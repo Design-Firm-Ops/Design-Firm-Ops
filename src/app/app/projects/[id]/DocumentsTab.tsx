@@ -1,0 +1,147 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import ConfirmDialog from '@/components/ConfirmDialog';
+
+export interface DocumentRow {
+  id: string;
+  type: string;
+  filename: string;
+  storageUrl: string;
+  uploadedAt: string;
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  PRESENTATION: 'Presentation',
+  VENDOR_INVOICE: 'Vendor Invoice',
+  CONTRACT: 'Contract',
+  OTHER: 'Other',
+};
+
+/**
+ * Generic document list + uploader. Used as-is for the Documents tab,
+ * and with a fixed single allowed type for the Contracts tab.
+ */
+export default function DocumentsTab({
+  projectId,
+  documents,
+  allowedTypes = ['PRESENTATION', 'VENDOR_INVOICE', 'CONTRACT', 'OTHER'],
+  defaultType,
+  emptyLabel = 'No documents uploaded yet.',
+}: {
+  projectId: string;
+  documents: DocumentRow[];
+  allowedTypes?: string[];
+  defaultType?: string;
+  emptyLabel?: string;
+}) {
+  const router = useRouter();
+  const [type, setType] = useState(defaultType ?? allowedTypes[0]);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<DocumentRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError(null);
+
+    const body = new FormData();
+    body.append('file', file);
+    body.append('projectId', projectId);
+    body.append('type', type);
+
+    const res = await fetch('/api/documents', { method: 'POST', body });
+    setUploading(false);
+    e.target.value = '';
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setError(data?.error ?? 'Upload failed.');
+      return;
+    }
+
+    router.refresh();
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    await fetch(`/api/documents/${pendingDelete.id}`, { method: 'DELETE' });
+    setDeleting(false);
+    setPendingDelete(null);
+    router.refresh();
+  }
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        {allowedTypes.length > 1 && (
+          <select className="input w-auto" value={type} onChange={(e) => setType(e.target.value)}>
+            {allowedTypes.map((t) => (
+              <option key={t} value={t}>
+                {TYPE_LABELS[t]}
+              </option>
+            ))}
+          </select>
+        )}
+        <label className="btn-primary cursor-pointer">
+          {uploading ? 'Uploading…' : 'Upload File'}
+          <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
+        </label>
+        {error && <span className="text-sm text-red-700">{error}</span>}
+      </div>
+
+      <div className="card overflow-x-auto">
+        <table className="min-w-full divide-y divide-taupe/30 text-sm">
+          <thead className="bg-taupe/10 text-left text-xs font-semibold uppercase tracking-wide text-brown/60">
+            <tr>
+              <th className="px-4 py-3">Filename</th>
+              <th className="px-4 py-3">Type</th>
+              <th className="px-4 py-3">Uploaded</th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-taupe/20">
+            {documents.map((doc) => (
+              <tr key={doc.id} className="hover:bg-taupe/5">
+                <td className="px-4 py-3">
+                  <a href={doc.storageUrl} target="_blank" rel="noreferrer" className="font-medium text-brown hover:text-gold">
+                    {doc.filename}
+                  </a>
+                </td>
+                <td className="px-4 py-3 text-brown/70">{TYPE_LABELS[doc.type]}</td>
+                <td className="px-4 py-3 text-brown/70">{new Date(doc.uploadedAt).toLocaleDateString()}</td>
+                <td className="px-4 py-3 text-right">
+                  <button className="text-sm text-red-700 hover:text-red-900" onClick={() => setPendingDelete(doc)}>
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {documents.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-brown/50">
+                  {emptyLabel}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Delete document?"
+        message={`This will permanently delete "${pendingDelete?.filename}" from storage records. This cannot be undone.`}
+        busy={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
+    </div>
+  );
+}

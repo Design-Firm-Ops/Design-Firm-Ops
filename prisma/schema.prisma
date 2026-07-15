@@ -1,0 +1,276 @@
+// MDI Studio — Prisma schema (Phase 1)
+// Postgres (Supabase). Money fields always use Decimal, never Float.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------- Enums ----------
+
+enum ProjectStatus {
+  LEAD
+  ACTIVE
+  ON_HOLD
+  COMPLETE
+}
+
+enum FeeStructure {
+  FLAT_FEE
+  HOURLY
+  COST_PLUS
+  HYBRID
+}
+
+enum MarkupMode {
+  MARKUP
+  MARGIN
+}
+
+enum TaxBase {
+  MERCH_ONLY
+  MERCH_PLUS_SHIPPING
+}
+
+enum ItemCategory {
+  LIGHTING
+  FURNITURE
+  PLUMBING
+  HARDWARE
+  TEXTILES
+  ART
+  ACCESSORIES
+  APPLIANCES
+  OTHER
+}
+
+enum ItemStatus {
+  PROPOSED
+  APPROVED
+  INVOICED
+  ORDERED
+  RECEIVED
+  DELIVERED
+}
+
+enum DocumentType {
+  PRESENTATION
+  VENDOR_INVOICE
+  CONTRACT
+  OTHER
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIALLY_PAID
+  PAID
+}
+
+enum PaymentMethod {
+  ACH
+  WIRE
+  CHECK
+  CREDIT_CARD
+  OTHER
+}
+
+// ---------- Models ----------
+
+/// Internal user (owner). Only two exist in practice.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Client {
+  id             String    @id @default(cuid())
+  name           String
+  email          String?
+  phone          String?
+  billingAddress String?
+  notes          String?
+  projects       Project[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model Project {
+  id             String        @id @default(cuid())
+  client         Client        @relation(fields: [clientId], references: [id])
+  clientId       String
+  name           String
+  projectAddress String?
+  status         ProjectStatus @default(LEAD)
+  startDate      DateTime?
+
+  feeStructure FeeStructure @default(COST_PLUS)
+  feeNotes     String?
+
+  // Pricing defaults — overridable per line item.
+  defaultMarkupPct Decimal    @default(15) @db.Decimal(6, 3)
+  markupMode       MarkupMode @default(MARKUP)
+
+  // Tax config. salesTaxRate is a fraction (0.07 = 7%).
+  salesTaxRate Decimal @default(0) @db.Decimal(6, 4)
+  taxBase      TaxBase @default(MERCH_ONLY)
+
+  // Used to derive invoice numbers, e.g. "2506" -> 2506-001, 2506-002...
+  invoicePrefix String?
+
+  items     Item[]
+  documents Document[]
+  invoices  Invoice[]
+  payments  Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Vendor {
+  id            String  @id @default(cuid())
+  name          String
+  website       String?
+  accountNumber String?
+  repName       String?
+  repEmail      String?
+  repPhone      String?
+  notes         String?
+
+  items Item[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// A single merchandise line item within a project.
+model Item {
+  id                 String       @id @default(cuid())
+  project            Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId          String
+  tag                String
+  name               String
+  invoiceDisplayName String?
+  category           ItemCategory @default(OTHER)
+  room               String?
+
+  vendor   Vendor? @relation(fields: [vendorId], references: [id])
+  vendorId String?
+
+  qty         Int     @default(1)
+  unitCost    Decimal @db.Decimal(10, 2)
+  platformFee Decimal @default(0) @db.Decimal(10, 2)
+
+  // Nullable overrides — fall back to the project's defaults when null.
+  markupPct  Decimal?    @db.Decimal(6, 3)
+  markupMode MarkupMode?
+
+  dimensions    String?
+  finish        String?
+  link          String?
+  shippingNotes String?
+
+  status ItemStatus @default(PROPOSED)
+
+  sourceDocument   Document? @relation(fields: [sourceDocumentId], references: [id])
+  sourceDocumentId String?
+
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+  invoiceId String?
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model Document {
+  id         String       @id @default(cuid())
+  project    Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  String
+  type       DocumentType
+  filename   String
+  storageUrl String
+  uploadedAt DateTime     @default(now())
+
+  sourcedItems Item[]
+
+  @@index([projectId])
+}
+
+/// A generated merchandise invoice. Shipping/tax are snapshotted at
+/// creation time so historical invoices never change if project
+/// defaults change later.
+model Invoice {
+  id            String        @id @default(cuid())
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId     String
+  invoiceNumber String        @unique
+  status        InvoiceStatus @default(DRAFT)
+
+  shippingTotal Decimal @default(0) @db.Decimal(10, 2)
+  taxRate       Decimal @db.Decimal(6, 4)
+  taxBase       TaxBase
+
+  issuedDate DateTime?
+  dueDate    DateTime?
+  notes      String?
+
+  items    Item[]
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+model Payment {
+  id        String  @id @default(cuid())
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+  invoiceId String?
+
+  amount    Decimal       @db.Decimal(10, 2)
+  date      DateTime      @default(now())
+  method    PaymentMethod @default(OTHER)
+  reference String?
+  notes     String?
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}
+
+/// Singleton company settings row (id is always 1).
+model Settings {
+  id Int @id @default(1)
+
+  companyName    String
+  companyAddress String?
+
+  owner1Name    String?
+  owner1Contact String?
+  owner2Name    String?
+  owner2Contact String?
+
+  // Rich text (HTML) — ACH / wire / Chase Bill Pay instructions rendered on invoice PDFs.
+  paymentInstructions String?
+
+  logoUrl String?
+
+  updatedAt DateTime @updatedAt
+}
