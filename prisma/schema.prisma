@@ -196,13 +196,16 @@ model Item {
 }
 
 model Document {
-  id         String       @id @default(cuid())
-  project    Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectId  String
-  type       DocumentType
-  filename   String
-  storageUrl String
-  uploadedAt DateTime     @default(now())
+  id          String       @id @default(cuid())
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String
+  type        DocumentType
+  filename    String
+  // Object path within the private "documents" bucket — never a public
+  // URL. Access is always through a short-lived signed URL minted on
+  // request (see lib/supabase.ts).
+  storagePath String
+  uploadedAt  DateTime     @default(now())
 
   sourcedItems Item[]
 

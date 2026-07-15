@@ -8,7 +8,9 @@ export interface DocumentRow {
   id: string;
   type: string;
   filename: string;
-  storageUrl: string;
+  // A short-lived signed URL generated fresh on each page load — null
+  // if it couldn't be minted (e.g. storage temporarily unreachable).
+  url: string | null;
   uploadedAt: string;
 }
 
@@ -110,9 +112,15 @@ export default function DocumentsTab({
             {documents.map((doc) => (
               <tr key={doc.id} className="hover:bg-taupe/5">
                 <td className="px-4 py-3">
-                  <a href={doc.storageUrl} target="_blank" rel="noreferrer" className="font-medium text-brown hover:text-gold">
-                    {doc.filename}
-                  </a>
+                  {doc.url ? (
+                    <a href={doc.url} target="_blank" rel="noreferrer" className="font-medium text-brown hover:text-gold">
+                      {doc.filename}
+                    </a>
+                  ) : (
+                    <span className="font-medium text-brown/50" title="Link unavailable — reload the page to retry">
+                      {doc.filename}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-brown/70">{TYPE_LABELS[doc.type]}</td>
                 <td className="px-4 py-3 text-brown/70">{new Date(doc.uploadedAt).toLocaleDateString()}</td>

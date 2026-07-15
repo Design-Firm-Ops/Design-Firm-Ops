@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
+import { createSignedDocumentUrl } from '@/lib/supabase';
 import ProjectHeader from './ProjectHeader';
 import ProjectTabs from './ProjectTabs';
 import ItemsTable, { ItemRow } from './ItemsTable';
@@ -82,13 +83,17 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     items: inv.items.map(serializeItem),
   }));
 
-  const documents: DocumentRow[] = project.documents.map((d) => ({
-    id: d.id,
-    type: d.type,
-    filename: d.filename,
-    storageUrl: d.storageUrl,
-    uploadedAt: d.uploadedAt.toISOString(),
-  }));
+  // Signed URLs are minted fresh on every load (they expire) — never
+  // read the raw storage path back to the browser.
+  const documents: DocumentRow[] = await Promise.all(
+    project.documents.map(async (d) => ({
+      id: d.id,
+      type: d.type,
+      filename: d.filename,
+      url: await createSignedDocumentUrl(d.storagePath),
+      uploadedAt: d.uploadedAt.toISOString(),
+    }))
+  );
 
   const payments: PaymentRow[] = project.payments.map((p) => ({
     id: p.id,

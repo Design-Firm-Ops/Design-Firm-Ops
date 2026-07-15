@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
-import { getSupabaseServerClient } from '@/lib/supabase';
-
-const LOGO_BUCKET = 'branding';
+import { getSupabaseServerClient, LOGO_BUCKET, ensureLogoBucket } from '@/lib/supabase';
 
 export async function POST(req: NextRequest) {
   const { unauthorized } = await requireSession();
@@ -17,6 +15,7 @@ export async function POST(req: NextRequest) {
 
   let logoUrl: string;
   try {
+    await ensureLogoBucket();
     const supabase = getSupabaseServerClient();
     const path = `logo-${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
-import { getSupabaseServerClient, DOCUMENTS_BUCKET } from '@/lib/supabase';
+import { getSupabaseServerClient, DOCUMENTS_BUCKET, ensureDocumentsBucket } from '@/lib/supabase';
 
 const DOCUMENT_TYPES = ['PRESENTATION', 'VENDOR_INVOICE', 'CONTRACT', 'OTHER'] as const;
 
@@ -21,8 +21,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid document type' }, { status: 400 });
   }
 
-  let storageUrl: string;
+  let storagePath: string;
   try {
+    await ensureDocumentsBucket();
     const supabase = getSupabaseServerClient();
     const path = `${projectId}/${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage
@@ -30,8 +31,7 @@ export async function POST(req: NextRequest) {
       .upload(path, await file.arrayBuffer(), { contentType: file.type });
     if (uploadError) throw uploadError;
 
-    const { data } = supabase.storage.from(DOCUMENTS_BUCKET).getPublicUrl(path);
-    storageUrl = data.publicUrl;
+    storagePath = path;
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Upload failed';
     return NextResponse.json({ error: `Storage upload failed: ${message}` }, { status: 502 });
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       projectId,
       type: type as (typeof DOCUMENT_TYPES)[number],
       filename: file.name,
-      storageUrl,
+      storagePath,
     },
   });
 
