@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
 import { projectSchema } from '@/lib/validation';
+import { findOrCreateProjectType } from '@/lib/projectType';
 
 export async function GET() {
   const { unauthorized } = await requireSession();
@@ -24,10 +25,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { startDate, ...rest } = parsed.data;
+  const {
+    startDate,
+    projectType,
+    clientId,
+    newClientName,
+    newClientEmail,
+    newClientPhone,
+    newClientAddress,
+    ...rest
+  } = parsed.data;
+
+  let resolvedClientId = clientId;
+  if (!resolvedClientId && newClientName?.trim()) {
+    const client = await prisma.client.create({
+      data: {
+        name: newClientName.trim(),
+        email: newClientEmail || null,
+        phone: newClientPhone || null,
+        billingAddress: newClientAddress || null,
+      },
+    });
+    resolvedClientId = client.id;
+  }
+  if (!resolvedClientId) {
+    return NextResponse.json({ error: 'A client is required — pick one or fill in the new client fields.' }, { status: 400 });
+  }
+
+  const projectTypeId = await findOrCreateProjectType(projectType);
+
   const project = await prisma.project.create({
     data: {
       ...rest,
+      clientId: resolvedClientId,
+      projectTypeId,
       startDate: startDate ? new Date(startDate) : null,
     },
   });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { resolvePermissions } from '@/lib/permissions';
 
 const bulkSchema = z.object({
   ids: z.array(z.string()).min(1),
@@ -10,8 +11,13 @@ const bulkSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
+
+  const perms = await resolvePermissions(session);
+  if (!perms.procurement) {
+    return NextResponse.json({ error: 'You do not have permission to edit procurement' }, { status: 403 });
+  }
 
   const body = await req.json();
   const parsed = bulkSchema.safeParse(body);

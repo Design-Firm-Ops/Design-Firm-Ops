@@ -2,16 +2,28 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 
-export default function NewProjectForm({ clients }: { clients: { id: string; name: string }[] }) {
+export default function NewProjectForm({
+  clients,
+  projectTypeOptions,
+}: {
+  clients: { id: string; name: string }[];
+  projectTypeOptions: string[];
+}) {
   const router = useRouter();
+  const [useNewClient, setUseNewClient] = useState(clients.length === 0);
   const [form, setForm] = useState({
     clientId: clients[0]?.id ?? '',
+    newClientName: '',
+    newClientEmail: '',
+    newClientPhone: '',
+    newClientAddress: '',
     name: '',
     projectAddress: '',
     status: 'LEAD',
     startDate: '',
+    projectType: '',
+    leadDesignerName: '',
     feeStructure: 'COST_PLUS',
     feeNotes: '',
     defaultMarkupPct: '15',
@@ -31,7 +43,7 @@ export default function NewProjectForm({ clients }: { clients: { id: string; nam
     const res = await fetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, clientId: useNewClient ? '' : form.clientId }),
     });
 
     setSaving(false);
@@ -47,32 +59,61 @@ export default function NewProjectForm({ clients }: { clients: { id: string; nam
     router.refresh();
   }
 
-  if (clients.length === 0) {
-    return (
-      <div className="card p-6">
-        <p className="text-brown/70">
-          You need at least one client before creating a project.{' '}
-          <Link href="/app/clients" className="text-gold underline">
-            Add a client
-          </Link>{' '}
-          first.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <form onSubmit={handleSubmit} className="card max-w-2xl space-y-4 p-6">
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
-          <label className="mb-1 block text-sm font-medium text-brown">Client</label>
-          <select className="input" value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <div className="mb-1 flex items-center justify-between">
+            <label className="block text-sm font-medium text-brown">Client</label>
+            {clients.length > 0 && (
+              <button
+                type="button"
+                className="text-sm text-brown hover:text-gold"
+                onClick={() => setUseNewClient(!useNewClient)}
+              >
+                {useNewClient ? 'Choose existing client' : '+ New client'}
+              </button>
+            )}
+          </div>
+          {useNewClient ? (
+            <div className="space-y-3 rounded-md border border-taupe/40 p-3">
+              <input
+                className="input"
+                required
+                placeholder="Client name"
+                value={form.newClientName}
+                onChange={(e) => setForm({ ...form, newClientName: e.target.value })}
+              />
+              <input
+                type="email"
+                className="input"
+                placeholder="Email (optional)"
+                value={form.newClientEmail}
+                onChange={(e) => setForm({ ...form, newClientEmail: e.target.value })}
+              />
+              <input
+                className="input"
+                placeholder="Phone (optional)"
+                value={form.newClientPhone}
+                onChange={(e) => setForm({ ...form, newClientPhone: e.target.value })}
+              />
+              <textarea
+                className="input"
+                rows={2}
+                placeholder="Billing address (optional)"
+                value={form.newClientAddress}
+                onChange={(e) => setForm({ ...form, newClientAddress: e.target.value })}
+              />
+            </div>
+          ) : (
+            <select className="input" value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         <div className="col-span-2">
           <label className="mb-1 block text-sm font-medium text-brown">Project Name</label>
@@ -102,6 +143,29 @@ export default function NewProjectForm({ clients }: { clients: { id: string; nam
             className="input"
             value={form.startDate}
             onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-brown">Project Type</label>
+          <input
+            className="input"
+            list="project-type-options"
+            placeholder="e.g. Full Remodel"
+            value={form.projectType}
+            onChange={(e) => setForm({ ...form, projectType: e.target.value })}
+          />
+          <datalist id="project-type-options">
+            {projectTypeOptions.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-brown">Lead Designer</label>
+          <input
+            className="input"
+            value={form.leadDesignerName}
+            onChange={(e) => setForm({ ...form, leadDesignerName: e.target.value })}
           />
         </div>
         <div>

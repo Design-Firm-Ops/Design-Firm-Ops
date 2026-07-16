@@ -2,32 +2,37 @@
 
 import { useState } from 'react';
 
-const TABS = ['Items', 'Invoices', 'Contracts', 'Documents', 'Payments'] as const;
-export type TabName = (typeof TABS)[number];
+export interface ProjectTab {
+  key: string;
+  label: string;
+  content: React.ReactNode;
+}
 
-export default function ProjectTabs({
-  panels,
-}: {
-  panels: Record<TabName, React.ReactNode>;
-}) {
-  const [active, setActive] = useState<TabName>('Items');
+/** Renders only the tabs the caller passes in — hide a tab entirely by omitting it (permission gating). */
+export default function ProjectTabs({ tabs }: { tabs: ProjectTab[] }) {
+  const [active, setActive] = useState(tabs[0]?.key);
+  const activeTab = tabs.find((t) => t.key === active) ?? tabs[0];
+
+  if (tabs.length === 0) {
+    return <div className="card p-8 text-center text-brown/50">No tabs are visible to your role.</div>;
+  }
 
   return (
     <div>
-      <div className="mb-4 flex gap-1 border-b border-taupe/40">
-        {TABS.map((tab) => (
+      <div className="mb-4 flex flex-wrap gap-1 border-b border-taupe/40">
+        {tabs.map((tab) => (
           <button
-            key={tab}
-            onClick={() => setActive(tab)}
+            key={tab.key}
+            onClick={() => setActive(tab.key)}
             className={`px-4 py-2 text-sm font-medium transition-colors ${
-              active === tab ? 'border-b-2 border-gold text-brown' : 'text-brown/50 hover:text-brown'
+              activeTab?.key === tab.key ? 'border-b-2 border-gold text-brown' : 'text-brown/50 hover:text-brown'
             }`}
           >
-            {tab}
+            {tab.label}
           </button>
         ))}
       </div>
-      <div>{panels[active]}</div>
+      <div>{activeTab?.content}</div>
     </div>
   );
 }

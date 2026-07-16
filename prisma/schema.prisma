@@ -1,4 +1,4 @@
-// MDI Studio — Prisma schema (Phase 1)
+// MDI Studio — Prisma schema
 // Postgres (Supabase). Money fields always use Decimal, never Float.
 
 generator client {
@@ -12,6 +12,11 @@ datasource db {
 }
 
 // ---------- Enums ----------
+
+enum UserRole {
+  ADMIN
+  DESIGNER
+}
 
 enum ProjectStatus {
   LEAD
@@ -60,8 +65,8 @@ enum ItemStatus {
 
 enum DocumentType {
   PRESENTATION
-  VENDOR_INVOICE
   CONTRACT
+  VENDOR_INVOICE
   OTHER
 }
 
@@ -80,16 +85,60 @@ enum PaymentMethod {
   OTHER
 }
 
+/// Which ledger a payment applies to — merchandise invoices or the
+/// separate design fee.
+enum PaymentCategory {
+  MERCHANDISE
+  DESIGN_FEE
+}
+
+enum VendorAccountType {
+  TRADE
+  RETAIL
+  BOTH
+}
+
+enum VendorProductType {
+  STOCK
+  CUSTOM
+  BOTH
+}
+
+enum VendorPriceRange {
+  LOW
+  MID
+  HIGH
+}
+
+/// FF&E product categories a vendor primarily offers — matches the
+/// firm's vendor spreadsheet. Distinct from ItemCategory (line-item
+/// categorization), which is coarser.
+enum VendorOffering {
+  FURNITURE
+  OUTDOOR
+  RUGS
+  PILLOWS
+  DECOR
+  MIRRORS
+  LAMPS
+  BEDDING
+}
+
 // ---------- Models ----------
 
-/// Internal user (owner). Only two exist in practice.
+/// Internal user (owner or designer). Role gates visibility of
+/// sensitive project/vendor data — see Settings' designerCanView* flags.
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
   passwordHash String
   name         String
+  role         UserRole @default(DESIGNER)
+  active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  uploadedResources Resource[]
 }
 
 model Client {
@@ -104,6 +153,18 @@ model Client {
   updatedAt      DateTime  @updatedAt
 }
 
+/// Expandable lookup shared by Project and Lead — grows as users type
+/// new project types rather than being a fixed enum.
+model ProjectType {
+  id   String @id @default(cuid())
+  name String @unique
+
+  projects Project[]
+  leads    Lead[]
+
+  createdAt DateTime @default(now())
+}
+
 model Project {
   id             String        @id @default(cuid())
   client         Client        @relation(fields: [clientId], references: [id])
@@ -112,6 +173,11 @@ model Project {
   projectAddress String?
   status         ProjectStatus @default(LEAD)
   startDate      DateTime?
+
+  projectType   ProjectType? @relation(fields: [projectTypeId], references: [id])
+  projectTypeId String?
+
+  leadDesignerName String?
 
   feeStructure FeeStructure @default(COST_PLUS)
   feeNotes     String?
@@ -127,24 +193,54 @@ model Project {
   // Used to derive invoice numbers, e.g. "2506" -> 2506-001, 2506-002...
   invoicePrefix String?
 
-  items     Item[]
-  documents Document[]
-  invoices  Invoice[]
-  payments  Payment[]
+  items             Item[]
+  documents         Document[]
+  invoices          Invoice[]
+  payments          Payment[]
+  designFeeCharges  DesignFeeCharge[]
+  convertedFromLead Lead?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
+/// A single billed-toward-the-design-fee line entry. Separate from
+/// merchandise Invoices — design fees are billed on their own ledger.
+model DesignFeeCharge {
+  id          String   @id @default(cuid())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String
+  description String
+  amount      Decimal  @db.Decimal(10, 2)
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([projectId])
+}
+
 model Vendor {
-  id            String  @id @default(cuid())
-  name          String
-  website       String?
-  accountNumber String?
-  repName       String?
-  repEmail      String?
-  repPhone      String?
+  id      String  @id @default(cuid())
+  name    String
+  website String?
+
+  // Free text — showroom name, rep name, email, phone are often
+  // combined and don't split cleanly across vendors.
+  showroomRep String?
+
+  accountType VendorAccountType?
+  productType VendorProductType?
+  priceRange  VendorPriceRange?
+  offerings   VendorOffering[]
+
   notes         String?
+  accountNumber String?
+
+  // Trade account credentials — permission-gated (Settings.designerCanViewVendorCredentials).
+  // Password is encrypted at rest (see lib/crypto.ts); notes covers
+  // non-standard cases ("no login, quotes through rep", "application pending").
+  tradeAccountUsername          String?
+  tradeAccountPasswordEncrypted String?
+  tradeAccountNotes             String?
 
   items Item[]
 
@@ -247,15 +343,92 @@ model Payment {
   invoice   Invoice? @relation(fields: [invoiceId], references: [id])
   invoiceId String?
 
-  amount    Decimal       @db.Decimal(10, 2)
-  date      DateTime      @default(now())
-  method    PaymentMethod @default(OTHER)
+  category  PaymentCategory @default(MERCHANDISE)
+  amount    Decimal         @db.Decimal(10, 2)
+  date      DateTime        @default(now())
+  method    PaymentMethod   @default(OTHER)
   reference String?
   notes     String?
 
   createdAt DateTime @default(now())
 
   @@index([projectId])
+}
+
+/// A pipeline column on the Business Development kanban board — fully
+/// customizable (add/rename/reorder/delete) by users.
+model PipelineStage {
+  id    String @id @default(cuid())
+  name  String
+  order Int    @default(0)
+
+  leads Lead[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ReferralPartner {
+  id           String  @id @default(cuid())
+  name         String
+  businessName String?
+  contactEmail String?
+  contactPhone String?
+  notes        String?
+
+  leads Lead[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// A prospective client tracked through the sales pipeline. Converts
+/// into a real Client + Project once won.
+model Lead {
+  id         String @id @default(cuid())
+  clientName String
+
+  projectType   ProjectType? @relation(fields: [projectTypeId], references: [id])
+  projectTypeId String?
+
+  referralSource String?
+
+  referralPartner   ReferralPartner? @relation(fields: [referralPartnerId], references: [id])
+  referralPartnerId String?
+
+  contactEmail String?
+  contactPhone String?
+  address      String?
+  notes        String?
+
+  pipelineStage   PipelineStage @relation(fields: [pipelineStageId], references: [id])
+  pipelineStageId String
+  sortOrder       Int           @default(0)
+
+  // Set once this lead is converted — the lead stays in the CRM as a
+  // record but is flagged as won.
+  convertedProject   Project? @relation(fields: [convertedProjectId], references: [id])
+  convertedProjectId String?  @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pipelineStageId])
+}
+
+/// A firm-wide file in the Administration storage center — templates,
+/// marketing materials, resources. Not tied to any single project.
+/// "Folder" is free text so the library stays user-customizable
+/// without a rigid taxonomy.
+model Resource {
+  id          String   @id @default(cuid())
+  folder      String
+  filename    String
+  storagePath String
+  uploadedAt  DateTime @default(now())
+
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id])
+  uploadedById String?
 }
 
 /// Singleton company settings row (id is always 1).
@@ -274,6 +447,17 @@ model Settings {
   paymentInstructions String?
 
   logoUrl String?
+
+  // Designer-role visibility toggles. ADMIN always sees everything;
+  // these gate what DESIGNER-role users see. Configured on the
+  // Administration > Permissions tab.
+  designerCanViewFinancials             Boolean @default(false)
+  designerCanViewClientContact          Boolean @default(true)
+  designerCanViewDocumentsPresentations Boolean @default(true)
+  designerCanViewContracts              Boolean @default(true)
+  designerCanViewInvoices               Boolean @default(true)
+  designerCanViewProcurement            Boolean @default(true)
+  designerCanViewVendorCredentials      Boolean @default(false)
 
   updatedAt DateTime @updatedAt
 }

@@ -5,9 +5,9 @@ import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 
 const links = [
-  { href: '/app/dashboard', label: 'Dashboard' },
-  { href: '/app/vendors', label: 'Vendors' },
-  { href: '/app/clients', label: 'Clients' },
+  { href: '/app/projects', label: 'Projects' },
+  { href: '/app/business-development', label: 'Business Development' },
+  { href: '/app/administration', label: 'Administration' },
   { href: '/app/settings', label: 'Settings' },
 ];
 
@@ -17,7 +17,7 @@ export default function Nav({ userName }: { userName?: string | null }) {
   return (
     <header className="border-b border-taupe/40 bg-brown text-cream">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
-        <Link href="/app/dashboard" className="letterspaced-title text-sm font-semibold">
+        <Link href="/app/projects" className="letterspaced-title text-sm font-semibold">
           M D I&nbsp; S T U D I O
         </Link>
 

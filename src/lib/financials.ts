@@ -1,6 +1,6 @@
 import Decimal from 'decimal.js';
 import { computeInvoiceTotals, priceLine, toCents } from '@/lib/pricing';
-import type { Item, Invoice, Payment, Project } from '@prisma/client';
+import type { Item, Invoice, Payment, Project, DesignFeeCharge } from '@prisma/client';
 
 type ProjectMarkupDefaults = Pick<Project, 'defaultMarkupPct' | 'markupMode'>;
 
@@ -18,10 +18,11 @@ export function priceItem(item: Item, project: ProjectMarkupDefaults) {
 }
 
 /**
- * Rolls a project's invoices up into invoiced / paid / outstanding
- * totals for the dashboard and project overview. Invoice totals are
- * computed live from each invoice's linked items (no line-item
- * snapshotting yet — see Invoice model comment).
+ * Rolls a project's merchandise invoices up into invoiced / paid /
+ * outstanding totals. Invoice totals are computed live from each
+ * invoice's linked items (no line-item snapshotting yet — see Invoice
+ * model comment). Only MERCHANDISE-category payments count here —
+ * design fee payments have their own ledger (see summarizeDesignFee).
  */
 export function summarizeProjectFinancials(
   project: ProjectMarkupDefaults & {
@@ -42,9 +43,23 @@ export function summarizeProjectFinancials(
     invoicedTotal = invoicedTotal.plus(totals.grandTotal);
   }
 
-  const paidTotal = toCents(project.payments.reduce((sum, p) => sum.plus(p.amount), new Decimal(0)));
+  const merchandisePayments = project.payments.filter((p) => p.category === 'MERCHANDISE');
+  const paidTotal = toCents(merchandisePayments.reduce((sum, p) => sum.plus(p.amount), new Decimal(0)));
   invoicedTotal = toCents(invoicedTotal);
   const outstanding = toCents(invoicedTotal.minus(paidTotal));
 
   return { invoicedTotal, paidTotal, outstanding };
+}
+
+/**
+ * Rolls up the separate design fee ledger: what's been billed toward
+ * the design fee, what's been paid against it, and what's outstanding.
+ */
+export function summarizeDesignFee(project: { designFeeCharges: DesignFeeCharge[]; payments: Payment[] }) {
+  const billed = toCents(project.designFeeCharges.reduce((sum, c) => sum.plus(c.amount), new Decimal(0)));
+  const designFeePayments = project.payments.filter((p) => p.category === 'DESIGN_FEE');
+  const paid = toCents(designFeePayments.reduce((sum, p) => sum.plus(p.amount), new Decimal(0)));
+  const outstanding = toCents(billed.minus(paid));
+
+  return { billed, paid, outstanding };
 }

@@ -4,26 +4,26 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ConfirmDialog from '@/components/ConfirmDialog';
 
-interface ClientRow {
+interface PartnerRow {
   id: string;
   name: string;
-  email: string | null;
-  phone: string | null;
-  billingAddress: string | null;
+  businessName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
   notes: string | null;
-  _count: { projects: number };
+  _count: { leads: number };
 }
 
-const emptyForm = { name: '', email: '', phone: '', billingAddress: '', notes: '' };
+const emptyForm = { name: '', businessName: '', contactEmail: '', contactPhone: '', notes: '' };
 
-export default function ClientsManager({ initialClients }: { initialClients: ClientRow[] }) {
+export default function ReferralPartnersManager({ initialPartners }: { initialPartners: PartnerRow[] }) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<ClientRow | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PartnerRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -34,14 +34,14 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
     setShowForm(true);
   }
 
-  function openEdit(client: ClientRow) {
-    setEditingId(client.id);
+  function openEdit(partner: PartnerRow) {
+    setEditingId(partner.id);
     setForm({
-      name: client.name,
-      email: client.email ?? '',
-      phone: client.phone ?? '',
-      billingAddress: client.billingAddress ?? '',
-      notes: client.notes ?? '',
+      name: partner.name,
+      businessName: partner.businessName ?? '',
+      contactEmail: partner.contactEmail ?? '',
+      contactPhone: partner.contactPhone ?? '',
+      notes: partner.notes ?? '',
     });
     setError(null);
     setShowForm(true);
@@ -52,7 +52,7 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
     setSaving(true);
     setError(null);
 
-    const res = await fetch(editingId ? `/api/clients/${editingId}` : '/api/clients', {
+    const res = await fetch(editingId ? `/api/referral-partners/${editingId}` : '/api/referral-partners', {
       method: editingId ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form),
@@ -75,12 +75,12 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
     setDeleting(true);
     setDeleteError(null);
 
-    const res = await fetch(`/api/clients/${pendingDelete.id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/referral-partners/${pendingDelete.id}`, { method: 'DELETE' });
     setDeleting(false);
 
     if (!res.ok) {
       const data = await res.json().catch(() => null);
-      setDeleteError(data?.error ?? 'Failed to delete client.');
+      setDeleteError(data?.error ?? 'Failed to delete partner.');
       return;
     }
 
@@ -92,7 +92,7 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
     <div>
       <div className="mb-4 flex justify-end">
         <button className="btn-primary" onClick={openCreate}>
-          New Client
+          New Referral Partner
         </button>
       </div>
 
@@ -101,28 +101,30 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
           <thead className="bg-taupe/10 text-left text-xs font-semibold uppercase tracking-wide text-brown/60">
             <tr>
               <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">Business</th>
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Phone</th>
-              <th className="px-4 py-3">Projects</th>
+              <th className="px-4 py-3">Leads</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-taupe/20">
-            {initialClients.map((client) => (
-              <tr key={client.id} className="hover:bg-taupe/5">
-                <td className="px-4 py-3 font-medium text-brown">{client.name}</td>
-                <td className="px-4 py-3 text-brown/70">{client.email || '—'}</td>
-                <td className="px-4 py-3 text-brown/70">{client.phone || '—'}</td>
-                <td className="px-4 py-3 text-brown/70">{client._count.projects}</td>
+            {initialPartners.map((partner) => (
+              <tr key={partner.id} className="hover:bg-taupe/5">
+                <td className="px-4 py-3 font-medium text-brown">{partner.name}</td>
+                <td className="px-4 py-3 text-brown/70">{partner.businessName || '—'}</td>
+                <td className="px-4 py-3 text-brown/70">{partner.contactEmail || '—'}</td>
+                <td className="px-4 py-3 text-brown/70">{partner.contactPhone || '—'}</td>
+                <td className="px-4 py-3 text-brown/70">{partner._count.leads}</td>
                 <td className="px-4 py-3 text-right">
-                  <button className="mr-3 text-sm text-brown hover:text-gold" onClick={() => openEdit(client)}>
+                  <button className="mr-3 text-sm text-brown hover:text-gold" onClick={() => openEdit(partner)}>
                     Edit
                   </button>
                   <button
                     className="text-sm text-red-700 hover:text-red-900"
                     onClick={() => {
                       setDeleteError(null);
-                      setPendingDelete(client);
+                      setPendingDelete(partner);
                     }}
                   >
                     Delete
@@ -130,10 +132,10 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
                 </td>
               </tr>
             ))}
-            {initialClients.length === 0 && (
+            {initialPartners.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-brown/50">
-                  No clients yet.
+                <td colSpan={6} className="px-4 py-8 text-center text-brown/50">
+                  No referral partners yet.
                 </td>
               </tr>
             )}
@@ -144,7 +146,7 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
       {showForm && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
           <form onSubmit={handleSubmit} className="card w-full max-w-md space-y-4 p-6">
-            <h2 className="text-lg font-semibold text-brown">{editingId ? 'Edit Client' : 'New Client'}</h2>
+            <h2 className="text-lg font-semibold text-brown">{editingId ? 'Edit Referral Partner' : 'New Referral Partner'}</h2>
 
             <div>
               <label className="mb-1 block text-sm font-medium text-brown">Name</label>
@@ -156,29 +158,28 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Email</label>
+              <label className="mb-1 block text-sm font-medium text-brown">Business Name</label>
+              <input
+                className="input"
+                value={form.businessName}
+                onChange={(e) => setForm({ ...form, businessName: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brown">Contact Email</label>
               <input
                 type="email"
                 className="input"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                value={form.contactEmail}
+                onChange={(e) => setForm({ ...form, contactEmail: e.target.value })}
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Phone</label>
+              <label className="mb-1 block text-sm font-medium text-brown">Contact Phone</label>
               <input
                 className="input"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Billing Address</label>
-              <textarea
-                className="input"
-                rows={2}
-                value={form.billingAddress}
-                onChange={(e) => setForm({ ...form, billingAddress: e.target.value })}
+                value={form.contactPhone}
+                onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
               />
             </div>
             <div>
@@ -207,10 +208,9 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
 
       <ConfirmDialog
         open={!!pendingDelete}
-        title="Delete client?"
+        title="Delete referral partner?"
         message={
-          deleteError ??
-          `This will permanently delete "${pendingDelete?.name}". This cannot be undone.`
+          deleteError ?? `This will permanently delete "${pendingDelete?.name}". This cannot be undone.`
         }
         busy={deleting}
         onConfirm={confirmDelete}

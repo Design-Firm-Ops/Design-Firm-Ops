@@ -3,10 +3,16 @@ import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
 import { invoiceCreateSchema } from '@/lib/validation';
 import { nextInvoiceNumber } from '@/lib/invoiceNumber';
+import { resolvePermissions } from '@/lib/permissions';
 
 export async function POST(req: NextRequest) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
+
+  const perms = await resolvePermissions(session);
+  if (!perms.invoices) {
+    return NextResponse.json({ error: 'You do not have permission to create invoices' }, { status: 403 });
+  }
 
   const body = await req.json();
   const parsed = invoiceCreateSchema.safeParse(body);

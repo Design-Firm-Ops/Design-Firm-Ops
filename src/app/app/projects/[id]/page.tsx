@@ -1,8 +1,12 @@
 import { notFound } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createSignedDocumentUrl } from '@/lib/supabase';
+import { resolvePermissions } from '@/lib/permissions';
+import { summarizeProjectFinancials, summarizeDesignFee } from '@/lib/financials';
 import ProjectHeader from './ProjectHeader';
-import ProjectTabs from './ProjectTabs';
+import ProjectTabs, { ProjectTab } from './ProjectTabs';
 import ItemsTable, { ItemRow } from './ItemsTable';
 import InvoicesTab, { InvoiceRow } from './InvoicesTab';
 import DocumentsTab, { DocumentRow } from './DocumentsTab';
@@ -53,20 +57,28 @@ function serializeItem(item: {
 }
 
 export default async function ProjectPage({ params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  const perms = await resolvePermissions(session);
+
   const project = await prisma.project.findUnique({
     where: { id: params.id },
     include: {
       client: true,
+      projectType: true,
       items: { orderBy: { sortOrder: 'asc' } },
       documents: { orderBy: { uploadedAt: 'desc' } },
       invoices: { include: { items: true }, orderBy: { createdAt: 'desc' } },
       payments: { orderBy: { date: 'desc' } },
+      designFeeCharges: { orderBy: { date: 'desc' } },
     },
   });
 
   if (!project) notFound();
 
-  const vendors = await prisma.vendor.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } });
+  const [vendors, projectTypes] = await Promise.all([
+    prisma.vendor.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    prisma.projectType.findMany({ orderBy: { name: 'asc' }, select: { name: true } }),
+  ]);
 
   const items: ItemRow[] = project.items.map(serializeItem);
   const uninvoicedItems = items.filter((i) => !i.invoiceId);
@@ -95,15 +107,90 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     }))
   );
 
-  const payments: PaymentRow[] = project.payments.map((p) => ({
-    id: p.id,
-    amount: String(p.amount),
-    date: p.date.toISOString(),
-    method: p.method,
-    reference: p.reference,
-    notes: p.notes,
-    invoiceId: p.invoiceId,
-  }));
+  const payments: PaymentRow[] = project.payments
+    .filter((p) => p.category === 'MERCHANDISE')
+    .map((p) => ({
+      id: p.id,
+      amount: String(p.amount),
+      date: p.date.toISOString(),
+      method: p.method,
+      reference: p.reference,
+      notes: p.notes,
+      invoiceId: p.invoiceId,
+    }));
+
+  const merchandise = summarizeProjectFinancials(project);
+  const designFee = summarizeDesignFee(project);
+
+  const tabs: ProjectTab[] = [];
+  if (perms.documentsPresentations) {
+    tabs.push({
+      key: 'documents',
+      label: 'Documents and Presentations',
+      content: (
+        <DocumentsTab
+          projectId={project.id}
+          documents={documents.filter((d) => d.type !== 'CONTRACT')}
+          allowedTypes={['PRESENTATION', 'VENDOR_INVOICE', 'OTHER']}
+          defaultType="PRESENTATION"
+        />
+      ),
+    });
+  }
+  if (perms.contracts) {
+    tabs.push({
+      key: 'contract',
+      label: 'Contract',
+      content: (
+        <DocumentsTab
+          projectId={project.id}
+          documents={documents.filter((d) => d.type === 'CONTRACT')}
+          allowedTypes={['CONTRACT']}
+          defaultType="CONTRACT"
+          emptyLabel="No contracts uploaded yet."
+        />
+      ),
+    });
+  }
+  if (perms.invoices) {
+    tabs.push({
+      key: 'invoices',
+      label: 'Invoices',
+      content: (
+        <div>
+          <InvoicesTab
+            projectId={project.id}
+            invoices={invoices}
+            uninvoicedItems={uninvoicedItems}
+            projectDefaultMarkupPct={String(project.defaultMarkupPct)}
+            projectMarkupMode={project.markupMode}
+            defaultTaxRate={String(project.salesTaxRate)}
+            defaultTaxBase={project.taxBase}
+          />
+          <PaymentsTab
+            projectId={project.id}
+            payments={payments}
+            invoiceOptions={invoices.map((i) => ({ id: i.id, invoiceNumber: i.invoiceNumber }))}
+          />
+        </div>
+      ),
+    });
+  }
+  if (perms.procurement) {
+    tabs.push({
+      key: 'procurement',
+      label: 'Procurement',
+      content: (
+        <ItemsTable
+          projectId={project.id}
+          initialItems={items}
+          vendors={vendors}
+          projectDefaultMarkupPct={String(project.defaultMarkupPct)}
+          projectMarkupMode={project.markupMode}
+        />
+      ),
+    });
+  }
 
   return (
     <div>
@@ -114,6 +201,8 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           projectAddress: project.projectAddress,
           status: project.status,
           startDate: project.startDate ? project.startDate.toISOString() : null,
+          projectType: project.projectType?.name ?? null,
+          leadDesignerName: project.leadDesignerName,
           feeStructure: project.feeStructure,
           feeNotes: project.feeNotes,
           defaultMarkupPct: String(project.defaultMarkupPct),
@@ -121,51 +210,22 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           salesTaxRate: String(project.salesTaxRate),
           taxBase: project.taxBase,
           invoicePrefix: project.invoicePrefix,
-          client: { id: project.client.id, name: project.client.name },
+          client: {
+            id: project.client.id,
+            name: project.client.name,
+            email: project.client.email,
+            phone: project.client.phone,
+            billingAddress: project.client.billingAddress,
+          },
         }}
+        projectTypeOptions={projectTypes.map((t) => t.name)}
+        canViewClientContact={perms.clientContact}
+        canViewFinancials={perms.financials}
+        merchandise={merchandise}
+        designFee={designFee}
       />
 
-      <ProjectTabs
-        panels={{
-          Items: (
-            <ItemsTable
-              projectId={project.id}
-              initialItems={items}
-              vendors={vendors}
-              projectDefaultMarkupPct={String(project.defaultMarkupPct)}
-              projectMarkupMode={project.markupMode}
-            />
-          ),
-          Invoices: (
-            <InvoicesTab
-              projectId={project.id}
-              invoices={invoices}
-              uninvoicedItems={uninvoicedItems}
-              projectDefaultMarkupPct={String(project.defaultMarkupPct)}
-              projectMarkupMode={project.markupMode}
-              defaultTaxRate={String(project.salesTaxRate)}
-              defaultTaxBase={project.taxBase}
-            />
-          ),
-          Contracts: (
-            <DocumentsTab
-              projectId={project.id}
-              documents={documents.filter((d) => d.type === 'CONTRACT')}
-              allowedTypes={['CONTRACT']}
-              defaultType="CONTRACT"
-              emptyLabel="No contracts uploaded yet."
-            />
-          ),
-          Documents: <DocumentsTab projectId={project.id} documents={documents} />,
-          Payments: (
-            <PaymentsTab
-              projectId={project.id}
-              payments={payments}
-              invoiceOptions={invoices.map((i) => ({ id: i.id, invoiceNumber: i.invoiceNumber }))}
-            />
-          ),
-        }}
-      />
+      <ProjectTabs tabs={tabs} />
     </div>
   );
 }

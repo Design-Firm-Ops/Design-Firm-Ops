@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
 import { projectSchema } from '@/lib/validation';
+import { findOrCreateProjectType } from '@/lib/projectType';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const { unauthorized } = await requireSession();
@@ -25,13 +26,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { startDate, ...rest } = parsed.data;
+  const { startDate, projectType, newClientName, newClientEmail, newClientPhone, newClientAddress, clientId, ...rest } =
+    parsed.data;
+
+  const data: Record<string, unknown> = { ...rest };
+  if (clientId) data.clientId = clientId;
+  if (startDate !== undefined) data.startDate = startDate ? new Date(startDate) : null;
+  if (projectType !== undefined) data.projectTypeId = await findOrCreateProjectType(projectType);
+
   const project = await prisma.project.update({
     where: { id: params.id },
-    data: {
-      ...rest,
-      ...(startDate !== undefined ? { startDate: startDate ? new Date(startDate) : null } : {}),
-    },
+    data,
   });
   return NextResponse.json(project);
 }

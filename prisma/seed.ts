@@ -1,11 +1,18 @@
-// Seed script — 2 internal users, 1 client, 1 project
-// ("Westland Reserve Red Rock Office") with 13 lighting line items that
-// reproduce the reference invoice numbers exactly:
+// Seed script.
+//
+// Seeds: 2 owner accounts (ADMIN) + 1 demo designer account (DESIGNER,
+// for exercising permission gating), company settings, default CRM
+// pipeline stages, the real 65-vendor FF&E list from the firm's
+// spreadsheet, and a demo project ("Westland Reserve Red Rock Office")
+// with 13 lighting line items that reproduce the reference invoice
+// numbers exactly:
 //   13 items, subtotal $19,287.85, shipping $2,295.48,
 //   7% tax $1,350.15, grand total $22,933.48
 
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { encryptSecret } from '../src/lib/crypto';
+import { RAW_VENDORS } from './vendorData';
 
 const prisma = new PrismaClient();
 
@@ -15,11 +22,19 @@ async function seedUsers() {
       email: process.env.SEED_OWNER1_EMAIL ?? 'madison@mditerior.com',
       password: process.env.SEED_OWNER1_PASSWORD ?? 'ChangeMe123!',
       name: 'Madison Ditton',
+      role: 'ADMIN' as const,
     },
     {
       email: process.env.SEED_OWNER2_EMAIL ?? 'owner2@mditerior.com',
       password: process.env.SEED_OWNER2_PASSWORD ?? 'ChangeMe123!',
       name: 'Studio Owner',
+      role: 'ADMIN' as const,
+    },
+    {
+      email: process.env.SEED_DESIGNER_EMAIL ?? 'designer@mditerior.com',
+      password: process.env.SEED_DESIGNER_PASSWORD ?? 'ChangeMe123!',
+      name: 'Sample Designer',
+      role: 'DESIGNER' as const,
     },
   ];
 
@@ -27,10 +42,10 @@ async function seedUsers() {
     const passwordHash = await bcrypt.hash(u.password, 10);
     await prisma.user.upsert({
       where: { email: u.email.toLowerCase() },
-      create: { email: u.email.toLowerCase(), passwordHash, name: u.name },
-      update: { passwordHash, name: u.name },
+      create: { email: u.email.toLowerCase(), passwordHash, name: u.name, role: u.role },
+      update: { passwordHash, name: u.name, role: u.role },
     });
-    console.log(`  user: ${u.email} / ${u.password}`);
+    console.log(`  user (${u.role}): ${u.email} / ${u.password}`);
   }
 }
 
@@ -54,12 +69,83 @@ async function seedSettings() {
   });
 }
 
+async function seedPipelineStages() {
+  const existing = await prisma.pipelineStage.count();
+  if (existing > 0) return;
+
+  const stages = ['New Lead', 'Contacted', 'Proposal Sent', 'Won', 'Lost'];
+  for (const [i, name] of stages.entries()) {
+    await prisma.pipelineStage.create({ data: { name, order: i } });
+  }
+  console.log(`  pipeline stages: ${stages.join(', ')}`);
+}
+
+function mapEnum<T extends string>(value: string | null, allowed: T[]): T | null {
+  if (!value) return null;
+  const upper = value.toUpperCase() as T;
+  return allowed.includes(upper) ? upper : null;
+}
+
+async function seedVendors() {
+  let withCredentials = 0;
+
+  for (const v of RAW_VENDORS) {
+    let tradeAccountNotes: string | null = null;
+    let tradeAccountPasswordEncrypted: string | null = null;
+
+    // Treat any login text that mentions a password as sensitive —
+    // encrypt the whole blob rather than trying to parse it apart.
+    // Non-credential status text ("no login, quotes through rep",
+    // "application pending") is kept as plain notes.
+    if (v.login) {
+      if (v.login.toLowerCase().includes('password')) {
+        tradeAccountPasswordEncrypted = encryptSecret(v.login);
+        withCredentials++;
+      } else {
+        tradeAccountNotes = v.login;
+      }
+    }
+
+    await prisma.vendor.create({
+      data: {
+        name: v.name,
+        website: v.website,
+        showroomRep: v.showroomRep,
+        accountType: mapEnum<'TRADE' | 'RETAIL' | 'BOTH'>(v.tradeRetail, ['TRADE', 'RETAIL', 'BOTH']),
+        productType: mapEnum<'STOCK' | 'CUSTOM' | 'BOTH'>(v.stockCustom, ['STOCK', 'CUSTOM', 'BOTH']),
+        priceRange: mapEnum<'LOW' | 'MID' | 'HIGH'>(v.priceRange, ['LOW', 'MID', 'HIGH']),
+        offerings: v.offerings as (
+          | 'FURNITURE'
+          | 'OUTDOOR'
+          | 'RUGS'
+          | 'PILLOWS'
+          | 'DECOR'
+          | 'MIRRORS'
+          | 'LAMPS'
+          | 'BEDDING'
+        )[],
+        notes: v.notes,
+        tradeAccountNotes,
+        tradeAccountPasswordEncrypted,
+      },
+    });
+  }
+
+  console.log(`  vendors: ${RAW_VENDORS.length} imported (${withCredentials} with encrypted trade credentials)`);
+}
+
 // Clears prior demo business data so this script can be re-run safely.
+// Leads/referral partners/pipeline stages are treated as persistent
+// business data, not demo data, so they're never cleared here — only
+// unlinked from a project about to be deleted.
 async function clearDemoData() {
+  await prisma.lead.updateMany({ where: { convertedProjectId: { not: null } }, data: { convertedProjectId: null } });
+
   await prisma.payment.deleteMany({});
   await prisma.invoice.deleteMany({});
   await prisma.item.deleteMany({});
   await prisma.document.deleteMany({});
+  await prisma.designFeeCharge.deleteMany({});
   await prisma.project.deleteMany({});
   await prisma.client.deleteMany({});
   await prisma.vendor.deleteMany({});
@@ -76,6 +162,12 @@ async function seedDemoProject() {
     },
   });
 
+  const projectType = await prisma.projectType.upsert({
+    where: { name: 'Commercial Office' },
+    create: { name: 'Commercial Office' },
+    update: {},
+  });
+
   const project = await prisma.project.create({
     data: {
       clientId: client.id,
@@ -83,6 +175,8 @@ async function seedDemoProject() {
       projectAddress: '1425 Red Rock Canyon Dr, St. George, UT 84770',
       status: 'ACTIVE',
       startDate: new Date('2025-04-01'),
+      projectTypeId: projectType.id,
+      leadDesignerName: 'Madison Ditton',
       feeStructure: 'COST_PLUS',
       feeNotes: '15% cost-plus on all merchandise; design fee billed hourly, invoiced separately.',
       defaultMarkupPct: 15,
@@ -93,19 +187,14 @@ async function seedDemoProject() {
     },
   });
 
+  // Small lighting-specific vendors for the demo line items — distinct
+  // from the firm's real FF&E vendor list above, kept minimal since
+  // their only role is to populate the Vendor column on these items.
   const [circa, visualComfort, rh, hinkley] = await Promise.all([
-    prisma.vendor.create({
-      data: { name: 'Circa Lighting', website: 'https://circalighting.com', repName: 'Ellen Marsh', repEmail: 'ellen@circalighting.com' },
-    }),
-    prisma.vendor.create({
-      data: { name: 'Visual Comfort & Co.', website: 'https://visualcomfort.com', repName: 'Derek Paulson', repEmail: 'derek@visualcomfort.com' },
-    }),
-    prisma.vendor.create({
-      data: { name: 'RH Lighting', website: 'https://rh.com', repName: 'Casey Nguyen', repEmail: 'casey@rh.com' },
-    }),
-    prisma.vendor.create({
-      data: { name: 'Hinkley Lighting', website: 'https://hinkley.com', repName: 'Marcus Tell', repEmail: 'marcus@hinkley.com' },
-    }),
+    prisma.vendor.create({ data: { name: 'Circa Lighting', website: 'https://circalighting.com', showroomRep: 'Ellen Marsh · ellen@circalighting.com' } }),
+    prisma.vendor.create({ data: { name: 'Visual Comfort & Co.', website: 'https://visualcomfort.com', showroomRep: 'Derek Paulson · derek@visualcomfort.com' } }),
+    prisma.vendor.create({ data: { name: 'RH Lighting', website: 'https://rh.com', showroomRep: 'Casey Nguyen · casey@rh.com' } }),
+    prisma.vendor.create({ data: { name: 'Hinkley Lighting', website: 'https://hinkley.com', showroomRep: 'Marcus Tell · marcus@hinkley.com' } }),
   ]);
 
   // Unit costs solved so the 13-item extended-price sum matches the
@@ -154,6 +243,15 @@ async function seedDemoProject() {
     });
   }
 
+  // A design fee charge/payment so the overview's Design Fee ledger
+  // has something to show out of the box.
+  await prisma.designFeeCharge.create({
+    data: { projectId: project.id, description: 'Design fee — phase 1', amount: '4500.00', date: new Date('2025-04-15') },
+  });
+  await prisma.payment.create({
+    data: { projectId: project.id, category: 'DESIGN_FEE', amount: '2000.00', method: 'ACH', date: new Date('2025-04-20') },
+  });
+
   console.log(`  client: ${client.name}`);
   console.log(`  project: ${project.name} (${items.length} items)`);
 }
@@ -162,7 +260,9 @@ async function main() {
   console.log('Seeding MDI Studio...');
   await seedUsers();
   await seedSettings();
+  await seedPipelineStages();
   await clearDemoData();
+  await seedVendors();
   await seedDemoProject();
   console.log('Done.');
 }

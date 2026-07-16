@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
 import { getSupabaseServerClient, DOCUMENTS_BUCKET, ensureDocumentsBucket } from '@/lib/supabase';
+import { resolvePermissions } from '@/lib/permissions';
 
 const DOCUMENT_TYPES = ['PRESENTATION', 'VENDOR_INVOICE', 'CONTRACT', 'OTHER'] as const;
 
 export async function POST(req: NextRequest) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
   const form = await req.formData();
@@ -19,6 +20,12 @@ export async function POST(req: NextRequest) {
   }
   if (!DOCUMENT_TYPES.includes(type as (typeof DOCUMENT_TYPES)[number])) {
     return NextResponse.json({ error: 'Invalid document type' }, { status: 400 });
+  }
+
+  const perms = await resolvePermissions(session);
+  const allowed = type === 'CONTRACT' ? perms.contracts : perms.documentsPresentations;
+  if (!allowed) {
+    return NextResponse.json({ error: 'You do not have permission to upload here' }, { status: 403 });
   }
 
   let storagePath: string;
