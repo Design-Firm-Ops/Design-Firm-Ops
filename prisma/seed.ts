@@ -86,6 +86,75 @@ function mapEnum<T extends string>(value: string | null, allowed: T[]): T | null
   return allowed.includes(upper) ? upper : null;
 }
 
+const PLACE_WORDS = new Set([
+  'trade', 'home', 'studio', 'rug', 'rugs', 'city', 'point', 'como', 'royale', 'regency',
+  'vintage', 'shop', 'online', 'slc', 'vegas', 'denver', 'la', 'curate', 'the', 'to', 'and',
+  'high', 'luxe', 'ivystone', 'park', 'furniture', 'collection', '&',
+]);
+
+function looksLikePersonName(text: string): boolean {
+  const words = text.trim().split(/\s+/);
+  if (words.length < 2 || words.length > 3) return false;
+  if (/\d/.test(text)) return false;
+  return words.every((w) => /^[A-Z][a-zA-Z'.-]*$/.test(w) && !PLACE_WORDS.has(w.toLowerCase()));
+}
+
+const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/;
+const PHONE_RE = /(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})/;
+
+/**
+ * Best-effort split of the firm's freeform "showroom / rep" spreadsheet
+ * text into structured fields. The source data mixes showroom name, rep
+ * name, email, and phone with no consistent delimiter, so this is a
+ * heuristic — admins can correct individual vendors after seeding.
+ */
+function parseShowroomRep(raw: string | null): {
+  showroomName: string | null;
+  repName: string | null;
+  repEmail: string | null;
+  repPhone: string | null;
+} {
+  if (!raw) return { showroomName: null, repName: null, repEmail: null, repPhone: null };
+
+  const lines = raw
+    .split('\n')
+    .flatMap((line) => line.split('·'))
+    .flatMap((line) => (EMAIL_RE.test(line) || PHONE_RE.test(line) ? [line] : line.split(',')))
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  let repEmail: string | null = null;
+  let repPhone: string | null = null;
+  const texts: string[] = [];
+
+  for (const line of lines) {
+    const emailMatch = line.match(EMAIL_RE);
+    const phoneMatch = line.match(PHONE_RE);
+    if (emailMatch && !repEmail) {
+      repEmail = emailMatch[0];
+      continue;
+    }
+    if (phoneMatch && !repPhone) {
+      repPhone = phoneMatch[0];
+      continue;
+    }
+    if (!emailMatch && !phoneMatch) texts.push(line);
+  }
+
+  let showroomName: string | null = null;
+  let repName: string | null = null;
+
+  if (texts.length === 1) {
+    if (looksLikePersonName(texts[0])) repName = texts[0];
+    else showroomName = texts[0];
+  } else if (texts.length >= 2) {
+    showroomName = texts.slice(0, -1).join(' / ');
+    repName = texts[texts.length - 1];
+  }
+
+  return { showroomName, repName, repEmail, repPhone };
+}
+
 async function seedVendors() {
   let withCredentials = 0;
 
@@ -106,11 +175,16 @@ async function seedVendors() {
       }
     }
 
+    const { showroomName, repName, repEmail, repPhone } = parseShowroomRep(v.showroomRep);
+
     await prisma.vendor.create({
       data: {
         name: v.name,
         website: v.website,
-        showroomRep: v.showroomRep,
+        showroomName,
+        repName,
+        repEmail,
+        repPhone,
         accountType: mapEnum<'TRADE' | 'RETAIL' | 'BOTH'>(v.tradeRetail, ['TRADE', 'RETAIL', 'BOTH']),
         productType: mapEnum<'STOCK' | 'CUSTOM' | 'BOTH'>(v.stockCustom, ['STOCK', 'CUSTOM', 'BOTH']),
         priceRange: mapEnum<'LOW' | 'MID' | 'HIGH'>(v.priceRange, ['LOW', 'MID', 'HIGH']),
@@ -191,10 +265,10 @@ async function seedDemoProject() {
   // from the firm's real FF&E vendor list above, kept minimal since
   // their only role is to populate the Vendor column on these items.
   const [circa, visualComfort, rh, hinkley] = await Promise.all([
-    prisma.vendor.create({ data: { name: 'Circa Lighting', website: 'https://circalighting.com', showroomRep: 'Ellen Marsh · ellen@circalighting.com' } }),
-    prisma.vendor.create({ data: { name: 'Visual Comfort & Co.', website: 'https://visualcomfort.com', showroomRep: 'Derek Paulson · derek@visualcomfort.com' } }),
-    prisma.vendor.create({ data: { name: 'RH Lighting', website: 'https://rh.com', showroomRep: 'Casey Nguyen · casey@rh.com' } }),
-    prisma.vendor.create({ data: { name: 'Hinkley Lighting', website: 'https://hinkley.com', showroomRep: 'Marcus Tell · marcus@hinkley.com' } }),
+    prisma.vendor.create({ data: { name: 'Circa Lighting', website: 'https://circalighting.com', repName: 'Ellen Marsh', repEmail: 'ellen@circalighting.com' } }),
+    prisma.vendor.create({ data: { name: 'Visual Comfort & Co.', website: 'https://visualcomfort.com', repName: 'Derek Paulson', repEmail: 'derek@visualcomfort.com' } }),
+    prisma.vendor.create({ data: { name: 'RH Lighting', website: 'https://rh.com', repName: 'Casey Nguyen', repEmail: 'casey@rh.com' } }),
+    prisma.vendor.create({ data: { name: 'Hinkley Lighting', website: 'https://hinkley.com', repName: 'Marcus Tell', repEmail: 'marcus@hinkley.com' } }),
   ]);
 
   // Unit costs solved so the 13-item extended-price sum matches the

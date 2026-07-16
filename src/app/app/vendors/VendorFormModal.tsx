@@ -6,7 +6,11 @@ export interface VendorRow {
   id: string;
   name: string;
   website: string | null;
-  showroomRep: string | null;
+  repName: string | null;
+  repEmail: string | null;
+  repPhone: string | null;
+  showroomName: string | null;
+  showroomAddress: string | null;
   accountType: string | null;
   productType: string | null;
   priceRange: string | null;
@@ -34,7 +38,11 @@ export default function VendorFormModal({
   const [form, setForm] = useState({
     name: vendor?.name ?? '',
     website: vendor?.website ?? '',
-    showroomRep: vendor?.showroomRep ?? '',
+    repName: vendor?.repName ?? '',
+    repEmail: vendor?.repEmail ?? '',
+    repPhone: vendor?.repPhone ?? '',
+    showroomName: vendor?.showroomName ?? '',
+    showroomAddress: vendor?.showroomAddress ?? '',
     accountType: vendor?.accountType ?? '',
     productType: vendor?.productType ?? '',
     priceRange: vendor?.priceRange ?? '',
@@ -93,16 +101,54 @@ export default function VendorFormModal({
             <label className="mb-1 block text-sm font-medium text-brown">Website</label>
             <input className="input" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
           </div>
-          <div className="col-span-2">
-            <label className="mb-1 block text-sm font-medium text-brown">Showroom / Rep</label>
-            <textarea
-              className="input"
-              rows={2}
-              placeholder="Showroom name, rep name, email, phone"
-              value={form.showroomRep}
-              onChange={(e) => setForm({ ...form, showroomRep: e.target.value })}
-            />
+        </div>
+
+        <div className="space-y-3 rounded-md border border-taupe/40 p-4">
+          <h3 className="text-sm font-semibold text-brown">Rep Information</h3>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brown">Name</label>
+              <input className="input" value={form.repName} onChange={(e) => setForm({ ...form, repName: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brown">Email</label>
+              <input
+                type="email"
+                className="input"
+                value={form.repEmail}
+                onChange={(e) => setForm({ ...form, repEmail: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brown">Phone</label>
+              <input className="input" value={form.repPhone} onChange={(e) => setForm({ ...form, repPhone: e.target.value })} />
+            </div>
           </div>
+        </div>
+
+        <div className="space-y-3 rounded-md border border-taupe/40 p-4">
+          <h3 className="text-sm font-semibold text-brown">Showroom Information</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brown">Showroom Name</label>
+              <input
+                className="input"
+                value={form.showroomName}
+                onChange={(e) => setForm({ ...form, showroomName: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brown">Address</label>
+              <input
+                className="input"
+                value={form.showroomAddress}
+                onChange={(e) => setForm({ ...form, showroomAddress: e.target.value })}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-brown">Trade or Retail</label>
             <select className="input" value={form.accountType} onChange={(e) => setForm({ ...form, accountType: e.target.value })}>

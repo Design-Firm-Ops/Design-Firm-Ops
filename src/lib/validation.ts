@@ -11,7 +11,11 @@ export const clientSchema = z.object({
 export const vendorSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   website: z.string().optional().or(z.literal('')),
-  showroomRep: z.string().optional().or(z.literal('')),
+  repName: z.string().optional().or(z.literal('')),
+  repEmail: z.string().email().optional().or(z.literal('')),
+  repPhone: z.string().optional().or(z.literal('')),
+  showroomName: z.string().optional().or(z.literal('')),
+  showroomAddress: z.string().optional().or(z.literal('')),
   accountType: z.enum(['TRADE', 'RETAIL', 'BOTH']).nullable().optional(),
   productType: z.enum(['STOCK', 'CUSTOM', 'BOTH']).nullable().optional(),
   priceRange: z.enum(['LOW', 'MID', 'HIGH']).nullable().optional(),
@@ -144,6 +148,17 @@ export const leadSchema = z.object({
   address: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
   pipelineStageId: z.string().min(1),
+  squareFootage: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? null : v),
+    z.coerce.number().int().min(0).nullable()
+  ),
+  estimatedBudget: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? null : v),
+    z.coerce.number().min(0).nullable()
+  ),
+  timeline: z.string().optional().or(z.literal('')),
+  builderName: z.string().optional().or(z.literal('')),
+  architectName: z.string().optional().or(z.literal('')),
 });
 
 export const leadUpdateSchema = leadSchema.partial();

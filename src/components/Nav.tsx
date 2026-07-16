@@ -3,10 +3,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
+import NavSearch from './NavSearch';
 
 const links = [
   { href: '/app/projects', label: 'Projects' },
   { href: '/app/business-development', label: 'Business Development' },
+  { href: '/app/vendors', label: 'Vendors' },
   { href: '/app/administration', label: 'Administration' },
   { href: '/app/settings', label: 'Settings' },
 ];
@@ -37,6 +39,8 @@ export default function Nav({ userName }: { userName?: string | null }) {
             );
           })}
         </nav>
+
+        <NavSearch />
 
         <div className="flex items-center gap-3 text-sm">
           {userName && <span className="text-cream/70">{userName}</span>}

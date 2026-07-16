@@ -25,6 +25,11 @@ export interface LeadRow {
   pipelineStageId: string;
   sortOrder: number;
   convertedProjectId: string | null;
+  squareFootage: number | null;
+  estimatedBudget: string | null;
+  timeline: string | null;
+  builderName: string | null;
+  architectName: string | null;
 }
 
 export default function LeadsBoard({
@@ -196,6 +201,13 @@ export default function LeadsBoard({
                     {lead.projectType && <p className="text-xs text-brown/60">{lead.projectType}</p>}
                     {lead.referralPartnerName && (
                       <p className="text-xs text-brown/50">via {lead.referralPartnerName}</p>
+                    )}
+                    {(lead.builderName || lead.architectName) && (
+                      <p className="text-xs text-brown/50">
+                        {lead.builderName && <>Builder: {lead.builderName}</>}
+                        {lead.builderName && lead.architectName && ' · '}
+                        {lead.architectName && <>Architect: {lead.architectName}</>}
+                      </p>
                     )}
                     {lead.convertedProjectId ? (
                       <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">

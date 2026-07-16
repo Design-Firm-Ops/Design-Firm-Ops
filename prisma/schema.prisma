@@ -223,9 +223,14 @@ model Vendor {
   name    String
   website String?
 
-  // Free text — showroom name, rep name, email, phone are often
-  // combined and don't split cleanly across vendors.
-  showroomRep String?
+  // Rep contact — the person to call/email at this vendor.
+  repName  String?
+  repEmail String?
+  repPhone String?
+
+  // Showroom — where the vendor's account/rep is physically based.
+  showroomName    String?
+  showroomAddress String?
 
   accountType VendorAccountType?
   productType VendorProductType?
@@ -400,6 +405,12 @@ model Lead {
   contactPhone String?
   address      String?
   notes        String?
+
+  squareFootage    Int?
+  estimatedBudget  Decimal? @db.Decimal(12, 2)
+  timeline         String?
+  builderName      String?
+  architectName    String?
 
   pipelineStage   PipelineStage @relation(fields: [pipelineStageId], references: [id])
   pipelineStageId String

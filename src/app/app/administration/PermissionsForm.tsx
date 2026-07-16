@@ -35,7 +35,7 @@ const FIELDS: { key: keyof PermissionsData; label: string; description: string }
   {
     key: 'designerCanViewVendorCredentials',
     label: 'Vendor Trade Account Credentials',
-    description: 'Usernames and passwords stored on the Administration > Vendors tab.',
+    description: 'Usernames and passwords stored on the Vendors page.',
   },
 ];
 

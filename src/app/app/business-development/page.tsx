@@ -33,6 +33,11 @@ export default async function BusinessDevelopmentPage() {
     pipelineStageId: l.pipelineStageId,
     sortOrder: l.sortOrder,
     convertedProjectId: l.convertedProjectId,
+    squareFootage: l.squareFootage,
+    estimatedBudget: l.estimatedBudget ? String(l.estimatedBudget) : null,
+    timeline: l.timeline,
+    builderName: l.builderName,
+    architectName: l.architectName,
   }));
 
   return (

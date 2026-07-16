@@ -4,6 +4,8 @@ import { useState } from 'react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import type { LeadRow, StageRow } from './LeadsBoard';
 
+const NEW_PARTNER_VALUE = '__new__';
+
 export default function LeadFormModal({
   lead,
   stages,
@@ -29,11 +31,60 @@ export default function LeadFormModal({
     address: lead?.address ?? '',
     notes: lead?.notes ?? '',
     pipelineStageId: lead?.pipelineStageId ?? stages[0]?.id ?? '',
+    squareFootage: lead?.squareFootage != null ? String(lead.squareFootage) : '',
+    estimatedBudget: lead?.estimatedBudget ?? '',
+    timeline: lead?.timeline ?? '',
+    builderName: lead?.builderName ?? '',
+    architectName: lead?.architectName ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const [partners, setPartners] = useState(referralPartners);
+  const [showNewPartner, setShowNewPartner] = useState(false);
+  const [newPartner, setNewPartner] = useState({ name: '', businessName: '', contactEmail: '', contactPhone: '' });
+  const [creatingPartner, setCreatingPartner] = useState(false);
+  const [partnerError, setPartnerError] = useState<string | null>(null);
+
+  function handleReferralPartnerChange(value: string) {
+    if (value === NEW_PARTNER_VALUE) {
+      setShowNewPartner(true);
+      setPartnerError(null);
+      return;
+    }
+    setForm({ ...form, referralPartnerId: value });
+  }
+
+  async function handleCreatePartner() {
+    if (!newPartner.name.trim()) {
+      setPartnerError('Name is required');
+      return;
+    }
+    setCreatingPartner(true);
+    setPartnerError(null);
+
+    const res = await fetch('/api/referral-partners', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newPartner),
+    });
+
+    setCreatingPartner(false);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setPartnerError(data?.error ? JSON.stringify(data.error) : 'Could not create partner.');
+      return;
+    }
+
+    const created = await res.json();
+    setPartners((prev) => [...prev, { id: created.id, name: created.name }]);
+    setForm((prev) => ({ ...prev, referralPartnerId: created.id }));
+    setShowNewPartner(false);
+    setNewPartner({ name: '', businessName: '', contactEmail: '', contactPhone: '' });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -126,17 +177,79 @@ export default function LeadFormModal({
             <select
               className="input"
               value={form.referralPartnerId}
-              onChange={(e) => setForm({ ...form, referralPartnerId: e.target.value })}
+              onChange={(e) => handleReferralPartnerChange(e.target.value)}
             >
               <option value="">—</option>
-              {referralPartners.map((p) => (
+              {partners.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
               ))}
+              <option value={NEW_PARTNER_VALUE}>+ New referral partner…</option>
             </select>
           </div>
         </div>
+
+        {showNewPartner && (
+          <div className="space-y-3 rounded-md border border-taupe/40 p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-brown">New Referral Partner</h3>
+              <button
+                type="button"
+                className="text-xs text-brown/50 hover:text-brown"
+                onClick={() => setShowNewPartner(false)}
+              >
+                Cancel
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="mb-1 block text-xs font-medium text-brown">Name</label>
+                <input
+                  className="input"
+                  value={newPartner.name}
+                  onChange={(e) => setNewPartner({ ...newPartner, name: e.target.value })}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="mb-1 block text-xs font-medium text-brown">Business Name</label>
+                <input
+                  className="input"
+                  value={newPartner.businessName}
+                  onChange={(e) => setNewPartner({ ...newPartner, businessName: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-brown">Email</label>
+                <input
+                  type="email"
+                  className="input"
+                  value={newPartner.contactEmail}
+                  onChange={(e) => setNewPartner({ ...newPartner, contactEmail: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-brown">Phone</label>
+                <input
+                  className="input"
+                  value={newPartner.contactPhone}
+                  onChange={(e) => setNewPartner({ ...newPartner, contactPhone: e.target.value })}
+                />
+              </div>
+            </div>
+            {partnerError && <p className="text-xs text-red-700">{partnerError}</p>}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="btn-secondary py-1.5 text-xs"
+                onClick={handleCreatePartner}
+                disabled={creatingPartner}
+              >
+                {creatingPartner ? 'Adding…' : 'Add Partner'}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -161,6 +274,58 @@ export default function LeadFormModal({
         <div>
           <label className="mb-1 block text-sm font-medium text-brown">Address</label>
           <input className="input" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Square Footage</label>
+            <input
+              type="number"
+              min={0}
+              className="input"
+              value={form.squareFootage}
+              onChange={(e) => setForm({ ...form, squareFootage: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Estimated Budget</label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              className="input"
+              value={form.estimatedBudget}
+              onChange={(e) => setForm({ ...form, estimatedBudget: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Timeline</label>
+            <input
+              className="input"
+              placeholder="e.g. Fall 2026"
+              value={form.timeline}
+              onChange={(e) => setForm({ ...form, timeline: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Builder</label>
+            <input
+              className="input"
+              value={form.builderName}
+              onChange={(e) => setForm({ ...form, builderName: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Architect</label>
+            <input
+              className="input"
+              value={form.architectName}
+              onChange={(e) => setForm({ ...form, architectName: e.target.value })}
+            />
+          </div>
         </div>
 
         <div>

@@ -2,10 +2,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createSignedResourceUrl } from '@/lib/supabase';
-import { isAdmin, resolvePermissions } from '@/lib/permissions';
-import AdminTabs from './AdminTabs';
-import StorageCenter from './StorageCenter';
-import VendorsManager from './VendorsManager';
+import { isAdmin } from '@/lib/permissions';
+import AdminBrowser from './AdminBrowser';
 import UsersManager from './UsersManager';
 import PermissionsForm from './PermissionsForm';
 
@@ -14,28 +12,9 @@ export const dynamic = 'force-dynamic';
 export default async function AdministrationPage() {
   const session = await getServerSession(authOptions);
   const admin = isAdmin(session);
-  const perms = await resolvePermissions(session);
 
-  const [resources, vendorsRaw, settings, users] = await Promise.all([
+  const [resources, settings, users] = await Promise.all([
     prisma.resource.findMany({ include: { uploadedBy: true }, orderBy: { uploadedAt: 'desc' } }),
-    prisma.vendor.findMany({
-      select: {
-        id: true,
-        name: true,
-        website: true,
-        showroomRep: true,
-        accountType: true,
-        productType: true,
-        priceRange: true,
-        offerings: true,
-        notes: true,
-        accountNumber: true,
-        tradeAccountUsername: true,
-        tradeAccountPasswordEncrypted: true,
-        tradeAccountNotes: true,
-      },
-      orderBy: { name: 'asc' },
-    }),
     admin ? prisma.settings.findUnique({ where: { id: 1 } }) : Promise.resolve(null),
     admin
       ? prisma.user.findMany({
@@ -55,13 +34,6 @@ export default async function AdministrationPage() {
       uploadedByName: r.uploadedBy?.name ?? null,
     }))
   );
-
-  const vendors = vendorsRaw.map(({ tradeAccountPasswordEncrypted, ...v }) => ({
-    ...v,
-    tradeAccountUsername: perms.vendorCredentials ? v.tradeAccountUsername : null,
-    tradeAccountNotes: perms.vendorCredentials ? v.tradeAccountNotes : null,
-    hasTradeAccountPassword: perms.vendorCredentials && tradeAccountPasswordEncrypted !== null,
-  }));
 
   const usersTab = admin ? (
     <UsersManager
@@ -86,9 +58,9 @@ export default async function AdministrationPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-semibold text-brown">Administration</h1>
-      <AdminTabs
-        storageContent={<StorageCenter initialResources={resourceRows} />}
-        vendorsContent={<VendorsManager initialVendors={vendors} canViewCredentials={perms.vendorCredentials} />}
+      <AdminBrowser
+        resourceRows={resourceRows}
+        usersForSearch={users.map((u) => ({ name: u.name, email: u.email }))}
         usersContent={usersTab}
         permissionsContent={permissionsTab}
         isAdmin={admin}
