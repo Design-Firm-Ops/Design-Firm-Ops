@@ -1,16 +1,17 @@
-/*
-  Warnings:
-
-  - You are about to drop the column `showroomRep` on the `Vendor` table. All the data in the column will be lost.
-
-*/
 -- AlterTable
-ALTER TABLE "Vendor" DROP COLUMN "showroomRep",
-ADD COLUMN     "repName" TEXT,
+ALTER TABLE "Vendor" ADD COLUMN     "repName" TEXT,
 ADD COLUMN     "repEmail" TEXT,
 ADD COLUMN     "repPhone" TEXT,
 ADD COLUMN     "showroomName" TEXT,
 ADD COLUMN     "showroomAddress" TEXT;
+
+-- Preserve existing showroom/rep text rather than discarding it — it
+-- lands in showroomName verbatim so nothing is lost; admins can split
+-- individual vendors into the new structured fields from the Vendors
+-- page as needed.
+UPDATE "Vendor" SET "showroomName" = "showroomRep" WHERE "showroomRep" IS NOT NULL;
+
+ALTER TABLE "Vendor" DROP COLUMN "showroomRep";
 
 -- AlterTable
 ALTER TABLE "Lead" ADD COLUMN     "squareFootage" INTEGER,
