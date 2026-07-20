@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
 import { projectSchema } from '@/lib/validation';
@@ -33,6 +34,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (clientId) data.clientId = clientId;
   if (startDate !== undefined) data.startDate = startDate ? new Date(startDate) : null;
   if (projectType !== undefined) data.projectTypeId = await findOrCreateProjectType(projectType);
+  if (data.defaultInvoiceColumnConfig === null) data.defaultInvoiceColumnConfig = Prisma.JsonNull;
 
   const project = await prisma.project.update({
     where: { id: params.id },

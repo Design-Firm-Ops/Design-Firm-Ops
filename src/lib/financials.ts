@@ -32,7 +32,11 @@ export function summarizeProjectFinancials(
 ) {
   let invoicedTotal = new Decimal(0);
 
-  for (const invoice of project.invoices) {
+  // A voided invoice's items are detached and revert to APPROVED — it
+  // never counted as real invoiced revenue in the first place.
+  const liveInvoices = project.invoices.filter((invoice) => invoice.status !== 'VOID');
+
+  for (const invoice of liveInvoices) {
     const extendedPrices = invoice.items.map((item) => priceItem(item, project).extended);
     const totals = computeInvoiceTotals({
       extendedPrices,

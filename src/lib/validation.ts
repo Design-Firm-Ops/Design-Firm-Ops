@@ -43,6 +43,8 @@ export const projectSchema = z.object({
   salesTaxRate: z.coerce.number().min(0).max(1).default(0),
   taxBase: z.enum(['MERCH_ONLY', 'MERCH_PLUS_SHIPPING']).default('MERCH_ONLY'),
   invoicePrefix: z.string().optional().or(z.literal('')),
+  // Columns new invoices on this project start with — see lib/invoiceColumns.ts.
+  defaultInvoiceColumnConfig: z.object({ columns: z.array(z.string()) }).nullable().optional(),
   // Only present when creating a project with a brand-new client inline.
   newClientName: z.string().optional().or(z.literal('')),
   newClientEmail: z.string().optional().or(z.literal('')),
@@ -74,7 +76,16 @@ export const itemSchema = z.object({
   status: z.enum(['PROPOSED', 'APPROVED', 'INVOICED', 'ORDERED', 'RECEIVED', 'DELIVERED']).default('PROPOSED'),
 });
 
-export const itemUpdateSchema = itemSchema.partial().omit({ projectId: true });
+export const itemUpdateSchema = itemSchema.partial().omit({ projectId: true }).extend({
+  // Bypasses the invoiced-item lock — see /api/items/[id] PATCH.
+  unlockOverride: z.boolean().optional(),
+});
+
+const hexColor = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{6}$/, 'Must be a hex color, e.g. #4A3728')
+  .optional()
+  .or(z.literal(''));
 
 export const settingsSchema = z.object({
   companyName: z.string().min(1, 'Company name is required'),
@@ -85,6 +96,8 @@ export const settingsSchema = z.object({
   owner2Contact: z.string().optional().or(z.literal('')),
   paymentInstructions: z.string().optional().or(z.literal('')),
   logoUrl: z.string().optional().or(z.literal('')),
+  invoicePrimaryColor: hexColor,
+  invoiceAccentColor: hexColor,
 });
 
 export const permissionsSchema = z.object({
@@ -108,12 +121,20 @@ export const paymentSchema = z.object({
   notes: z.string().optional().or(z.literal('')),
 });
 
+export const paymentUpdateSchema = paymentSchema.partial().omit({ projectId: true });
+
 export const invoiceCreateSchema = z.object({
   projectId: z.string().min(1),
   itemIds: z.array(z.string()).min(1, 'Select at least one item'),
   shippingTotal: z.coerce.number().min(0).default(0),
   taxRate: z.coerce.number().min(0).max(1).optional(),
   taxBase: z.enum(['MERCH_ONLY', 'MERCH_PLUS_SHIPPING']).optional(),
+  dueDate: z.string().optional().or(z.literal('')),
+  notes: z.string().optional().or(z.literal('')),
+});
+
+export const invoiceUpdateSchema = z.object({
+  columnConfig: z.object({ columns: z.array(z.string()) }).nullable().optional(),
   dueDate: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
 });

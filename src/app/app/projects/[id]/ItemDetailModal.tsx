@@ -63,6 +63,7 @@ export default function ItemDetailModal({
   const [defs, setDefs] = useState(fieldDefs);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const locked = !!item.invoiceId;
 
   const priced = priceLine({
     unitCost: form.unitCost,
@@ -125,6 +126,13 @@ export default function ItemDetailModal({
       <form onSubmit={handleSubmit} className="card w-full max-w-2xl max-h-[90vh] space-y-4 overflow-y-auto p-6">
         <h2 className="text-lg font-medium text-brown">Item Details — {item.tag}</h2>
 
+        {locked && (
+          <p className="rounded-md border border-gold/40 bg-gold/10 p-3 text-sm text-brown">
+            🔒 Locked to invoice {item.invoiceNumber}. Use "Correct this item" in the Procurement list to edit.
+          </p>
+        )}
+
+        <fieldset disabled={locked} className="space-y-4 disabled:opacity-60">
         <div className="flex items-start gap-4">
           <button type="button" onClick={() => imageUrl && setEnlarged(true)}>
             {imageUrl ? (
@@ -269,6 +277,7 @@ export default function ItemDetailModal({
             onChange={(e) => setForm({ ...form, shippingNotes: e.target.value })}
           />
         </div>
+        </fieldset>
 
         <ItemCustomFields
           itemId={item.id}
@@ -286,9 +295,11 @@ export default function ItemDetailModal({
           <button type="button" className="btn-secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
+          {!locked && (
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          )}
         </div>
       </form>
 

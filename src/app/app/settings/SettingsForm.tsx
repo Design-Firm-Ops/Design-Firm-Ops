@@ -15,7 +15,12 @@ interface SettingsData {
   owner2Contact: string | null;
   paymentInstructions: string | null;
   logoUrl: string | null;
+  invoicePrimaryColor: string | null;
+  invoiceAccentColor: string | null;
 }
+
+const DEFAULT_PRIMARY_COLOR = '#4A3728';
+const DEFAULT_ACCENT_COLOR = '#C49A5C';
 
 export default function SettingsForm({ initialSettings }: { initialSettings: SettingsData | null }) {
   const router = useRouter();
@@ -27,6 +32,8 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Set
     owner2Name: initialSettings?.owner2Name ?? '',
     owner2Contact: initialSettings?.owner2Contact ?? '',
     paymentInstructions: initialSettings?.paymentInstructions ?? '',
+    invoicePrimaryColor: initialSettings?.invoicePrimaryColor ?? DEFAULT_PRIMARY_COLOR,
+    invoiceAccentColor: initialSettings?.invoiceAccentColor ?? DEFAULT_ACCENT_COLOR,
   });
   const [logoUrl, setLogoUrl] = useState(initialSettings?.logoUrl ?? null);
   const [saving, setSaving] = useState(false);
@@ -115,6 +122,47 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Set
           )}
           <input type="file" accept="image/*" onChange={handleLogoUpload} disabled={uploadingLogo} />
           {uploadingLogo && <p className="mt-1 text-sm text-brown/60">Uploading…</p>}
+        </div>
+
+        <div>
+          <p className="mb-1 text-sm font-medium text-brown">Invoice Branding Colors</p>
+          <p className="mb-3 text-xs text-brown/50">Used on invoice PDFs and emails. Defaults to the Design Firm Ops brand palette.</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brown">Primary Color</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  className="h-9 w-12 rounded border border-taupe/40"
+                  value={form.invoicePrimaryColor || DEFAULT_PRIMARY_COLOR}
+                  onChange={(e) => setForm({ ...form, invoicePrimaryColor: e.target.value })}
+                />
+                <input
+                  className="input"
+                  placeholder={DEFAULT_PRIMARY_COLOR}
+                  value={form.invoicePrimaryColor}
+                  onChange={(e) => setForm({ ...form, invoicePrimaryColor: e.target.value })}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brown">Accent Color</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  className="h-9 w-12 rounded border border-taupe/40"
+                  value={form.invoiceAccentColor || DEFAULT_ACCENT_COLOR}
+                  onChange={(e) => setForm({ ...form, invoiceAccentColor: e.target.value })}
+                />
+                <input
+                  className="input"
+                  placeholder={DEFAULT_ACCENT_COLOR}
+                  value={form.invoiceAccentColor}
+                  onChange={(e) => setForm({ ...form, invoiceAccentColor: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

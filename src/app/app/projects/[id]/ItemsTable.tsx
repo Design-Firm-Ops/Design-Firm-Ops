@@ -30,6 +30,7 @@ export interface ItemRow {
   shippingNotes: string | null;
   status: string;
   invoiceId: string | null;
+  invoiceNumber: string | null;
   fieldValues: { fieldDefId: string; value: string | null }[];
 }
 
@@ -78,6 +79,7 @@ export default function ItemsTable({
   offeringOptions,
   itemFieldDefs,
   isAdmin,
+  canOverrideLock,
   projectDefaultMarkupPct,
   projectMarkupMode,
   copyTargets,
@@ -89,6 +91,7 @@ export default function ItemsTable({
   offeringOptions: OfferingOption[];
   itemFieldDefs: ItemFieldDefRow[];
   isAdmin: boolean;
+  canOverrideLock: boolean;
   projectDefaultMarkupPct: string;
   projectMarkupMode: string;
   copyTargets: { id: string; name: string }[];
@@ -102,18 +105,31 @@ export default function ItemsTable({
   const [addingRow, setAddingRow] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [copyingId, setCopyingId] = useState<string | null>(null);
+  const [overriddenIds, setOverriddenIds] = useState<Set<string>>(new Set());
+  const [pendingOverride, setPendingOverride] = useState<ItemRow | null>(null);
 
   function updateLocal(id: string, patch: Partial<ItemRow>) {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }
 
+  function isEditable(item: ItemRow) {
+    return !item.invoiceId || overriddenIds.has(item.id);
+  }
+
   async function saveField(id: string, patch: Record<string, unknown>) {
+    const item = items.find((i) => i.id === id);
     await fetch(`/api/items/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
+      body: JSON.stringify(item?.invoiceId ? { ...patch, unlockOverride: true } : patch),
     });
     router.refresh();
+  }
+
+  function confirmOverride() {
+    if (!pendingOverride) return;
+    setOverriddenIds((prev) => new Set(prev).add(pendingOverride.id));
+    setPendingOverride(null);
   }
 
   async function handleAddRow() {
@@ -134,7 +150,7 @@ export default function ItemsTable({
     setAddingRow(false);
     if (res.ok) {
       const created = await res.json();
-      setItems((prev) => [...prev, { ...created, imageUrl: null, fieldValues: [] }]);
+      setItems((prev) => [...prev, { ...created, imageUrl: null, invoiceNumber: null, fieldValues: [] }]);
       router.refresh();
     }
   }
@@ -281,8 +297,10 @@ export default function ItemsTable({
             {items.map((item) => {
               const priced = computeRow(item, projectDefaultMarkupPct, projectMarkupMode);
               const markupDisplayValue = item.markupPct ?? '';
+              const editable = isEditable(item);
+              const locked = !editable;
               return (
-                <tr key={item.id} className="hover:bg-taupe/5">
+                <tr key={item.id} className={`hover:bg-taupe/5 ${locked ? 'bg-taupe/5' : ''}`}>
                   <td className="px-2 py-1">
                     <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelect(item.id)} />
                   </td>
@@ -298,12 +316,20 @@ export default function ItemsTable({
                     </button>
                   </td>
                   <td className="px-2 py-1">
-                    <input
-                      className="w-20 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none"
-                      value={item.tag}
-                      onChange={(e) => updateLocal(item.id, { tag: e.target.value })}
-                      onBlur={(e) => saveField(item.id, { tag: e.target.value })}
-                    />
+                    <div className="flex items-center gap-1">
+                      {locked && (
+                        <span title={`Locked to invoice ${item.invoiceNumber}`} className="text-brown/40">
+                          🔒
+                        </span>
+                      )}
+                      <input
+                        className="w-20 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                        value={item.tag}
+                        disabled={locked}
+                        onChange={(e) => updateLocal(item.id, { tag: e.target.value })}
+                        onBlur={(e) => saveField(item.id, { tag: e.target.value })}
+                      />
+                    </div>
                   </td>
                   <td className="px-2 py-1">
                     <button className="text-left font-medium text-brown hover:text-gold" onClick={() => setDetailItem(item)}>
@@ -312,8 +338,9 @@ export default function ItemsTable({
                   </td>
                   <td className="px-2 py-1">
                     <select
-                      className="rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none"
+                      className="rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                       value={item.category}
+                      disabled={locked}
                       onChange={(e) => {
                         updateLocal(item.id, { category: e.target.value });
                         saveField(item.id, { category: e.target.value });
@@ -328,8 +355,9 @@ export default function ItemsTable({
                   </td>
                   <td className="px-2 py-1">
                     <select
-                      className="rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none"
+                      className="rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                       value={item.offeringId ?? ''}
+                      disabled={locked}
                       onChange={(e) => {
                         updateLocal(item.id, { offeringId: e.target.value || null });
                         saveField(item.id, { offeringId: e.target.value });
@@ -345,16 +373,18 @@ export default function ItemsTable({
                   </td>
                   <td className="px-2 py-1">
                     <input
-                      className="w-24 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none"
+                      className="w-24 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                       value={item.room ?? ''}
+                      disabled={locked}
                       onChange={(e) => updateLocal(item.id, { room: e.target.value })}
                       onBlur={(e) => saveField(item.id, { room: e.target.value })}
                     />
                   </td>
                   <td className="px-2 py-1">
                     <select
-                      className="rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none"
+                      className="rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                       value={item.vendorId ?? ''}
+                      disabled={locked}
                       onChange={(e) => {
                         updateLocal(item.id, { vendorId: e.target.value || null });
                         saveField(item.id, { vendorId: e.target.value });
@@ -372,8 +402,9 @@ export default function ItemsTable({
                     <input
                       type="number"
                       min={1}
-                      className="w-14 rounded border border-transparent bg-transparent px-1 py-0.5 text-right hover:border-taupe/40 focus:border-gold focus:outline-none"
+                      className="w-14 rounded border border-transparent bg-transparent px-1 py-0.5 text-right hover:border-taupe/40 focus:border-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                       value={item.qty}
+                      disabled={locked}
                       onChange={(e) => updateLocal(item.id, { qty: Number(e.target.value) })}
                       onBlur={(e) => saveField(item.id, { qty: Number(e.target.value) })}
                     />
@@ -383,8 +414,9 @@ export default function ItemsTable({
                       type="number"
                       step="0.01"
                       min={0}
-                      className="w-24 rounded border border-transparent bg-transparent px-1 py-0.5 text-right hover:border-taupe/40 focus:border-gold focus:outline-none"
+                      className="w-24 rounded border border-transparent bg-transparent px-1 py-0.5 text-right hover:border-taupe/40 focus:border-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                       value={item.unitCost}
+                      disabled={locked}
                       onChange={(e) => updateLocal(item.id, { unitCost: e.target.value })}
                       onBlur={(e) => saveField(item.id, { unitCost: e.target.value })}
                     />
@@ -394,8 +426,9 @@ export default function ItemsTable({
                       type="number"
                       step="0.001"
                       placeholder={`${projectDefaultMarkupPct}% (default)`}
-                      className="w-24 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none"
+                      className="w-24 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                       value={markupDisplayValue}
+                      disabled={locked}
                       onChange={(e) => updateLocal(item.id, { markupPct: e.target.value || null })}
                       onBlur={(e) => saveField(item.id, { markupPct: e.target.value === '' ? null : Number(e.target.value) })}
                     />
@@ -405,8 +438,9 @@ export default function ItemsTable({
                   <td className="px-2 py-1 text-right tabular-nums text-green-800">{formatMoney(priced.profit)}</td>
                   <td className="px-2 py-1">
                     <select
-                      className="rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none"
+                      className="rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                       value={item.status}
+                      disabled={locked}
                       onChange={(e) => {
                         updateLocal(item.id, { status: e.target.value });
                         saveField(item.id, { status: e.target.value });
@@ -420,28 +454,43 @@ export default function ItemsTable({
                     </select>
                   </td>
                   <td className="px-2 py-1">
-                    {copyTargets.length > 0 && (
-                      <select
-                        className="rounded border border-taupe/40 bg-white px-1 py-0.5 text-xs"
-                        value=""
-                        disabled={copyingId === item.id}
-                        onChange={(e) => handleCopy(item.id, e.target.value)}
+                    {locked && canOverrideLock ? (
+                      <button
+                        className="whitespace-nowrap text-xs text-gold hover:underline"
+                        onClick={() => setPendingOverride(item)}
                       >
-                        <option value="" disabled>
-                          {copyingId === item.id ? 'Copying…' : 'Copy to…'}
-                        </option>
-                        {copyTargets.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
+                        Correct this item
+                      </button>
+                    ) : (
+                      copyTargets.length > 0 && (
+                        <select
+                          className="rounded border border-taupe/40 bg-white px-1 py-0.5 text-xs"
+                          value=""
+                          disabled={copyingId === item.id}
+                          onChange={(e) => handleCopy(item.id, e.target.value)}
+                        >
+                          <option value="" disabled>
+                            {copyingId === item.id ? 'Copying…' : 'Copy to…'}
                           </option>
-                        ))}
-                      </select>
+                          {copyTargets.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                      )
                     )}
                   </td>
                   <td className="px-2 py-1 text-right">
-                    <button className="text-red-700 hover:text-red-900" onClick={() => setPendingDelete(item)}>
-                      ✕
-                    </button>
+                    {locked ? (
+                      <span className="text-brown/20" title="Void the invoice to remove this item">
+                        ✕
+                      </span>
+                    ) : (
+                      <button className="text-red-700 hover:text-red-900" onClick={() => setPendingDelete(item)}>
+                        ✕
+                      </button>
+                    )}
                   </td>
                 </tr>
               );
@@ -495,6 +544,15 @@ export default function ItemsTable({
         busy={deleting}
         onConfirm={confirmDeleteRow}
         onCancel={() => setPendingDelete(null)}
+      />
+
+      <ConfirmDialog
+        open={!!pendingOverride}
+        title="Correct this item?"
+        message={`"${pendingOverride?.name}" is locked to invoice ${pendingOverride?.invoiceNumber}. Editing it now will change figures on an already-created invoice.`}
+        confirmLabel="Unlock and Edit"
+        onConfirm={confirmOverride}
+        onCancel={() => setPendingOverride(null)}
       />
     </div>
   );

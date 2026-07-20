@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
 import { projectSchema } from '@/lib/validation';
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest) {
     newClientEmail,
     newClientPhone,
     newClientAddress,
+    defaultInvoiceColumnConfig,
     ...rest
   } = parsed.data;
 
@@ -61,6 +63,7 @@ export async function POST(req: NextRequest) {
       clientId: resolvedClientId,
       projectTypeId,
       startDate: startDate ? new Date(startDate) : null,
+      defaultInvoiceColumnConfig: defaultInvoiceColumnConfig === null ? Prisma.JsonNull : defaultInvoiceColumnConfig,
     },
   });
 

@@ -36,6 +36,7 @@ function serializeInvoiceItem(item: {
   shippingNotes: string | null;
   status: string;
   invoiceId: string | null;
+  invoice?: { invoiceNumber: string } | null;
 }) {
   return {
     id: item.id,
@@ -56,6 +57,7 @@ function serializeInvoiceItem(item: {
     shippingNotes: item.shippingNotes,
     status: item.status,
     invoiceId: item.invoiceId,
+    invoiceNumber: item.invoice?.invoiceNumber ?? null,
   };
 }
 
@@ -69,7 +71,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     include: {
       client: true,
       projectType: true,
-      items: { orderBy: { sortOrder: 'asc' }, include: { fieldValues: true } },
+      items: { orderBy: { sortOrder: 'asc' }, include: { fieldValues: true, invoice: { select: { invoiceNumber: true } } } },
       procurementLists: { orderBy: { order: 'asc' } },
       documents: { orderBy: { uploadedAt: 'desc' } },
       invoices: { include: { items: true }, orderBy: { createdAt: 'desc' } },
@@ -110,6 +112,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     taxBase: inv.taxBase,
     issuedDate: inv.issuedDate ? inv.issuedDate.toISOString() : null,
     dueDate: inv.dueDate ? inv.dueDate.toISOString() : null,
+    columnConfig: inv.columnConfig as { columns: string[] } | null,
     items: inv.items.map((it) => itemsById.get(it.id)!).filter(Boolean),
   }));
 
@@ -194,6 +197,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
             projectMarkupMode={project.markupMode}
             defaultTaxRate={String(project.salesTaxRate)}
             defaultTaxBase={project.taxBase}
+            projectDefaultColumnConfig={project.defaultInvoiceColumnConfig as { columns: string[] } | null}
           />
           <PaymentsTab
             projectId={project.id}
@@ -216,6 +220,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           offeringOptions={offerings.map((o) => ({ id: o.id, name: o.name }))}
           itemFieldDefs={itemFieldDefs}
           isAdmin={admin}
+          canOverrideLock={perms.invoices}
           projectDefaultMarkupPct={String(project.defaultMarkupPct)}
           projectMarkupMode={project.markupMode}
         />
@@ -241,6 +246,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           salesTaxRate: String(project.salesTaxRate),
           taxBase: project.taxBase,
           invoicePrefix: project.invoicePrefix,
+          defaultInvoiceColumnConfig: project.defaultInvoiceColumnConfig as { columns: string[] } | null,
           client: {
             id: project.client.id,
             name: project.client.name,

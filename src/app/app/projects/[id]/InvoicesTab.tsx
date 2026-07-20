@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { computeInvoiceTotals, priceLine } from '@/lib/pricing';
 import { formatMoney, formatPercentFromFraction } from '@/lib/money';
+import { COLUMN_LABELS, COLUMN_PRESETS, INVOICE_COLUMNS, InvoiceColumnKey, resolveColumnConfig } from '@/lib/invoiceColumns';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import type { ItemRow } from './ItemsTable';
 
 export interface InvoiceRow {
@@ -15,8 +17,25 @@ export interface InvoiceRow {
   taxBase: string;
   issuedDate: string | null;
   dueDate: string | null;
+  columnConfig: { columns: string[] } | null;
   items: ItemRow[];
 }
+
+const STATUS_STYLES: Record<string, string> = {
+  DRAFT: 'bg-taupe/20 text-brown/70',
+  SENT: 'bg-gold/20 text-brown',
+  PARTIALLY_PAID: 'bg-gold/40 text-brown',
+  PAID: 'bg-green-50 text-green-800',
+  VOID: 'bg-taupe/10 text-brown/40',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Draft',
+  SENT: 'Sent',
+  PARTIALLY_PAID: 'Partially Paid',
+  PAID: 'Paid',
+  VOID: 'Void',
+};
 
 export default function InvoicesTab({
   projectId,
@@ -26,6 +45,7 @@ export default function InvoicesTab({
   projectMarkupMode,
   defaultTaxRate,
   defaultTaxBase,
+  projectDefaultColumnConfig,
 }: {
   projectId: string;
   invoices: InvoiceRow[];
@@ -34,6 +54,7 @@ export default function InvoicesTab({
   projectMarkupMode: string;
   defaultTaxRate: string;
   defaultTaxBase: string;
+  projectDefaultColumnConfig?: { columns: string[] } | null;
 }) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
@@ -45,6 +66,13 @@ export default function InvoicesTab({
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [expandedColumnsId, setExpandedColumnsId] = useState<string | null>(null);
+  const [savingColumnsId, setSavingColumnsId] = useState<string | null>(null);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingVoid, setPendingVoid] = useState<InvoiceRow | null>(null);
+  const [voiding, setVoiding] = useState(false);
 
   function priceOf(item: ItemRow) {
     return priceLine({
@@ -113,6 +141,64 @@ export default function InvoicesTab({
     router.refresh();
   }
 
+  async function handleSaveColumns(invoiceId: string, columns: InvoiceColumnKey[]) {
+    setSavingColumnsId(invoiceId);
+    setActionError(null);
+
+    const res = await fetch(`/api/invoices/${invoiceId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ columnConfig: { columns } }),
+    });
+
+    setSavingColumnsId(null);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setActionError(data?.error ? JSON.stringify(data.error) : 'Could not save column selection.');
+      return;
+    }
+
+    router.refresh();
+  }
+
+  async function handleSend(invoiceId: string) {
+    setSendingId(invoiceId);
+    setActionError(null);
+
+    const res = await fetch(`/api/invoices/${invoiceId}/send`, { method: 'POST' });
+
+    setSendingId(null);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setActionError(data?.error ?? 'Could not send invoice.');
+      return;
+    }
+
+    router.refresh();
+  }
+
+  async function handleVoid() {
+    if (!pendingVoid) return;
+    setVoiding(true);
+    setActionError(null);
+
+    const res = await fetch(`/api/invoices/${pendingVoid.id}/void`, { method: 'POST' });
+
+    setVoiding(false);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setActionError(data?.error ?? 'Could not void invoice.');
+      setPendingVoid(null);
+      return;
+    }
+
+    setPendingVoid(null);
+    router.refresh();
+  }
+
   return (
     <div>
       <div className="mb-4 flex justify-end">
@@ -126,6 +212,8 @@ export default function InvoicesTab({
         </button>
       </div>
 
+      {actionError && <p className="mb-3 text-sm text-red-700">{actionError}</p>}
+
       <div className="space-y-4">
         {invoices.map((invoice) => {
           const extendedPrices = invoice.items.map((i) => priceOf(i).extended);
@@ -135,12 +223,22 @@ export default function InvoicesTab({
             taxRate: invoice.taxRate,
             taxBase: invoice.taxBase as 'MERCH_ONLY' | 'MERCH_PLUS_SHIPPING',
           });
+          const isVoid = invoice.status === 'VOID';
+          const resolved = resolveColumnConfig(invoice.columnConfig, projectDefaultColumnConfig);
+          const columnsOpen = expandedColumnsId === invoice.id;
+
           return (
-            <div key={invoice.id} className="card p-5">
+            <div key={invoice.id} className={`card p-5 ${isVoid ? 'opacity-60' : ''}`}>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h3 className="font-serif text-lg font-medium text-brown">{invoice.invoiceNumber}</h3>
-                  <p className="text-xs uppercase tracking-[0.24em] text-taupe">{invoice.status}</p>
+                  <h3 className={`font-serif text-lg font-medium text-brown ${isVoid ? 'line-through' : ''}`}>
+                    {invoice.invoiceNumber}
+                  </h3>
+                  <span
+                    className={`inline-block rounded px-2 py-0.5 text-xs font-medium uppercase tracking-[0.1em] ${STATUS_STYLES[invoice.status] ?? 'bg-taupe/20 text-brown/70'}`}
+                  >
+                    {STATUS_LABELS[invoice.status] ?? invoice.status}
+                  </span>
                 </div>
                 <div className="text-right text-sm">
                   <p className="text-brown/60">
@@ -167,6 +265,77 @@ export default function InvoicesTab({
                   <dd className="tabular-nums font-medium text-brown">{formatMoney(totals.grandTotal)}</dd>
                 </div>
               </dl>
+
+              {!isVoid && (
+                <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-taupe/20 pt-3">
+                  <a
+                    className="text-sm font-medium text-gold hover:underline"
+                    href={`/api/invoices/${invoice.id}/pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    View PDF
+                  </a>
+                  <button
+                    className="text-sm font-medium text-brown hover:underline"
+                    onClick={() => setExpandedColumnsId(columnsOpen ? null : invoice.id)}
+                  >
+                    {columnsOpen ? 'Hide columns' : 'Client-visible columns'}
+                  </button>
+                  <button
+                    className="text-sm font-medium text-brown hover:underline disabled:opacity-50"
+                    onClick={() => handleSend(invoice.id)}
+                    disabled={sendingId === invoice.id}
+                  >
+                    {sendingId === invoice.id ? 'Sending…' : invoice.status === 'DRAFT' ? 'Send Invoice' : 'Resend Invoice'}
+                  </button>
+                  <button className="ml-auto text-sm text-red-700 hover:underline" onClick={() => setPendingVoid(invoice)}>
+                    Void
+                  </button>
+                </div>
+              )}
+
+              {!isVoid && columnsOpen && (
+                <div className="mt-3 rounded-md border border-taupe/40 bg-cream/60 p-4">
+                  <p className="mb-2 text-xs uppercase tracking-[0.24em] text-taupe">Presets</p>
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {Object.entries(COLUMN_PRESETS).map(([key, preset]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className="rounded-full border border-taupe/50 px-3 py-1 text-xs text-brown hover:border-gold"
+                        onClick={() => handleSaveColumns(invoice.id, preset.config.columns)}
+                        disabled={savingColumnsId === invoice.id}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mb-2 text-xs uppercase tracking-[0.24em] text-taupe">Columns shown to client</p>
+                  <div className="flex flex-wrap gap-3">
+                    {INVOICE_COLUMNS.map((col) => (
+                      <label key={col} className="flex items-center gap-1.5 text-sm text-brown">
+                        <input
+                          type="checkbox"
+                          checked={resolved.columns.includes(col)}
+                          disabled={savingColumnsId === invoice.id}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...resolved.columns, col]
+                              : resolved.columns.filter((c) => c !== col);
+                            handleSaveColumns(
+                              invoice.id,
+                              INVOICE_COLUMNS.filter((c) => next.includes(c))
+                            );
+                          }}
+                        />
+                        {COLUMN_LABELS[col]}
+                      </label>
+                    ))}
+                  </div>
+                  {savingColumnsId === invoice.id && <p className="mt-2 text-xs text-brown/50">Saving…</p>}
+                </div>
+              )}
             </div>
           );
         })}
@@ -283,6 +452,16 @@ export default function InvoicesTab({
           </form>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!pendingVoid}
+        title="Void this invoice?"
+        message={`"${pendingVoid?.invoiceNumber}" will be marked void and its ${pendingVoid?.items.length ?? 0} item(s) will unlock and return to Approved status, available to re-invoice. This cannot be undone, but the invoice stays in the project's history.`}
+        confirmLabel="Void Invoice"
+        busy={voiding}
+        onConfirm={handleVoid}
+        onCancel={() => setPendingVoid(null)}
+      />
     </div>
   );
 }

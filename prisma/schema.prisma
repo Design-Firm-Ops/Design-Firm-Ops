@@ -75,6 +75,7 @@ enum InvoiceStatus {
   SENT
   PARTIALLY_PAID
   PAID
+  VOID
 }
 
 enum PaymentMethod {
@@ -203,6 +204,10 @@ model Project {
 
   // Used to derive invoice numbers, e.g. "2506" -> 2506-001, 2506-002...
   invoicePrefix String?
+
+  // Which invoice columns new invoices on this project start with — see
+  // Invoice.columnConfig. Null = fall back to the built-in "transparent" preset.
+  defaultInvoiceColumnConfig Json?
 
   items             Item[]
   procurementLists  ProcurementList[]
@@ -452,6 +457,17 @@ model Invoice {
   dueDate    DateTime?
   notes      String?
 
+  // Generated on first Send — permanent, unique link for the (Phase 4)
+  // client payment portal. Exists now so send/PDF links are already
+  // correct once the portal page itself ships.
+  portalToken String? @unique
+
+  // Which columns this invoice's PDF/portal render show the client —
+  // see lib/invoiceColumns.ts for the shape and presets. Null = use the
+  // project's defaultInvoiceColumnConfig (or the built-in preset if
+  // that's also null).
+  columnConfig Json?
+
   items    Item[]
   payments Payment[]
 
@@ -613,6 +629,11 @@ model Settings {
   paymentInstructions String?
 
   logoUrl String?
+
+  // Invoice PDF/email branding — defaults to the Design Firm Ops brand
+  // colors (see globals.css) when unset; admin can override per firm.
+  invoicePrimaryColor String?
+  invoiceAccentColor  String?
 
   // Designer-role visibility toggles. ADMIN always sees everything;
   // these gate what DESIGNER-role users see. Configured on the

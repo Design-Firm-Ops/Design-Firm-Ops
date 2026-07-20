@@ -8,6 +8,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import DesignFeeSection from './DesignFeeSection';
 import ProjectCustomFields, { FieldDefRow, FieldValueRow } from './ProjectCustomFields';
 import ProjectFieldsManager from './ProjectFieldsManager';
+import { COLUMN_LABELS, COLUMN_PRESETS, INVOICE_COLUMNS, InvoiceColumnKey, resolveColumnConfig } from '@/lib/invoiceColumns';
 
 export interface ProjectData {
   id: string;
@@ -24,6 +25,7 @@ export interface ProjectData {
   salesTaxRate: string;
   taxBase: string;
   invoicePrefix: string | null;
+  defaultInvoiceColumnConfig: { columns: string[] } | null;
   client: {
     id: string;
     name: string;
@@ -92,6 +94,7 @@ export default function ProjectHeader({
     taxBase: project.taxBase,
     invoicePrefix: project.invoicePrefix ?? '',
   });
+  const [invoiceColumns, setInvoiceColumns] = useState<string[] | null>(project.defaultInvoiceColumnConfig?.columns ?? null);
   const [clientForm, setClientForm] = useState({
     name: project.client.name,
     email: project.client.email ?? '',
@@ -109,7 +112,10 @@ export default function ProjectHeader({
     const res = await fetch(`/api/projects/${project.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...form,
+        defaultInvoiceColumnConfig: invoiceColumns ? { columns: invoiceColumns } : null,
+      }),
     });
 
     setSaving(false);
@@ -398,6 +404,44 @@ export default function ProjectHeader({
                   value={form.feeNotes}
                   onChange={(e) => setForm({ ...form, feeNotes: e.target.value })}
                 />
+              </div>
+            </div>
+
+            <div className="rounded-md border border-taupe/40 p-4">
+              <p className="mb-1 text-sm font-medium text-brown">Default invoice columns shown to client</p>
+              <p className="mb-3 text-xs text-brown/50">
+                New invoices inherit this unless a column selection is set on the invoice itself.
+              </p>
+              <div className="mb-3 flex flex-wrap gap-2">
+                {Object.entries(COLUMN_PRESETS).map(([key, preset]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className="rounded-full border border-taupe/50 px-3 py-1 text-xs text-brown hover:border-gold"
+                    onClick={() => setInvoiceColumns(preset.config.columns)}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {INVOICE_COLUMNS.map((col) => {
+                  const resolved = resolveColumnConfig(invoiceColumns ? { columns: invoiceColumns } : null);
+                  return (
+                    <label key={col} className="flex items-center gap-1.5 text-sm text-brown">
+                      <input
+                        type="checkbox"
+                        checked={resolved.columns.includes(col)}
+                        onChange={(e) => {
+                          const base = invoiceColumns ?? resolved.columns;
+                          const next = e.target.checked ? [...base, col] : base.filter((c) => c !== col);
+                          setInvoiceColumns(INVOICE_COLUMNS.filter((c) => (next as InvoiceColumnKey[]).includes(c)));
+                        }}
+                      />
+                      {COLUMN_LABELS[col]}
+                    </label>
+                  );
+                })}
               </div>
             </div>
 

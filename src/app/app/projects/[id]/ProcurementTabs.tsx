@@ -18,6 +18,7 @@ export default function ProcurementTabs({
   offeringOptions,
   itemFieldDefs,
   isAdmin,
+  canOverrideLock,
   projectDefaultMarkupPct,
   projectMarkupMode,
 }: {
@@ -27,6 +28,7 @@ export default function ProcurementTabs({
   offeringOptions: { id: string; name: string }[];
   itemFieldDefs: ItemFieldDefRow[];
   isAdmin: boolean;
+  canOverrideLock: boolean;
   projectDefaultMarkupPct: string;
   projectMarkupMode: string;
 }) {
@@ -183,6 +185,7 @@ export default function ProcurementTabs({
           offeringOptions={offeringOptions}
           itemFieldDefs={itemFieldDefs}
           isAdmin={isAdmin}
+          canOverrideLock={canOverrideLock}
           projectDefaultMarkupPct={projectDefaultMarkupPct}
           projectMarkupMode={projectMarkupMode}
           copyTargets={lists.filter((l) => l.id !== activeList.id && l.id !== 'unassigned').map((l) => ({ id: l.id, name: l.name }))}
