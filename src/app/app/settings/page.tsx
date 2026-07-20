@@ -8,7 +8,7 @@ export default async function SettingsPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-semibold text-brown">Company Settings</h1>
+      <h1 className="mb-6 text-2xl font-medium text-brown">Company Settings</h1>
       <SettingsForm initialSettings={settings} />
     </div>
   );

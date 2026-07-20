@@ -122,7 +122,7 @@ export default function ProjectDocumentsBrowser({
 
         <div className="card overflow-x-auto">
           <table className="min-w-full divide-y divide-taupe/30 text-sm">
-            <thead className="bg-taupe/10 text-left text-xs font-semibold uppercase tracking-wide text-brown/60">
+            <thead className="bg-taupe/10 text-left text-xs font-medium uppercase tracking-[0.24em] text-taupe">
               <tr>
                 <th className="px-4 py-3">Filename</th>
                 <th className="px-4 py-3">Type</th>
@@ -209,7 +209,7 @@ export default function ProjectDocumentsBrowser({
               setNewFolderName('');
             }}
           >
-            <h2 className="text-lg font-semibold text-brown">New Folder</h2>
+            <h2 className="text-lg font-medium text-brown">New Folder</h2>
             <input
               className="input"
               required

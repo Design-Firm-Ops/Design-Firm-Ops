@@ -69,7 +69,7 @@ export default function FolderView({ folder, files, query }: { folder: string; f
 
       <div className="card overflow-x-auto">
         <table className="min-w-full divide-y divide-taupe/30 text-sm">
-          <thead className="bg-taupe/10 text-left text-xs font-semibold uppercase tracking-wide text-brown/60">
+          <thead className="bg-taupe/10 text-left text-xs font-medium uppercase tracking-[0.24em] text-taupe">
             <tr>
               <th className="px-4 py-3">Filename</th>
               <th className="px-4 py-3">Uploaded By</th>

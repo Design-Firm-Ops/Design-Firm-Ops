@@ -85,7 +85,7 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Set
   return (
     <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
       <section className="card space-y-4 p-6">
-        <h2 className="text-lg font-semibold text-brown">Company</h2>
+        <h2 className="text-lg font-medium text-brown">Company</h2>
 
         <div>
           <label className="mb-1 block text-sm font-medium text-brown">Company Name</label>
@@ -119,7 +119,7 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Set
       </section>
 
       <section className="card space-y-4 p-6">
-        <h2 className="text-lg font-semibold text-brown">Owner Contacts</h2>
+        <h2 className="text-lg font-medium text-brown">Owner Contacts</h2>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
@@ -160,7 +160,7 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Set
       </section>
 
       <section className="card space-y-4 p-6">
-        <h2 className="text-lg font-semibold text-brown">Payment Instructions</h2>
+        <h2 className="text-lg font-medium text-brown">Payment Instructions</h2>
         <p className="text-sm text-brown/60">
           Rendered on invoice PDFs — ACH routing/account, wire details, Chase Bill Pay, etc.
         </p>

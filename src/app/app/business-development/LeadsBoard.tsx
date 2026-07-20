@@ -178,7 +178,7 @@ export default function LeadsBoard({
             >
               <div className="flex items-center justify-between gap-2 border-b border-taupe/30 p-3">
                 <input
-                  className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold text-brown hover:border-taupe/40 focus:border-gold focus:outline-none"
+                  className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium text-brown hover:border-taupe/40 focus:border-gold focus:outline-none"
                   value={stage.name}
                   onChange={(e) => handleRenameStage(stage, e.target.value)}
                 />

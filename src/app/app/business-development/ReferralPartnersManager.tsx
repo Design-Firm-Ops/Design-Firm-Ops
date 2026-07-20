@@ -98,7 +98,7 @@ export default function ReferralPartnersManager({ initialPartners }: { initialPa
 
       <div className="card overflow-x-auto">
         <table className="min-w-full divide-y divide-taupe/30 text-sm">
-          <thead className="bg-taupe/10 text-left text-xs font-semibold uppercase tracking-wide text-brown/60">
+          <thead className="bg-taupe/10 text-left text-xs font-medium uppercase tracking-[0.24em] text-taupe">
             <tr>
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Business</th>
@@ -146,7 +146,7 @@ export default function ReferralPartnersManager({ initialPartners }: { initialPa
       {showForm && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
           <form onSubmit={handleSubmit} className="card w-full max-w-md space-y-4 p-6">
-            <h2 className="text-lg font-semibold text-brown">{editingId ? 'Edit Referral Partner' : 'New Referral Partner'}</h2>
+            <h2 className="text-lg font-medium text-brown">{editingId ? 'Edit Referral Partner' : 'New Referral Partner'}</h2>
 
             <div>
               <label className="mb-1 block text-sm font-medium text-brown">Name</label>

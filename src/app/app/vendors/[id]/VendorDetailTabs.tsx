@@ -93,7 +93,7 @@ export default function VendorDetailTabs({
 
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-brown/50">Website</h3>
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-[0.24em] text-taupe">Website</h3>
               {vendor.website ? (
                 <a href={vendor.website} target="_blank" rel="noreferrer" className="text-sm text-gold hover:underline">
                   {vendor.website}
@@ -103,7 +103,7 @@ export default function VendorDetailTabs({
               )}
             </div>
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-brown/50">Offerings</h3>
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-[0.24em] text-taupe">Offerings</h3>
               <p className="text-sm text-brown/70">
                 {vendor.offerings.length > 0 ? vendor.offerings.map((o) => o.name).join(', ') : '—'}
               </p>
@@ -112,7 +112,7 @@ export default function VendorDetailTabs({
 
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-brown/50">Rep Information</h3>
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-[0.24em] text-taupe">Rep Information</h3>
               <div className="space-y-1 text-sm text-brown/70">
                 <p>{vendor.repName || '—'}</p>
                 {vendor.repEmail && <p>{vendor.repEmail}</p>}
@@ -120,7 +120,7 @@ export default function VendorDetailTabs({
               </div>
             </div>
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-brown/50">Showroom Information</h3>
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-[0.24em] text-taupe">Showroom Information</h3>
               <div className="space-y-1 text-sm text-brown/70">
                 <p>{vendor.showroomName || '—'}</p>
                 {vendor.showroomAddress && <p>{vendor.showroomAddress}</p>}
@@ -130,29 +130,29 @@ export default function VendorDetailTabs({
 
           <div className="grid grid-cols-3 gap-6">
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-brown/50">Trade / Retail</h3>
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-[0.24em] text-taupe">Trade / Retail</h3>
               <p className="text-sm text-brown/70">{vendor.accountType ? LABELS[vendor.accountType] : '—'}</p>
             </div>
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-brown/50">Stock / Custom</h3>
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-[0.24em] text-taupe">Stock / Custom</h3>
               <p className="text-sm text-brown/70">{vendor.productType ? LABELS[vendor.productType] : '—'}</p>
             </div>
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-brown/50">Price Range</h3>
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-[0.24em] text-taupe">Price Range</h3>
               <p className="text-sm text-brown/70">{vendor.priceRange ? LABELS[vendor.priceRange] : '—'}</p>
             </div>
           </div>
 
           {vendor.notes && (
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-brown/50">Notes</h3>
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-[0.24em] text-taupe">Notes</h3>
               <p className="whitespace-pre-line text-sm text-brown/70">{vendor.notes}</p>
             </div>
           )}
 
           {canViewCredentials && (vendor.tradeAccountUsername || vendor.hasTradeAccountPassword || vendor.tradeAccountNotes) && (
             <div className="rounded-md border border-taupe/40 p-4">
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-brown/50">Trade Account Credentials</h3>
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-[0.24em] text-taupe">Trade Account Credentials</h3>
               <div className="space-y-1 text-sm">
                 {vendor.tradeAccountUsername && <p>{vendor.tradeAccountUsername}</p>}
                 {vendor.hasTradeAccountPassword && <PasswordReveal vendorId={vendor.id} />}

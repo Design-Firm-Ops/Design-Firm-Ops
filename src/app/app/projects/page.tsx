@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 const STATUS_STYLES: Record<string, string> = {
   LEAD: 'bg-taupe/30 text-brown',
-  ACTIVE: 'bg-gold/30 text-brown',
+  ACTIVE: 'bg-brown/10 text-brown',
   ON_HOLD: 'bg-red-100 text-red-800',
   COMPLETE: 'bg-green-100 text-green-800',
 };
@@ -27,7 +27,7 @@ export default async function ProjectsPage({
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-brown">Projects</h1>
+        <h1 className="text-2xl font-medium text-brown">Projects</h1>
         <div className="flex items-center gap-3">
           <StatusFilter value={status} />
           <Link href="/app/projects/new" className="btn-primary">
@@ -38,7 +38,7 @@ export default async function ProjectsPage({
 
       <div className="card overflow-x-auto">
         <table className="min-w-full divide-y divide-taupe/30 text-sm">
-          <thead className="bg-taupe/10 text-left text-xs font-semibold uppercase tracking-wide text-brown/60">
+          <thead className="bg-taupe/10 text-left text-xs font-medium uppercase tracking-[0.24em] text-taupe">
             <tr>
               <th className="px-4 py-3">Project</th>
               <th className="px-4 py-3">Client</th>

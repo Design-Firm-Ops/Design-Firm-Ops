@@ -11,7 +11,7 @@ export default async function NewProjectPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-semibold text-brown">New Project</h1>
+      <h1 className="mb-6 text-2xl font-medium text-brown">New Project</h1>
       <NewProjectForm clients={clients} projectTypeOptions={projectTypes.map((t) => t.name)} />
     </div>
   );

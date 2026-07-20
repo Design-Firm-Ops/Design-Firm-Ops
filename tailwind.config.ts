@@ -5,13 +5,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Sourced from CSS custom properties in globals.css (single
+        // source of truth for the brand palette) — the rgb(<alpha-value>)
+        // form keeps Tailwind's opacity modifiers (bg-gold/90, etc.) working.
         brown: {
-          DEFAULT: '#4a3728',
-          dark: '#3a2b20',
+          DEFAULT: 'rgb(var(--brown) / <alpha-value>)',
+          dark: 'rgb(var(--brown-dark) / <alpha-value>)',
         },
-        cream: '#F7F3EE',
-        gold: '#C49A5C',
-        taupe: '#BCA88A',
+        cream: 'rgb(var(--cream) / <alpha-value>)',
+        gold: 'rgb(var(--gold) / <alpha-value>)',
+        taupe: 'rgb(var(--taupe) / <alpha-value>)',
       },
       fontFamily: {
         serif: ['var(--font-lora)', 'Georgia', 'serif'],

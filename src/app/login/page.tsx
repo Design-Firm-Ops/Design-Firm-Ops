@@ -37,8 +37,9 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-cream px-4">
       <div className="card w-full max-w-sm p-8">
         <div className="mb-8 text-center">
-          <h1 className="letterspaced-title text-xl font-semibold text-brown">D E S I G N&nbsp; F I R M&nbsp; O P S</h1>
-          <p className="mt-2 text-sm text-brown/60">Internal sign in</p>
+          <h1 className="logo-mark text-2xl text-brown">Design Firm Ops</h1>
+          <p className="logo-sub text-taupe">Studio Operations</p>
+          <p className="mt-4 text-sm text-brown/60">Internal sign in</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

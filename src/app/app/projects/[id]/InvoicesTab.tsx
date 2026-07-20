@@ -139,8 +139,8 @@ export default function InvoicesTab({
             <div key={invoice.id} className="card p-5">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h3 className="font-serif text-lg font-semibold text-brown">{invoice.invoiceNumber}</h3>
-                  <p className="text-xs uppercase tracking-wide text-brown/50">{invoice.status}</p>
+                  <h3 className="font-serif text-lg font-medium text-brown">{invoice.invoiceNumber}</h3>
+                  <p className="text-xs uppercase tracking-[0.24em] text-taupe">{invoice.status}</p>
                 </div>
                 <div className="text-right text-sm">
                   <p className="text-brown/60">
@@ -164,7 +164,7 @@ export default function InvoicesTab({
                 </div>
                 <div>
                   <dt className="text-brown/50">Grand Total</dt>
-                  <dd className="tabular-nums font-semibold text-brown">{formatMoney(totals.grandTotal)}</dd>
+                  <dd className="tabular-nums font-medium text-brown">{formatMoney(totals.grandTotal)}</dd>
                 </div>
               </dl>
             </div>
@@ -178,7 +178,7 @@ export default function InvoicesTab({
       {showForm && (
         <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
           <form onSubmit={handleCreate} className="card w-full max-w-2xl space-y-4 p-6">
-            <h2 className="text-lg font-semibold text-brown">Create Invoice</h2>
+            <h2 className="text-lg font-medium text-brown">Create Invoice</h2>
 
             <div>
               <p className="mb-2 text-sm font-medium text-brown">Select items to invoice</p>
@@ -264,7 +264,7 @@ export default function InvoicesTab({
                   </div>
                   <div>
                     <p className="text-brown/50">Grand Total</p>
-                    <p className="tabular-nums font-semibold">{formatMoney(preview.grandTotal)}</p>
+                    <p className="tabular-nums font-medium">{formatMoney(preview.grandTotal)}</p>
                   </div>
                 </div>
               </div>

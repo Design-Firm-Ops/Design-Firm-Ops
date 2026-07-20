@@ -79,7 +79,7 @@ export default function PaymentsTab({
     <div className="mt-8 border-t border-taupe/30 pt-6">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-brown">Payments</h2>
+          <h2 className="text-lg font-medium text-brown">Payments</h2>
           <p className="text-sm text-brown/60">Total received: {formatMoney(total)}</p>
         </div>
         <button className="btn-primary" onClick={() => setShowForm(true)}>
@@ -89,7 +89,7 @@ export default function PaymentsTab({
 
       <div className="card overflow-x-auto">
         <table className="min-w-full divide-y divide-taupe/30 text-sm">
-          <thead className="bg-taupe/10 text-left text-xs font-semibold uppercase tracking-wide text-brown/60">
+          <thead className="bg-taupe/10 text-left text-xs font-medium uppercase tracking-[0.24em] text-taupe">
             <tr>
               <th className="px-4 py-3">Date</th>
               <th className="px-4 py-3">Amount</th>
@@ -130,7 +130,7 @@ export default function PaymentsTab({
       {showForm && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
           <form onSubmit={handleSubmit} className="card w-full max-w-md space-y-4 p-6">
-            <h2 className="text-lg font-semibold text-brown">Log Payment</h2>
+            <h2 className="text-lg font-medium text-brown">Log Payment</h2>
 
             <div>
               <label className="mb-1 block text-sm font-medium text-brown">Amount</label>

@@ -35,7 +35,7 @@ export default function RichTextEditor({
   return (
     <div>
       <div className="mb-2 flex gap-1 rounded-md border border-taupe/60 bg-taupe/5 p-1">
-        <button type="button" className="rounded px-2 py-1 text-sm font-bold hover:bg-taupe/20" onClick={() => exec('bold')}>
+        <button type="button" className="rounded px-2 py-1 text-sm font-medium hover:bg-taupe/20" onClick={() => exec('bold')}>
           B
         </button>
         <button type="button" className="rounded px-2 py-1 text-sm italic hover:bg-taupe/20" onClick={() => exec('italic')}>

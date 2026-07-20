@@ -6,7 +6,8 @@ import './globals.css';
 const lora = Lora({
   subsets: ['latin'],
   variable: '--font-lora',
-  weight: ['500', '600', '700'],
+  weight: ['400', '500'],
+  style: ['normal', 'italic'],
 });
 
 const poppins = Poppins({

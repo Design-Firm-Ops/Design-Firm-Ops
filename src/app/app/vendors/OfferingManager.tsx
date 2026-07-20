@@ -66,7 +66,7 @@ export default function OfferingManager({ offerings, onClose }: { offerings: Off
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
       <div className="card w-full max-w-md space-y-4 p-6">
-        <h2 className="text-lg font-semibold text-brown">Manage Offering Categories</h2>
+        <h2 className="text-lg font-medium text-brown">Manage Offering Categories</h2>
         <p className="text-xs text-brown/50">
           Shared between Vendors and line items — rename or remove categories as your firm's vocabulary changes.
         </p>

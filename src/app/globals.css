@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Design Firm Ops brand palette — channel values (R G B, space-separated)
+   so Tailwind's opacity modifiers (bg-gold/90, text-brown/60, etc.) keep
+   working while every color traces back to one source of truth. */
+:root {
+  --brown: 74 55 40; /* #4A3728 — primary: text, headers, primary buttons, wordmark */
+  --brown-dark: 58 43 32; /* #3A2B20 — primary button hover */
+  --cream: 247 243 238; /* #F7F3EE — base: backgrounds, cards */
+  --gold: 196 154 92; /* #C49A5C — accent only: dots, hover states, rules, small marks */
+  --taupe: 188 168 138; /* #BCA88A — supporting: captions, metadata, secondary labels */
+}
+
 @layer base {
   body {
     @apply bg-cream text-brown font-sans;
@@ -11,13 +22,25 @@
   h2,
   h3,
   h4 {
-    @apply font-serif;
+    @apply font-serif font-medium;
   }
 }
 
 @layer components {
-  .letterspaced-title {
-    letter-spacing: 0.35em;
+  /* Wordmark lockup — Lora Medium, sentence case, never bold/condensed/
+     all-caps/gold. Optional .logo-sub descriptor beneath, Poppins Light,
+     uppercase, wide tracking. */
+  .logo-mark {
+    @apply block font-serif text-lg font-medium;
+  }
+
+  .logo-sub {
+    @apply mt-1 block text-[10px] font-light uppercase tracking-[0.32em];
+  }
+
+  /* Eyebrow / label — Poppins Medium, 11px, 0.24em tracking, uppercase. */
+  .eyebrow {
+    @apply font-sans text-[11px] font-medium uppercase tracking-[0.24em] text-taupe;
   }
 
   .btn-primary {
@@ -26,6 +49,12 @@
 
   .btn-secondary {
     @apply inline-flex items-center justify-center rounded-md border border-taupe bg-transparent px-4 py-2 text-sm font-medium text-brown transition-colors hover:bg-taupe/20 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  /* Accent CTA — gold as a fill is reserved for occasional standalone
+     actions like this; never the default button treatment. */
+  .btn-gold {
+    @apply inline-flex items-center justify-center rounded-md bg-gold px-4 py-2 text-sm font-medium text-brown transition-colors hover:bg-gold/90 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .btn-danger {

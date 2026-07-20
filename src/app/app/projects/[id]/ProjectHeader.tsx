@@ -161,7 +161,7 @@ export default function ProjectHeader({
     <div className="card mb-6 p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-brown">{project.name}</h1>
+          <h1 className="text-2xl font-medium text-brown">{project.name}</h1>
           <p className="text-brown/60">{project.client.name}</p>
           {project.projectAddress && <p className="text-sm text-brown/50">{project.projectAddress}</p>}
         </div>
@@ -224,7 +224,7 @@ export default function ProjectHeader({
       {canViewClientContact && (
         <div className="mt-6 border-t border-taupe/30 pt-4">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-brown/60">Client Contact</h2>
+            <h2 className="text-sm font-medium uppercase tracking-[0.24em] text-taupe">Client Contact</h2>
             <button className="text-sm text-brown hover:text-gold" onClick={() => setShowClientForm(true)}>
               Edit
             </button>
@@ -248,9 +248,9 @@ export default function ProjectHeader({
 
       {canViewFinancials && (
         <div className="mt-6 space-y-4 border-t border-taupe/30 pt-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-brown/60">Financial Summary</h2>
+          <h2 className="text-sm font-medium uppercase tracking-[0.24em] text-taupe">Financial Summary</h2>
           <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-brown/50">Merchandise</p>
+            <p className="mb-2 text-xs font-medium uppercase tracking-[0.24em] text-taupe">Merchandise</p>
             <dl className="grid grid-cols-3 gap-4 text-sm">
               <div>
                 <dt className="text-brown/50">Invoiced</dt>
@@ -262,7 +262,7 @@ export default function ProjectHeader({
               </div>
               <div>
                 <dt className="text-brown/50">Outstanding</dt>
-                <dd className="tabular-nums font-semibold text-brown">{formatMoney(merchandise.outstanding)}</dd>
+                <dd className="tabular-nums font-medium text-brown">{formatMoney(merchandise.outstanding)}</dd>
               </div>
             </dl>
           </div>
@@ -276,7 +276,7 @@ export default function ProjectHeader({
       {showForm && (
         <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
           <form onSubmit={handleSubmit} className="card w-full max-w-2xl space-y-4 p-6">
-            <h2 className="text-lg font-semibold text-brown">Edit Project</h2>
+            <h2 className="text-lg font-medium text-brown">Edit Project</h2>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
@@ -420,7 +420,7 @@ export default function ProjectHeader({
       {showClientForm && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
           <form onSubmit={handleClientSubmit} className="card w-full max-w-md space-y-4 p-6">
-            <h2 className="text-lg font-semibold text-brown">Edit Client Contact</h2>
+            <h2 className="text-lg font-medium text-brown">Edit Client Contact</h2>
 
             <div>
               <label className="mb-1 block text-sm font-medium text-brown">Name</label>

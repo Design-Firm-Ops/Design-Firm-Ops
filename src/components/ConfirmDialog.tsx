@@ -26,7 +26,7 @@ export default function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="card w-full max-w-sm p-6">
-        <h2 className="text-lg font-semibold text-brown">{title}</h2>
+        <h2 className="text-lg font-medium text-brown">{title}</h2>
         <p className="mt-2 text-sm text-brown/70">{message}</p>
         <div className="mt-6 flex justify-end gap-3">
           <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>

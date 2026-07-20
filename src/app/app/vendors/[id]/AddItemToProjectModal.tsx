@@ -95,7 +95,7 @@ export default function AddItemToProjectModal({
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
       <form onSubmit={handleSubmit} className="card w-full max-w-lg space-y-4 p-6">
-        <h2 className="text-lg font-semibold text-brown">Add Item to a Project</h2>
+        <h2 className="text-lg font-medium text-brown">Add Item to a Project</h2>
 
         <div>
           <label className="mb-1 block text-sm font-medium text-brown">Active Project</label>

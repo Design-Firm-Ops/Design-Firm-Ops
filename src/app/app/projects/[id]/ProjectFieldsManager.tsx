@@ -87,7 +87,7 @@ export default function ProjectFieldsManager({
 
   return (
     <div className="rounded-md border border-taupe/40 p-4">
-      <h3 className="mb-1 text-sm font-semibold text-brown">Custom Fields</h3>
+      <h3 className="mb-1 text-sm font-medium text-brown">Custom Fields</h3>
       <p className="mb-3 text-xs text-brown/50">
         Shown on the project overview below. Drag to reorder; the eye icon controls whether Designers can see a field.
       </p>

@@ -51,7 +51,7 @@ export default function LeadDocumentsSection({ leadId }: { leadId: string }) {
   return (
     <div className="space-y-3 rounded-md border border-taupe/40 p-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-brown">Documents</h3>
+        <h3 className="text-sm font-medium text-brown">Documents</h3>
         <label className="text-xs text-gold hover:underline cursor-pointer">
           {uploading ? 'Uploading…' : '+ Upload'}
           <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />

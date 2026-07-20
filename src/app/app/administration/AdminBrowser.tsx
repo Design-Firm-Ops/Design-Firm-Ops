@@ -200,13 +200,13 @@ export default function AdminBrowser({
         <div className="flex items-center gap-2">
           <div className="flex rounded-md border border-taupe/40 p-0.5">
             <button
-              className={`rounded px-3 py-1 text-xs font-medium ${view === 'rows' ? 'bg-gold/90 text-brown' : 'text-brown/60'}`}
+              className={`rounded px-3 py-1 text-xs font-medium ${view === 'rows' ? 'bg-brown text-cream' : 'text-brown/60'}`}
               onClick={() => setView('rows')}
             >
               Rows
             </button>
             <button
-              className={`rounded px-3 py-1 text-xs font-medium ${view === 'icons' ? 'bg-gold/90 text-brown' : 'text-brown/60'}`}
+              className={`rounded px-3 py-1 text-xs font-medium ${view === 'icons' ? 'bg-brown text-cream' : 'text-brown/60'}`}
               onClick={() => setView('icons')}
             >
               Icons
@@ -257,7 +257,7 @@ export default function AdminBrowser({
       {showNewFolder && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
           <form onSubmit={handleCreateFolder} className="card w-full max-w-sm space-y-4 p-6">
-            <h2 className="text-lg font-semibold text-brown">New Folder</h2>
+            <h2 className="text-lg font-medium text-brown">New Folder</h2>
             <div>
               <label className="mb-1 block text-sm font-medium text-brown">Folder Name</label>
               <input

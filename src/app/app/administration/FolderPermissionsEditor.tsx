@@ -51,7 +51,7 @@ export default function FolderPermissionsEditor({
 
   return (
     <details className="mb-4 rounded-md border border-taupe/40 p-4">
-      <summary className="cursor-pointer text-sm font-semibold text-brown">Folder Permissions</summary>
+      <summary className="cursor-pointer text-sm font-medium text-brown">Folder Permissions</summary>
       <p className="mb-3 mt-2 text-xs text-brown/50">
         Leave everyone unchecked to let all teammates see this folder. Check specific people to restrict it to just
         them (admins can always see every folder).

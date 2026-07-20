@@ -37,7 +37,7 @@ export default function VendorItemsPanel({ vendorId }: { vendorId: string }) {
 
   return (
     <div className="px-4 py-3">
-      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-brown/60">
+      <h4 className="mb-2 text-xs font-medium uppercase tracking-[0.24em] text-taupe">
         Previously Used Items ({items.length})
       </h4>
       <table className="min-w-full text-xs">

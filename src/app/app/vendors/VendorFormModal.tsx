@@ -91,7 +91,7 @@ export default function VendorFormModal({
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
       <form onSubmit={handleSubmit} className="card w-full max-w-2xl space-y-4 p-6">
-        <h2 className="text-lg font-semibold text-brown">{vendor ? 'Edit Vendor' : 'New Vendor'}</h2>
+        <h2 className="text-lg font-medium text-brown">{vendor ? 'Edit Vendor' : 'New Vendor'}</h2>
 
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2">
@@ -110,7 +110,7 @@ export default function VendorFormModal({
         </div>
 
         <div className="space-y-3 rounded-md border border-taupe/40 p-4">
-          <h3 className="text-sm font-semibold text-brown">Rep Information</h3>
+          <h3 className="text-sm font-medium text-brown">Rep Information</h3>
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-brown">Name</label>
@@ -133,7 +133,7 @@ export default function VendorFormModal({
         </div>
 
         <div className="space-y-3 rounded-md border border-taupe/40 p-4">
-          <h3 className="text-sm font-semibold text-brown">Showroom Information</h3>
+          <h3 className="text-sm font-medium text-brown">Showroom Information</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-brown">Showroom Name</label>
@@ -210,7 +210,7 @@ export default function VendorFormModal({
 
         {canViewCredentials && (
           <div className="space-y-3 rounded-md border border-taupe/40 p-4">
-            <h3 className="text-sm font-semibold text-brown">Trade Account Credentials</h3>
+            <h3 className="text-sm font-medium text-brown">Trade Account Credentials</h3>
             <p className="text-xs text-brown/50">Stored encrypted. Leave password blank to keep it unchanged.</p>
             <div className="grid grid-cols-2 gap-4">
               <div>

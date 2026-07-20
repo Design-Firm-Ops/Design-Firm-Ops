@@ -103,14 +103,14 @@ export default function VendorsManager({
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-brown/50">Filter by offering:</span>
+          <span className="text-xs font-medium uppercase tracking-[0.24em] text-taupe">Filter by offering:</span>
           {offeringOptions.map((o) => (
             <button
               key={o.id}
               onClick={() => toggleOfferingFilter(o.id)}
               className={`rounded-full border px-3 py-1 text-xs transition-colors ${
                 offeringFilters.has(o.id)
-                  ? 'border-gold bg-gold/90 text-brown'
+                  ? 'border-brown bg-brown text-cream'
                   : 'border-taupe/40 text-brown/60 hover:bg-taupe/10'
               }`}
             >
@@ -139,7 +139,7 @@ export default function VendorsManager({
 
       <div className="card overflow-x-auto">
         <table className="min-w-full divide-y divide-taupe/30 text-sm">
-          <thead className="bg-taupe/10 text-left text-xs font-semibold uppercase tracking-wide text-brown/60">
+          <thead className="bg-taupe/10 text-left text-xs font-medium uppercase tracking-[0.24em] text-taupe">
             <tr>
               <th className="cursor-pointer select-none px-4 py-3" onClick={() => toggleSort('name')}>
                 Vendor{sortIndicator('name')}

@@ -50,7 +50,7 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-semibold text-brown">{vendor.name}</h1>
+      <h1 className="mb-6 text-2xl font-medium text-brown">{vendor.name}</h1>
       <VendorDetailTabs
         vendor={vendor}
         offeringOptions={offerings.map((o) => ({ id: o.id, name: o.name }))}

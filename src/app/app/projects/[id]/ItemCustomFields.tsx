@@ -79,7 +79,7 @@ export default function ItemCustomFields({
   return (
     <div className="space-y-3 rounded-md border border-taupe/40 p-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-brown">Additional Fields</h3>
+        <h3 className="text-sm font-medium text-brown">Additional Fields</h3>
         {isAdmin && (
           <button type="button" className="text-xs text-brown/50 underline hover:text-brown" onClick={() => setManaging((m) => !m)}>
             {managing ? 'Done' : 'Manage Fields'}

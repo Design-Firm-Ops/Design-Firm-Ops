@@ -67,7 +67,7 @@ export default async function AdministrationPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-semibold text-brown">Administration</h1>
+      <h1 className="mb-6 text-2xl font-medium text-brown">Administration</h1>
       <AdminBrowser
         resourceRows={resourceRows}
         usersForSearch={users.map((u) => ({ name: u.name, email: u.email }))}

@@ -120,7 +120,7 @@ export default function LeadFormModal({
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
       <form onSubmit={handleSubmit} className="card w-full max-w-lg space-y-4 p-6">
-        <h2 className="text-lg font-semibold text-brown">{lead ? 'Edit Lead' : 'New Lead'}</h2>
+        <h2 className="text-lg font-medium text-brown">{lead ? 'Edit Lead' : 'New Lead'}</h2>
 
         <div>
           <label className="mb-1 block text-sm font-medium text-brown">Client Name</label>
@@ -194,7 +194,7 @@ export default function LeadFormModal({
         {showNewPartner && (
           <div className="space-y-3 rounded-md border border-taupe/40 p-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-brown">New Referral Partner</h3>
+              <h3 className="text-sm font-medium text-brown">New Referral Partner</h3>
               <button
                 type="button"
                 className="text-xs text-brown/50 hover:text-brown"

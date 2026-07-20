@@ -44,7 +44,7 @@ export default function ProjectCustomFields({
 
   return (
     <div className="mt-6 border-t border-taupe/30 pt-4">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-brown/60">Additional Fields</h2>
+      <h2 className="mb-3 text-sm font-medium uppercase tracking-[0.24em] text-taupe">Additional Fields</h2>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         {visibleDefs.map((field) => (

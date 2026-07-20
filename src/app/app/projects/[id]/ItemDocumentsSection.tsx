@@ -55,7 +55,7 @@ export default function ItemDocumentsSection({ itemId, projectId }: { itemId: st
   return (
     <div className="space-y-2 rounded-md border border-taupe/40 p-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-brown">Documents (quotes, spec sheets…)</h3>
+        <h3 className="text-sm font-medium text-brown">Documents (quotes, spec sheets…)</h3>
         <label className="cursor-pointer text-xs text-gold hover:underline">
           {uploading ? 'Uploading…' : '+ Upload'}
           <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />

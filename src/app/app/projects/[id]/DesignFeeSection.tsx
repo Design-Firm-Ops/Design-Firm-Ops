@@ -67,7 +67,7 @@ export default function DesignFeeSection({
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-medium uppercase tracking-wide text-brown/50">Design Fee</p>
+        <p className="text-xs font-medium uppercase tracking-[0.24em] text-taupe">Design Fee</p>
         <div className="flex gap-3 text-sm">
           <button className="text-brown hover:text-gold" onClick={() => setShowCharge(true)}>
             + Bill Design Fee
@@ -88,14 +88,14 @@ export default function DesignFeeSection({
         </div>
         <div>
           <dt className="text-brown/50">Outstanding</dt>
-          <dd className="tabular-nums font-semibold text-brown">{formatMoney(summary.outstanding)}</dd>
+          <dd className="tabular-nums font-medium text-brown">{formatMoney(summary.outstanding)}</dd>
         </div>
       </dl>
 
       {showCharge && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
           <form onSubmit={handleAddCharge} className="card w-full max-w-md space-y-4 p-6">
-            <h2 className="text-lg font-semibold text-brown">Bill Design Fee</h2>
+            <h2 className="text-lg font-medium text-brown">Bill Design Fee</h2>
             <div>
               <label className="mb-1 block text-sm font-medium text-brown">Description</label>
               <input
@@ -142,7 +142,7 @@ export default function DesignFeeSection({
       {showPayment && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
           <form onSubmit={handleAddPayment} className="card w-full max-w-md space-y-4 p-6">
-            <h2 className="text-lg font-semibold text-brown">Log Design Fee Payment</h2>
+            <h2 className="text-lg font-medium text-brown">Log Design Fee Payment</h2>
             <div>
               <label className="mb-1 block text-sm font-medium text-brown">Amount</label>
               <input

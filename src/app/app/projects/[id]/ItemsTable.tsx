@@ -250,7 +250,7 @@ export default function ItemsTable({
 
       <div className="card overflow-x-auto">
         <table className="min-w-full divide-y divide-taupe/30 text-xs">
-          <thead className="bg-taupe/10 text-left font-semibold uppercase tracking-wide text-brown/60">
+          <thead className="bg-taupe/10 text-left font-medium uppercase tracking-[0.24em] text-taupe">
             <tr>
               <th className="px-2 py-2">
                 <input
@@ -456,7 +456,7 @@ export default function ItemsTable({
           </tbody>
           {items.length > 0 && (
             <tfoot>
-              <tr className="border-t-2 border-brown/30 bg-taupe/10 font-semibold text-brown">
+              <tr className="border-t-2 border-brown/30 bg-taupe/10 font-medium text-brown">
                 <td colSpan={12} className="px-2 py-2 text-right">
                   Totals
                 </td>

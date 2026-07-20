@@ -53,7 +53,7 @@ export default async function BusinessDevelopmentPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-semibold text-brown">Business Development</h1>
+      <h1 className="mb-6 text-2xl font-medium text-brown">Business Development</h1>
       <BusinessDevTabs
         boards={boardData}
         referralPartners={referralPartners.map((p) => ({ id: p.id, name: p.name }))}

@@ -73,7 +73,7 @@ export default function PermissionsForm({ initialSettings }: { initialSettings: 
   return (
     <form onSubmit={handleSubmit} className="card max-w-2xl space-y-4 p-6">
       <div>
-        <h2 className="text-lg font-semibold text-brown">Designer Role Visibility</h2>
+        <h2 className="text-lg font-medium text-brown">Designer Role Visibility</h2>
         <p className="text-sm text-brown/60">
           Administrators always see everything. These toggles control what the Designer role can see.
         </p>

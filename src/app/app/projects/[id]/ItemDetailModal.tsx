@@ -123,7 +123,7 @@ export default function ItemDetailModal({
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
       <form onSubmit={handleSubmit} className="card w-full max-w-2xl max-h-[90vh] space-y-4 overflow-y-auto p-6">
-        <h2 className="text-lg font-semibold text-brown">Item Details — {item.tag}</h2>
+        <h2 className="text-lg font-medium text-brown">Item Details — {item.tag}</h2>
 
         <div className="flex items-start gap-4">
           <button type="button" onClick={() => imageUrl && setEnlarged(true)}>
@@ -158,7 +158,7 @@ export default function ItemDetailModal({
         </div>
 
         <div className="rounded-md border border-taupe/40 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-brown">Cost & Pricing</h3>
+          <h3 className="mb-3 text-sm font-medium text-brown">Cost & Pricing</h3>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-brown">Qty</label>
