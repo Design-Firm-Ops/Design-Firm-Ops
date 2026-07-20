@@ -17,7 +17,7 @@ const VENDOR_SELECT = {
   accountType: true,
   productType: true,
   priceRange: true,
-  offerings: true,
+  offerings: { select: { id: true, name: true }, orderBy: { name: 'asc' as const } },
   notes: true,
   accountNumber: true,
   tradeAccountUsername: true,
@@ -50,7 +50,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { tradeAccountPassword, ...rest } = parsed.data;
+  const { tradeAccountPassword, offerings, ...rest } = parsed.data;
 
   const hasCredentialInput =
     tradeAccountPassword !== undefined || rest.tradeAccountUsername !== undefined || rest.tradeAccountNotes !== undefined;
@@ -63,6 +63,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     where: { id: params.id },
     data: {
       ...rest,
+      ...(offerings ? { offerings: { set: offerings.map((id) => ({ id })) } } : {}),
       ...(tradeAccountPassword ? { tradeAccountPasswordEncrypted: encryptSecret(tradeAccountPassword) } : {}),
     },
     select: VENDOR_SELECT,

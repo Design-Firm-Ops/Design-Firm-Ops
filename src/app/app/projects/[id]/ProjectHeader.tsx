@@ -6,6 +6,7 @@ import Decimal from 'decimal.js';
 import { formatMoney, formatPercent, formatPercentFromFraction } from '@/lib/money';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import DesignFeeSection from './DesignFeeSection';
+import ProjectCustomFields, { FieldDefRow, FieldValueRow } from './ProjectCustomFields';
 
 export interface ProjectData {
   id: string;
@@ -53,6 +54,9 @@ export default function ProjectHeader({
   canViewFinancials,
   merchandise,
   designFee,
+  fieldDefs,
+  fieldValues,
+  isAdmin,
 }: {
   project: ProjectData;
   projectTypeOptions: string[];
@@ -60,6 +64,9 @@ export default function ProjectHeader({
   canViewFinancials: boolean;
   merchandise: MerchandiseFinancials;
   designFee: DesignFeeFinancials;
+  fieldDefs: FieldDefRow[];
+  fieldValues: FieldValueRow[];
+  isAdmin: boolean;
 }) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
@@ -261,6 +268,8 @@ export default function ProjectHeader({
           <DesignFeeSection projectId={project.id} summary={designFee} />
         </div>
       )}
+
+      <ProjectCustomFields projectId={project.id} fieldDefs={fieldDefs} fieldValues={fieldValues} isAdmin={isAdmin} />
 
       {showForm && (
         <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">

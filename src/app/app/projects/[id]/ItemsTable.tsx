@@ -6,7 +6,7 @@ import Decimal from 'decimal.js';
 import { priceLine } from '@/lib/pricing';
 import { formatMoney } from '@/lib/money';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import ItemDetailModal from './ItemDetailModal';
+import ItemDetailModal, { ItemFieldDefRow } from './ItemDetailModal';
 
 export interface ItemRow {
   id: string;
@@ -16,6 +16,9 @@ export interface ItemRow {
   category: string;
   room: string | null;
   vendorId: string | null;
+  offeringId: string | null;
+  procurementListId: string | null;
+  imageUrl: string | null;
   qty: number;
   unitCost: string;
   platformFee: string;
@@ -27,9 +30,15 @@ export interface ItemRow {
   shippingNotes: string | null;
   status: string;
   invoiceId: string | null;
+  fieldValues: { fieldDefId: string; value: string | null }[];
 }
 
 interface VendorOption {
+  id: string;
+  name: string;
+}
+
+interface OfferingOption {
   id: string;
   name: string;
 }
@@ -63,14 +72,22 @@ function computeRow(item: ItemRow, projectDefaultMarkupPct: string, projectMarku
 
 export default function ItemsTable({
   projectId,
+  procurementListId,
   initialItems,
   vendors,
+  offeringOptions,
+  itemFieldDefs,
+  isAdmin,
   projectDefaultMarkupPct,
   projectMarkupMode,
 }: {
   projectId: string;
+  procurementListId: string | null;
   initialItems: ItemRow[];
   vendors: VendorOption[];
+  offeringOptions: OfferingOption[];
+  itemFieldDefs: ItemFieldDefRow[];
+  isAdmin: boolean;
   projectDefaultMarkupPct: string;
   projectMarkupMode: string;
 }) {
@@ -103,6 +120,7 @@ export default function ItemsTable({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         projectId,
+        procurementListId: procurementListId && procurementListId !== 'unassigned' ? procurementListId : '',
         tag: `LT-${items.length + 1}`,
         name: 'New Item',
         category: 'OTHER',
@@ -113,7 +131,8 @@ export default function ItemsTable({
     setAddingRow(false);
     if (res.ok) {
       const created = await res.json();
-      setItems((prev) => [...prev, created]);
+      setItems((prev) => [...prev, { ...created, imageUrl: null, fieldValues: [] }]);
+      router.refresh();
     }
   }
 
@@ -225,9 +244,11 @@ export default function ItemsTable({
                   onChange={toggleSelectAll}
                 />
               </th>
+              <th className="px-2 py-2">Image</th>
               <th className="px-2 py-2">Tag</th>
               <th className="px-2 py-2">Name</th>
               <th className="px-2 py-2">Category</th>
+              <th className="px-2 py-2">Offering</th>
               <th className="px-2 py-2">Room</th>
               <th className="px-2 py-2">Vendor</th>
               <th className="px-2 py-2 text-right">Qty</th>
@@ -248,6 +269,17 @@ export default function ItemsTable({
                 <tr key={item.id} className="hover:bg-taupe/5">
                   <td className="px-2 py-1">
                     <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelect(item.id)} />
+                  </td>
+                  <td className="px-2 py-1">
+                    <button onClick={() => setDetailItem(item)} title="View / edit item">
+                      {item.imageUrl ? (
+                        <img src={item.imageUrl} alt={item.name} className="h-10 w-10 rounded object-cover" />
+                      ) : (
+                        <span className="flex h-10 w-10 items-center justify-center rounded bg-taupe/20 text-brown/30">
+                          —
+                        </span>
+                      )}
+                    </button>
                   </td>
                   <td className="px-2 py-1">
                     <input
@@ -274,6 +306,23 @@ export default function ItemsTable({
                       {CATEGORIES.map((c) => (
                         <option key={c} value={c}>
                           {c}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-2 py-1">
+                    <select
+                      className="rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none"
+                      value={item.offeringId ?? ''}
+                      onChange={(e) => {
+                        updateLocal(item.id, { offeringId: e.target.value || null });
+                        saveField(item.id, { offeringId: e.target.value });
+                      }}
+                    >
+                      <option value="">—</option>
+                      {offeringOptions.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.name}
                         </option>
                       ))}
                     </select>
@@ -364,7 +413,7 @@ export default function ItemsTable({
             })}
             {items.length === 0 && (
               <tr>
-                <td colSpan={14} className="px-4 py-8 text-center text-brown/50">
+                <td colSpan={16} className="px-4 py-8 text-center text-brown/50">
                   No line items yet. Click "Add Row" to get started.
                 </td>
               </tr>
@@ -373,7 +422,7 @@ export default function ItemsTable({
           {items.length > 0 && (
             <tfoot>
               <tr className="border-t-2 border-brown/30 bg-taupe/10 font-semibold text-brown">
-                <td colSpan={10} className="px-2 py-2 text-right">
+                <td colSpan={12} className="px-2 py-2 text-right">
                   Totals
                 </td>
                 <td className="px-2 py-2 text-right tabular-nums">{formatMoney(totals.subtotal)}</td>
@@ -388,6 +437,13 @@ export default function ItemsTable({
       {detailItem && (
         <ItemDetailModal
           item={detailItem}
+          projectId={projectId}
+          vendors={vendors}
+          offeringOptions={offeringOptions}
+          fieldDefs={itemFieldDefs}
+          isAdmin={isAdmin}
+          projectDefaultMarkupPct={projectDefaultMarkupPct}
+          projectMarkupMode={projectMarkupMode}
           onClose={() => setDetailItem(null)}
           onSaved={(updated) => {
             updateLocal(updated.id, updated);

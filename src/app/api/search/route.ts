@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
     prisma.lead.findMany({ where: { clientName: { contains: q, mode: 'insensitive' } }, take: 6 }),
     perms.documentsPresentations || perms.contracts
       ? prisma.document.findMany({
-          where: { filename: { contains: q, mode: 'insensitive' } },
+          where: { filename: { contains: q, mode: 'insensitive' }, projectId: { not: null } },
           include: { project: true },
           take: 6,
         })
@@ -82,11 +82,11 @@ export async function GET(req: NextRequest) {
       href: '/app/business-development',
     })),
     ...documents
-      .filter((d) => (d.type === 'CONTRACT' ? perms.contracts : perms.documentsPresentations))
+      .filter((d) => d.project && (d.type === 'CONTRACT' ? perms.contracts : perms.documentsPresentations))
       .map((d) => ({
         type: 'document' as const,
         label: d.filename,
-        sublabel: `Document · ${d.project.name}`,
+        sublabel: `Document · ${d.project!.name}`,
         href: `/app/projects/${d.projectId}`,
       })),
     ...resources.map((r) => ({

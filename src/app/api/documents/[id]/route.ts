@@ -12,7 +12,11 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   if (!document) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const perms = await resolvePermissions(session);
-  const allowed = document.type === 'CONTRACT' ? perms.contracts : perms.documentsPresentations;
+  const allowed = document.itemId
+    ? perms.procurement
+    : document.type === 'CONTRACT'
+      ? perms.contracts
+      : perms.documentsPresentations;
   if (!allowed) {
     return NextResponse.json({ error: 'You do not have permission to delete this' }, { status: 403 });
   }

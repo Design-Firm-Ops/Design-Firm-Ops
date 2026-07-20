@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { OfferingRow } from './OfferingManager';
 
 export interface VendorRow {
   id: string;
@@ -14,7 +15,7 @@ export interface VendorRow {
   accountType: string | null;
   productType: string | null;
   priceRange: string | null;
-  offerings: string[];
+  offerings: OfferingRow[];
   notes: string | null;
   accountNumber: string | null;
   tradeAccountUsername: string | null;
@@ -22,15 +23,15 @@ export interface VendorRow {
   hasTradeAccountPassword: boolean;
 }
 
-const OFFERINGS = ['FURNITURE', 'OUTDOOR', 'RUGS', 'PILLOWS', 'DECOR', 'MIRRORS', 'LAMPS', 'BEDDING'];
-
 export default function VendorFormModal({
   vendor,
+  offeringOptions,
   canViewCredentials,
   onClose,
   onSaved,
 }: {
   vendor: VendorRow | null;
+  offeringOptions: OfferingRow[];
   canViewCredentials: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -46,7 +47,7 @@ export default function VendorFormModal({
     accountType: vendor?.accountType ?? '',
     productType: vendor?.productType ?? '',
     priceRange: vendor?.priceRange ?? '',
-    offerings: vendor?.offerings ?? [],
+    offerings: vendor?.offerings.map((o) => o.id) ?? [],
     notes: vendor?.notes ?? '',
     accountNumber: vendor?.accountNumber ?? '',
     tradeAccountUsername: vendor?.tradeAccountUsername ?? '',
@@ -56,12 +57,12 @@ export default function VendorFormModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function toggleOffering(offering: string) {
+  function toggleOffering(offeringId: string) {
     setForm((prev) => ({
       ...prev,
-      offerings: prev.offerings.includes(offering)
-        ? prev.offerings.filter((o) => o !== offering)
-        : [...prev.offerings, offering],
+      offerings: prev.offerings.includes(offeringId)
+        ? prev.offerings.filter((o) => o !== offeringId)
+        : [...prev.offerings, offeringId],
     }));
   }
 
@@ -99,7 +100,12 @@ export default function VendorFormModal({
           </div>
           <div className="col-span-2">
             <label className="mb-1 block text-sm font-medium text-brown">Website</label>
-            <input className="input" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
+            <input
+              className="input"
+              placeholder="https://…"
+              value={form.website}
+              onChange={(e) => setForm({ ...form, website: e.target.value })}
+            />
           </div>
         </div>
 
@@ -187,12 +193,13 @@ export default function VendorFormModal({
           <div className="col-span-2">
             <label className="mb-2 block text-sm font-medium text-brown">Primary Offerings</label>
             <div className="flex flex-wrap gap-3">
-              {OFFERINGS.map((o) => (
-                <label key={o} className="flex items-center gap-1.5 text-sm">
-                  <input type="checkbox" checked={form.offerings.includes(o)} onChange={() => toggleOffering(o)} />
-                  {o.charAt(0) + o.slice(1).toLowerCase()}
+              {offeringOptions.map((o) => (
+                <label key={o.id} className="flex items-center gap-1.5 text-sm">
+                  <input type="checkbox" checked={form.offerings.includes(o.id)} onChange={() => toggleOffering(o.id)} />
+                  {o.name}
                 </label>
               ))}
+              {offeringOptions.length === 0 && <p className="text-xs text-brown/50">No categories yet — add some from the Vendors page.</p>}
             </div>
           </div>
           <div className="col-span-2">

@@ -70,12 +70,19 @@ async function seedSettings() {
 }
 
 async function seedPipelineStages() {
-  const existing = await prisma.pipelineStage.count();
+  // The customizable-taxonomies migration always creates one default
+  // LeadBoard ("Leads") and attaches any pre-existing stages to it —
+  // reuse that board (or create it, for a from-scratch test DB where
+  // migrations were generated differently) rather than assuming stages
+  // don't exist yet.
+  const board = (await prisma.leadBoard.findFirst({ orderBy: { order: 'asc' } })) ?? (await prisma.leadBoard.create({ data: { name: 'Leads', order: 0 } }));
+
+  const existing = await prisma.pipelineStage.count({ where: { boardId: board.id } });
   if (existing > 0) return;
 
   const stages = ['New Lead', 'Contacted', 'Proposal Sent', 'Won', 'Lost'];
   for (const [i, name] of stages.entries()) {
-    await prisma.pipelineStage.create({ data: { name, order: i } });
+    await prisma.pipelineStage.create({ data: { name, order: i, boardId: board.id } });
   }
   console.log(`  pipeline stages: ${stages.join(', ')}`);
 }
@@ -188,16 +195,9 @@ async function seedVendors() {
         accountType: mapEnum<'TRADE' | 'RETAIL' | 'BOTH'>(v.tradeRetail, ['TRADE', 'RETAIL', 'BOTH']),
         productType: mapEnum<'STOCK' | 'CUSTOM' | 'BOTH'>(v.stockCustom, ['STOCK', 'CUSTOM', 'BOTH']),
         priceRange: mapEnum<'LOW' | 'MID' | 'HIGH'>(v.priceRange, ['LOW', 'MID', 'HIGH']),
-        offerings: v.offerings as (
-          | 'FURNITURE'
-          | 'OUTDOOR'
-          | 'RUGS'
-          | 'PILLOWS'
-          | 'DECOR'
-          | 'MIRRORS'
-          | 'LAMPS'
-          | 'BEDDING'
-        )[],
+        offerings: {
+          connect: v.offerings.map((o) => ({ name: o.charAt(0) + o.slice(1).toLowerCase() })),
+        },
         notes: v.notes,
         tradeAccountNotes,
         tradeAccountPasswordEncrypted,
@@ -218,7 +218,10 @@ async function clearDemoData() {
   await prisma.payment.deleteMany({});
   await prisma.invoice.deleteMany({});
   await prisma.item.deleteMany({});
-  await prisma.document.deleteMany({});
+  // Only clear project-scoped documents — lead-attached documents
+  // (projectId null, leadId set) are persistent business data, same as
+  // leads themselves, and must survive a re-seed.
+  await prisma.document.deleteMany({ where: { projectId: { not: null } } });
   await prisma.designFeeCharge.deleteMany({});
   await prisma.project.deleteMany({});
   await prisma.client.deleteMany({});
@@ -261,6 +264,13 @@ async function seedDemoProject() {
     },
   });
 
+  const procurementLists = await Promise.all(
+    ['Lighting', 'Furniture', 'Decor', 'Materials', 'Other Merchandise'].map((name, order) =>
+      prisma.procurementList.create({ data: { projectId: project.id, name, order } })
+    )
+  );
+  const lightingList = procurementLists[0];
+
   // Small lighting-specific vendors for the demo line items — distinct
   // from the firm's real FF&E vendor list above, kept minimal since
   // their only role is to populate the Vendor column on these items.
@@ -301,6 +311,7 @@ async function seedDemoProject() {
         category: 'LIGHTING',
         room: item.room,
         vendorId: item.vendor.id,
+        procurementListId: lightingList.id,
         qty: item.qty,
         unitCost: item.unitCost,
         finish: item.finish,

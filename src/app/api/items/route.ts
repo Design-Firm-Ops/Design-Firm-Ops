@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { vendorId, ...rest } = parsed.data;
+  const { vendorId, offeringId, procurementListId, ...rest } = parsed.data;
 
   const maxSort = await prisma.item.aggregate({
     where: { projectId: parsed.data.projectId },
@@ -30,6 +30,8 @@ export async function POST(req: NextRequest) {
     data: {
       ...rest,
       vendorId: vendorId || null,
+      offeringId: offeringId || null,
+      procurementListId: procurementListId || null,
       sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
     },
   });

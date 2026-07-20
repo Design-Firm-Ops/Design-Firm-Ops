@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import FolderIcon from './FolderIcon';
 import FolderView, { ResourceRow } from './FolderView';
+import FolderPermissionsEditor from './FolderPermissionsEditor';
 
 type View = 'rows' | 'icons';
 
@@ -17,12 +18,16 @@ interface Tile {
 export default function AdminBrowser({
   resourceRows,
   usersForSearch,
+  allUsers,
+  folderPermissions,
   usersContent,
   permissionsContent,
   isAdmin,
 }: {
   resourceRows: ResourceRow[];
   usersForSearch: { name: string; email: string }[];
+  allUsers: { id: string; name: string; email: string }[];
+  folderPermissions: { name: string; allowedUserIds: string[] }[];
   usersContent: React.ReactNode;
   permissionsContent: React.ReactNode;
   isAdmin: boolean;
@@ -31,11 +36,35 @@ export default function AdminBrowser({
   const [query, setQuery] = useState('');
   const [view, setView] = useState<View>('rows');
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const [history, setHistory] = useState<string[]>([]);
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [newFolderError, setNewFolderError] = useState<string | null>(null);
   const newFolderFileRef = useRef<HTMLInputElement>(null);
+
+  function openFolder(key: string) {
+    setHistory((prev) => (openKey ? [...prev, openKey] : prev));
+    setOpenKey(key);
+  }
+
+  function goBack() {
+    setHistory((prev) => {
+      if (prev.length === 0) {
+        setOpenKey(null);
+        return prev;
+      }
+      const next = [...prev];
+      const last = next.pop()!;
+      setOpenKey(last);
+      return next;
+    });
+  }
+
+  function goHome() {
+    setHistory([]);
+    setOpenKey(null);
+  }
 
   const resourcesByFolder = useMemo(() => {
     const map = new Map<string, ResourceRow[]>();
@@ -109,21 +138,27 @@ export default function AdminBrowser({
       return;
     }
 
-    setOpenKey(`folder:${newFolderName.trim()}`);
+    openFolder(`folder:${newFolderName.trim()}`);
     setShowNewFolder(false);
     setNewFolderName('');
     router.refresh();
   }
 
   if (openKey && openTile) {
+    const existingPermissions = folderPermissions.find((f) => f.name === openTile.label);
     return (
       <div>
-        <div className="mb-4 flex items-center gap-2 text-sm">
-          <button className="text-brown/60 hover:text-brown" onClick={() => setOpenKey(null)}>
-            Administration
+        <div className="mb-4 flex items-center gap-3 text-sm">
+          <button className="btn-secondary py-1 text-xs" onClick={goBack}>
+            ← Back
           </button>
-          <span className="text-brown/30">/</span>
-          <span className="font-medium text-brown">{openTile.label}</span>
+          <div className="flex items-center gap-2">
+            <button className="text-brown/60 hover:text-brown" onClick={goHome}>
+              Administration
+            </button>
+            <span className="text-brown/30">/</span>
+            <span className="font-medium text-brown">{openTile.label}</span>
+          </div>
         </div>
 
         <div className="mb-4">
@@ -138,7 +173,16 @@ export default function AdminBrowser({
         {openKey === 'users' && usersContent}
         {openKey === 'permissions' && permissionsContent}
         {openKey.startsWith('folder:') && (
-          <FolderView folder={openTile.label} files={resourcesByFolder.get(openTile.label) ?? []} query={query} />
+          <>
+            {isAdmin && (
+              <FolderPermissionsEditor
+                folderName={openTile.label}
+                allUsers={allUsers}
+                allowedUserIds={existingPermissions?.allowedUserIds ?? []}
+              />
+            )}
+            <FolderView folder={openTile.label} files={resourcesByFolder.get(openTile.label) ?? []} query={query} />
+          </>
         )}
       </div>
     );
@@ -183,7 +227,7 @@ export default function AdminBrowser({
           {visibleTiles.map((tile) => (
             <button
               key={tile.key}
-              onClick={() => setOpenKey(tile.key)}
+              onClick={() => openFolder(tile.key)}
               className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-taupe/5"
             >
               <FolderIcon className="h-6 w-6 flex-shrink-0 text-gold" />
@@ -199,7 +243,7 @@ export default function AdminBrowser({
           {visibleTiles.map((tile) => (
             <button
               key={tile.key}
-              onClick={() => setOpenKey(tile.key)}
+              onClick={() => openFolder(tile.key)}
               className="card flex flex-col items-center gap-2 p-4 text-center hover:bg-taupe/5"
             >
               <FolderIcon className="h-10 w-10 text-gold" />

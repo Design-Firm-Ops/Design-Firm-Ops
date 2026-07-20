@@ -10,28 +10,31 @@ export default async function VendorsPage() {
   const session = await getServerSession(authOptions);
   const perms = await resolvePermissions(session);
 
-  const vendorsRaw = await prisma.vendor.findMany({
-    select: {
-      id: true,
-      name: true,
-      website: true,
-      repName: true,
-      repEmail: true,
-      repPhone: true,
-      showroomName: true,
-      showroomAddress: true,
-      accountType: true,
-      productType: true,
-      priceRange: true,
-      offerings: true,
-      notes: true,
-      accountNumber: true,
-      tradeAccountUsername: true,
-      tradeAccountPasswordEncrypted: true,
-      tradeAccountNotes: true,
-    },
-    orderBy: { name: 'asc' },
-  });
+  const [vendorsRaw, offerings] = await Promise.all([
+    prisma.vendor.findMany({
+      select: {
+        id: true,
+        name: true,
+        website: true,
+        repName: true,
+        repEmail: true,
+        repPhone: true,
+        showroomName: true,
+        showroomAddress: true,
+        accountType: true,
+        productType: true,
+        priceRange: true,
+        offerings: { select: { id: true, name: true }, orderBy: { name: 'asc' } },
+        notes: true,
+        accountNumber: true,
+        tradeAccountUsername: true,
+        tradeAccountPasswordEncrypted: true,
+        tradeAccountNotes: true,
+      },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.offering.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
+  ]);
 
   const vendors = vendorsRaw.map(({ tradeAccountPasswordEncrypted, ...v }) => ({
     ...v,
@@ -43,7 +46,11 @@ export default async function VendorsPage() {
   return (
     <div>
       <h1 className="mb-6 text-2xl font-semibold text-brown">Vendors</h1>
-      <VendorsManager initialVendors={vendors} canViewCredentials={perms.vendorCredentials} />
+      <VendorsManager
+        initialVendors={vendors}
+        offeringOptions={offerings.map((o) => ({ id: o.id, name: o.name }))}
+        canViewCredentials={perms.vendorCredentials}
+      />
     </div>
   );
 }

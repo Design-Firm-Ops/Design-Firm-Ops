@@ -110,21 +110,32 @@ enum VendorPriceRange {
   HIGH
 }
 
-/// FF&E product categories a vendor primarily offers — matches the
-/// firm's vendor spreadsheet. Distinct from ItemCategory (line-item
-/// categorization), which is coarser.
-enum VendorOffering {
-  FURNITURE
-  OUTDOOR
-  RUGS
-  PILLOWS
-  DECOR
-  MIRRORS
-  LAMPS
-  BEDDING
+/// Input type for a user-defined ProjectFieldDef / ItemFieldDef. Values
+/// are always stored as text — this only hints at how to render/parse
+/// the input.
+enum FieldType {
+  TEXT
+  NUMBER
+  DATE
+  CURRENCY
+  RICH_TEXT
 }
 
 // ---------- Models ----------
+
+/// A user-customizable product category, shared between Vendor.offerings
+/// and Item.offering — labels are entirely up to the firm (seeded with
+/// the original FF&E spreadsheet categories, but freely renamable).
+model Offering {
+  id    String @id @default(cuid())
+  name  String @unique
+  order Int    @default(0)
+
+  vendors Vendor[]
+  items   Item[]
+
+  createdAt DateTime @default(now())
+}
 
 /// Internal user (owner or designer). Role gates visibility of
 /// sensitive project/vendor data — see Settings' designerCanView* flags.
@@ -194,14 +205,74 @@ model Project {
   invoicePrefix String?
 
   items             Item[]
+  procurementLists  ProcurementList[]
   documents         Document[]
   invoices          Invoice[]
   payments          Payment[]
   designFeeCharges  DesignFeeCharge[]
   convertedFromLead Lead?
+  fieldValues       ProjectFieldValue[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// A user-defined field shown on every project's overview — admin
+/// manages the set, order, and per-field Designer visibility; the
+/// actual per-project text lives in ProjectFieldValue. Intended as the
+/// landing spot for future AI-extracted contract data (e.g. Design Fee).
+model ProjectFieldDef {
+  id                String    @id @default(cuid())
+  label             String
+  fieldType         FieldType @default(TEXT)
+  order             Int       @default(0)
+  visibleToDesigner Boolean   @default(true)
+
+  values ProjectFieldValue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProjectFieldValue {
+  id         String          @id @default(cuid())
+  project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  String
+  fieldDef   ProjectFieldDef @relation(fields: [fieldDefId], references: [id], onDelete: Cascade)
+  fieldDefId String
+  value      String?
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, fieldDefId])
+}
+
+/// Same pattern as ProjectFieldDef, scoped to line items instead —
+/// intended as the landing spot for future AI-extracted vendor PDF data.
+model ItemFieldDef {
+  id                String    @id @default(cuid())
+  label             String
+  fieldType         FieldType @default(TEXT)
+  order             Int       @default(0)
+  visibleToDesigner Boolean   @default(true)
+
+  values ItemFieldValue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ItemFieldValue {
+  id         String       @id @default(cuid())
+  item       Item         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId     String
+  fieldDef   ItemFieldDef @relation(fields: [fieldDefId], references: [id], onDelete: Cascade)
+  fieldDefId String
+  value      String?
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([itemId, fieldDefId])
 }
 
 /// A single billed-toward-the-design-fee line entry. Separate from
@@ -235,7 +306,7 @@ model Vendor {
   accountType VendorAccountType?
   productType VendorProductType?
   priceRange  VendorPriceRange?
-  offerings   VendorOffering[]
+  offerings   Offering[]
 
   notes         String?
   accountNumber String?
@@ -267,6 +338,12 @@ model Item {
   vendor   Vendor? @relation(fields: [vendorId], references: [id])
   vendorId String?
 
+  offering   Offering? @relation(fields: [offeringId], references: [id])
+  offeringId String?
+
+  procurementList   ProcurementList? @relation(fields: [procurementListId], references: [id])
+  procurementListId String?
+
   qty         Int     @default(1)
   unitCost    Decimal @db.Decimal(10, 2)
   platformFee Decimal @default(0) @db.Decimal(10, 2)
@@ -280,13 +357,24 @@ model Item {
   link          String?
   shippingNotes String?
 
+  // Path in the private "documents" bucket for a thumbnail image —
+  // signed URL minted on request, same as project documents.
+  imageStoragePath String?
+
   status ItemStatus @default(PROPOSED)
 
   sourceDocument   Document? @relation(fields: [sourceDocumentId], references: [id])
   sourceDocumentId String?
 
+  // Quotes, spec sheets, etc. attached directly to this item — distinct
+  // from sourceDocument, which is the presentation/doc this item was
+  // originally pulled from.
+  attachedDocuments Document[] @relation("ItemAttachedDocuments")
+
   invoice   Invoice? @relation(fields: [invoiceId], references: [id])
   invoiceId String?
+
+  fieldValues ItemFieldValue[]
 
   sortOrder Int @default(0)
 
@@ -294,13 +382,44 @@ model Item {
   updatedAt DateTime @updatedAt
 
   @@index([projectId])
+  @@index([procurementListId])
+}
+
+/// A user-defined sub-list within a project's Procurement tab (e.g.
+/// "Lighting", "Furniture") — lets the firm organize line items into
+/// as many working lists as a project needs.
+model ProcurementList {
+  id        String  @id @default(cuid())
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  name      String
+  order     Int     @default(0)
+
+  items Item[]
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
 }
 
 model Document {
   id          String       @id @default(cuid())
-  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectId   String
+  // Exactly one of project/lead is set for top-level uploads; a
+  // conversion (Lead -> Project) simply re-points existing rows rather
+  // than copying files. itemId additionally tags a document as
+  // attached to one specific line item (quotes, spec sheets).
+  project     Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String?
+  lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  leadId      String?
+  item        Item?        @relation("ItemAttachedDocuments", fields: [itemId], references: [id], onDelete: Cascade)
+  itemId      String?
   type        DocumentType
+  // User-organized folder within the project's Documents and
+  // Presentations tab (e.g. "Precedent Images"). Null for
+  // Contract-type documents and lead/item attachments, which aren't
+  // folder-organized.
+  folder      String?
   filename    String
   // Object path within the private "documents" bucket — never a public
   // URL. Access is always through a short-lived signed URL minted on
@@ -311,6 +430,8 @@ model Document {
   sourcedItems Item[]
 
   @@index([projectId])
+  @@index([leadId])
+  @@index([itemId])
 }
 
 /// A generated merchandise invoice. Shipping/tax are snapshotted at
@@ -360,17 +481,35 @@ model Payment {
   @@index([projectId])
 }
 
-/// A pipeline column on the Business Development kanban board — fully
-/// customizable (add/rename/reorder/delete) by users.
-model PipelineStage {
+/// One of up to 5 independent lead pipelines (e.g. "Residential",
+/// "Commercial") — each behaves like its own kanban board with its own
+/// columns.
+model LeadBoard {
   id    String @id @default(cuid())
   name  String
   order Int    @default(0)
+
+  stages PipelineStage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// A pipeline column on a Business Development kanban board — fully
+/// customizable (add/rename/reorder/delete) by users.
+model PipelineStage {
+  id      String    @id @default(cuid())
+  board   LeadBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  boardId String
+  name    String
+  order   Int       @default(0)
 
   leads Lead[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([boardId])
 }
 
 model ReferralPartner {
@@ -406,11 +545,11 @@ model Lead {
   address      String?
   notes        String?
 
-  squareFootage    Int?
-  estimatedBudget  Decimal? @db.Decimal(12, 2)
-  timeline         String?
-  builderName      String?
-  architectName    String?
+  squareFootage   Int?
+  estimatedBudget Decimal? @db.Decimal(12, 2)
+  timeline        String?
+  builderName     String?
+  architectName   String?
 
   pipelineStage   PipelineStage @relation(fields: [pipelineStageId], references: [id])
   pipelineStageId String
@@ -420,6 +559,8 @@ model Lead {
   // record but is flagged as won.
   convertedProject   Project? @relation(fields: [convertedProjectId], references: [id])
   convertedProjectId String?  @unique
+
+  documents Document[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -440,6 +581,20 @@ model Resource {
 
   uploadedBy   User?   @relation(fields: [uploadedById], references: [id])
   uploadedById String?
+}
+
+/// Access-control metadata for a Storage Center folder, keyed by
+/// folder name (Resource.folder is free text, so this row is optional
+/// and only appears once someone restricts a folder). Admins always
+/// have access regardless of this list; an empty list means everyone
+/// with Administration access can see the folder.
+model ResourceFolder {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  allowedUserIds String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 /// Singleton company settings row (id is always 1).

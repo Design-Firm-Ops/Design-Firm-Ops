@@ -12,33 +12,43 @@ export const dynamic = 'force-dynamic';
 export default async function AdministrationPage() {
   const session = await getServerSession(authOptions);
   const admin = isAdmin(session);
+  const currentUserId = session!.user.id;
 
-  const [resources, settings, users] = await Promise.all([
+  const [resources, folderPermissions, settings, users] = await Promise.all([
     prisma.resource.findMany({ include: { uploadedBy: true }, orderBy: { uploadedAt: 'desc' } }),
+    prisma.resourceFolder.findMany(),
     admin ? prisma.settings.findUnique({ where: { id: 1 } }) : Promise.resolve(null),
-    admin
-      ? prisma.user.findMany({
-          select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
-          orderBy: { createdAt: 'asc' },
-        })
-      : Promise.resolve([]),
+    prisma.user.findMany({
+      select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    }),
   ]);
 
+  // Admins always see every folder; everyone else is filtered by that
+  // folder's allow-list (an empty list means "everyone can see it").
+  const restrictedFolders = new Set(
+    folderPermissions
+      .filter((f) => f.allowedUserIds.length > 0 && !f.allowedUserIds.includes(currentUserId))
+      .map((f) => f.name)
+  );
+
   const resourceRows = await Promise.all(
-    resources.map(async (r) => ({
-      id: r.id,
-      folder: r.folder,
-      filename: r.filename,
-      url: await createSignedResourceUrl(r.storagePath),
-      uploadedAt: r.uploadedAt.toISOString(),
-      uploadedByName: r.uploadedBy?.name ?? null,
-    }))
+    resources
+      .filter((r) => admin || !restrictedFolders.has(r.folder))
+      .map(async (r) => ({
+        id: r.id,
+        folder: r.folder,
+        filename: r.filename,
+        url: await createSignedResourceUrl(r.storagePath),
+        uploadedAt: r.uploadedAt.toISOString(),
+        uploadedByName: r.uploadedBy?.name ?? null,
+      }))
   );
 
   const usersTab = admin ? (
     <UsersManager
       initialUsers={users.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}
-      currentUserId={session!.user.id}
+      currentUserId={currentUserId}
     />
   ) : null;
   const permissionsTab = admin ? (
@@ -61,6 +71,8 @@ export default async function AdministrationPage() {
       <AdminBrowser
         resourceRows={resourceRows}
         usersForSearch={users.map((u) => ({ name: u.name, email: u.email }))}
+        allUsers={admin ? users.map((u) => ({ id: u.id, name: u.name, email: u.email })) : []}
+        folderPermissions={folderPermissions.map((f) => ({ name: f.name, allowedUserIds: f.allowedUserIds }))}
         usersContent={usersTab}
         permissionsContent={permissionsTab}
         isAdmin={admin}

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import LeadDocumentsSection from './LeadDocumentsSection';
 import type { LeadRow, StageRow } from './LeadsBoard';
 
 const NEW_PARTNER_VALUE = '__new__';
@@ -332,6 +333,8 @@ export default function LeadFormModal({
           <label className="mb-1 block text-sm font-medium text-brown">Notes</label>
           <textarea className="input" rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
         </div>
+
+        {lead && <LeadDocumentsSection leadId={lead.id} />}
 
         {error && <p className="text-sm text-red-700">{error}</p>}
 

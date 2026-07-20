@@ -33,11 +33,13 @@ export interface LeadRow {
 }
 
 export default function LeadsBoard({
+  boardId,
   initialStages,
   initialLeads,
   referralPartners,
   projectTypeOptions,
 }: {
+  boardId: string;
   initialStages: StageRow[];
   initialLeads: LeadRow[];
   referralPartners: { id: string; name: string }[];
@@ -94,7 +96,7 @@ export default function LeadsBoard({
     const res = await fetch('/api/pipeline-stages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newStageName.trim() }),
+      body: JSON.stringify({ name: newStageName.trim(), boardId }),
     });
     setAddingStage(false);
 

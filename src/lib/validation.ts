@@ -19,9 +19,8 @@ export const vendorSchema = z.object({
   accountType: z.enum(['TRADE', 'RETAIL', 'BOTH']).nullable().optional(),
   productType: z.enum(['STOCK', 'CUSTOM', 'BOTH']).nullable().optional(),
   priceRange: z.enum(['LOW', 'MID', 'HIGH']).nullable().optional(),
-  offerings: z
-    .array(z.enum(['FURNITURE', 'OUTDOOR', 'RUGS', 'PILLOWS', 'DECOR', 'MIRRORS', 'LAMPS', 'BEDDING']))
-    .default([]),
+  // IDs of user-customizable Offering rows — no longer a fixed enum.
+  offerings: z.array(z.string()).default([]),
   notes: z.string().optional().or(z.literal('')),
   accountNumber: z.string().optional().or(z.literal('')),
   tradeAccountUsername: z.string().optional().or(z.literal('')),
@@ -61,6 +60,8 @@ export const itemSchema = z.object({
     .default('OTHER'),
   room: z.string().optional().or(z.literal('')),
   vendorId: z.string().optional().or(z.literal('')),
+  offeringId: z.string().optional().or(z.literal('')),
+  procurementListId: z.string().optional().or(z.literal('')),
   qty: z.coerce.number().int().min(1).default(1),
   unitCost: z.coerce.number().min(0),
   platformFee: z.coerce.number().min(0).default(0),
@@ -126,8 +127,17 @@ export const designFeeChargeSchema = z.object({
 
 // ---------- Business Development ----------
 
+export const leadBoardSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+});
+
 export const pipelineStageSchema = z.object({
   name: z.string().min(1, 'Name is required'),
+  boardId: z.string().min(1),
+});
+
+export const pipelineStageUpdateSchema = z.object({
+  name: z.string().min(1).optional(),
 });
 
 export const referralPartnerSchema = z.object({
@@ -182,4 +192,52 @@ export const userUpdateSchema = z.object({
   role: z.enum(['ADMIN', 'DESIGNER']).optional(),
   active: z.boolean().optional(),
   password: z.string().min(8).optional().or(z.literal('')),
+});
+
+export const resourceFolderPermissionSchema = z.object({
+  allowedUserIds: z.array(z.string()).default([]),
+});
+
+// ---------- Customizable taxonomies ----------
+
+export const offeringSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+});
+
+export const procurementListSchema = z.object({
+  projectId: z.string().min(1),
+  name: z.string().min(1, 'Name is required'),
+});
+
+export const procurementListUpdateSchema = z.object({
+  name: z.string().min(1).optional(),
+  order: z.number().int().optional(),
+});
+
+const fieldDefBaseSchema = z.object({
+  label: z.string().min(1, 'Label is required'),
+  fieldType: z.enum(['TEXT', 'NUMBER', 'DATE', 'CURRENCY', 'RICH_TEXT']).default('TEXT'),
+  visibleToDesigner: z.boolean().default(true),
+});
+
+export const projectFieldDefSchema = fieldDefBaseSchema;
+export const projectFieldDefUpdateSchema = fieldDefBaseSchema.partial().extend({
+  order: z.number().int().optional(),
+});
+
+export const itemFieldDefSchema = fieldDefBaseSchema;
+export const itemFieldDefUpdateSchema = fieldDefBaseSchema.partial().extend({
+  order: z.number().int().optional(),
+});
+
+export const fieldValueSchema = z.object({
+  fieldDefId: z.string().min(1),
+  value: z.string().nullable().optional(),
+});
+
+// ---------- Documents ----------
+
+export const documentFolderSchema = z.object({
+  projectId: z.string().min(1),
+  folder: z.string().min(1, 'Folder is required'),
 });

@@ -1,12 +1,12 @@
 import { prisma } from '@/lib/prisma';
 import BusinessDevTabs from './BusinessDevTabs';
-import LeadsBoard from './LeadsBoard';
 import ReferralPartnersManager from './ReferralPartnersManager';
 
 export const dynamic = 'force-dynamic';
 
 export default async function BusinessDevelopmentPage() {
-  const [stages, leads, referralPartners, projectTypes] = await Promise.all([
+  const [boards, stages, leads, referralPartners, projectTypes] = await Promise.all([
+    prisma.leadBoard.findMany({ orderBy: { order: 'asc' } }),
     prisma.pipelineStage.findMany({ orderBy: { order: 'asc' } }),
     prisma.lead.findMany({
       include: { projectType: true, referralPartner: true },
@@ -40,18 +40,24 @@ export default async function BusinessDevelopmentPage() {
     architectName: l.architectName,
   }));
 
+  const boardData = boards.map((board) => {
+    const boardStages = stages.filter((s) => s.boardId === board.id);
+    const stageIds = new Set(boardStages.map((s) => s.id));
+    return {
+      id: board.id,
+      name: board.name,
+      stages: boardStages,
+      leads: leadRows.filter((l) => stageIds.has(l.pipelineStageId)),
+    };
+  });
+
   return (
     <div>
       <h1 className="mb-6 text-2xl font-semibold text-brown">Business Development</h1>
       <BusinessDevTabs
-        leadsContent={
-          <LeadsBoard
-            initialStages={stages}
-            initialLeads={leadRows}
-            referralPartners={referralPartners.map((p) => ({ id: p.id, name: p.name }))}
-            projectTypeOptions={projectTypes.map((t) => t.name)}
-          />
-        }
+        boards={boardData}
+        referralPartners={referralPartners.map((p) => ({ id: p.id, name: p.name }))}
+        projectTypeOptions={projectTypes.map((t) => t.name)}
         referralPartnersContent={<ReferralPartnersManager initialPartners={referralPartners} />}
       />
     </div>

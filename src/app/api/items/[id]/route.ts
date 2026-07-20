@@ -19,13 +19,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { vendorId, ...rest } = parsed.data;
+  const { vendorId, offeringId, procurementListId, ...rest } = parsed.data;
 
   const item = await prisma.item.update({
     where: { id: params.id },
     data: {
       ...rest,
       ...(vendorId !== undefined ? { vendorId: vendorId || null } : {}),
+      ...(offeringId !== undefined ? { offeringId: offeringId || null } : {}),
+      ...(procurementListId !== undefined ? { procurementListId: procurementListId || null } : {}),
     },
   });
   return NextResponse.json(item);

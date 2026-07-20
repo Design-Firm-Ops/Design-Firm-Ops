@@ -14,6 +14,8 @@ export async function POST(req: NextRequest) {
   const file = form.get('file');
   const projectId = form.get('projectId');
   const type = form.get('type');
+  const folder = form.get('folder');
+  const itemId = form.get('itemId');
 
   if (!(file instanceof File) || typeof projectId !== 'string' || typeof type !== 'string') {
     return NextResponse.json({ error: 'file, projectId and type are required' }, { status: 400 });
@@ -23,7 +25,12 @@ export async function POST(req: NextRequest) {
   }
 
   const perms = await resolvePermissions(session);
-  const allowed = type === 'CONTRACT' ? perms.contracts : perms.documentsPresentations;
+  const allowed =
+    typeof itemId === 'string' && itemId
+      ? perms.procurement
+      : type === 'CONTRACT'
+        ? perms.contracts
+        : perms.documentsPresentations;
   if (!allowed) {
     return NextResponse.json({ error: 'You do not have permission to upload here' }, { status: 403 });
   }
@@ -50,6 +57,8 @@ export async function POST(req: NextRequest) {
       type: type as (typeof DOCUMENT_TYPES)[number],
       filename: file.name,
       storagePath,
+      folder: typeof folder === 'string' && folder ? folder : null,
+      itemId: typeof itemId === 'string' && itemId ? itemId : null,
     },
   });
 

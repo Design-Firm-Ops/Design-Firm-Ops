@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
 import { projectSchema } from '@/lib/validation';
 import { findOrCreateProjectType } from '@/lib/projectType';
+import { DEFAULT_PROCUREMENT_LISTS } from '@/lib/procurement';
 
 export async function GET() {
   const { unauthorized } = await requireSession();
@@ -62,5 +63,10 @@ export async function POST(req: NextRequest) {
       startDate: startDate ? new Date(startDate) : null,
     },
   });
+
+  await prisma.procurementList.createMany({
+    data: DEFAULT_PROCUREMENT_LISTS.map((name, order) => ({ projectId: project.id, name, order })),
+  });
+
   return NextResponse.json(project, { status: 201 });
 }

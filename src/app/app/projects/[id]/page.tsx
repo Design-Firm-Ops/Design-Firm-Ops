@@ -3,18 +3,21 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createSignedDocumentUrl } from '@/lib/supabase';
-import { resolvePermissions } from '@/lib/permissions';
+import { resolvePermissions, isAdmin as checkIsAdmin } from '@/lib/permissions';
 import { summarizeProjectFinancials, summarizeDesignFee } from '@/lib/financials';
+import { DEFAULT_DOCUMENT_FOLDERS } from '@/lib/procurement';
 import ProjectHeader from './ProjectHeader';
 import ProjectTabs, { ProjectTab } from './ProjectTabs';
-import ItemsTable, { ItemRow } from './ItemsTable';
+import ProcurementTabs from './ProcurementTabs';
+import { ItemRow } from './ItemsTable';
 import InvoicesTab, { InvoiceRow } from './InvoicesTab';
+import ProjectDocumentsBrowser, { DocumentRow as FolderDocumentRow } from './ProjectDocumentsBrowser';
 import DocumentsTab, { DocumentRow } from './DocumentsTab';
 import PaymentsTab, { PaymentRow } from './PaymentsTab';
 
 export const dynamic = 'force-dynamic';
 
-function serializeItem(item: {
+function serializeInvoiceItem(item: {
   id: string;
   tag: string;
   name: string;
@@ -33,7 +36,7 @@ function serializeItem(item: {
   shippingNotes: string | null;
   status: string;
   invoiceId: string | null;
-}): ItemRow {
+}) {
   return {
     id: item.id,
     tag: item.tag,
@@ -59,29 +62,44 @@ function serializeItem(item: {
 export default async function ProjectPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   const perms = await resolvePermissions(session);
+  const admin = checkIsAdmin(session);
 
   const project = await prisma.project.findUnique({
     where: { id: params.id },
     include: {
       client: true,
       projectType: true,
-      items: { orderBy: { sortOrder: 'asc' } },
+      items: { orderBy: { sortOrder: 'asc' }, include: { fieldValues: true } },
+      procurementLists: { orderBy: { order: 'asc' } },
       documents: { orderBy: { uploadedAt: 'desc' } },
       invoices: { include: { items: true }, orderBy: { createdAt: 'desc' } },
       payments: { orderBy: { date: 'desc' } },
       designFeeCharges: { orderBy: { date: 'desc' } },
+      fieldValues: true,
     },
   });
 
   if (!project) notFound();
 
-  const [vendors, projectTypes] = await Promise.all([
+  const [vendors, projectTypes, offerings, itemFieldDefs, projectFieldDefs] = await Promise.all([
     prisma.vendor.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     prisma.projectType.findMany({ orderBy: { name: 'asc' }, select: { name: true } }),
+    prisma.offering.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
+    prisma.itemFieldDef.findMany({ orderBy: { order: 'asc' } }),
+    prisma.projectFieldDef.findMany({ orderBy: { order: 'asc' } }),
   ]);
 
-  const items: ItemRow[] = project.items.map(serializeItem);
+  const items: ItemRow[] = await Promise.all(
+    project.items.map(async (item) => ({
+      ...serializeInvoiceItem(item),
+      offeringId: item.offeringId,
+      procurementListId: item.procurementListId,
+      imageUrl: item.imageStoragePath ? await createSignedDocumentUrl(item.imageStoragePath) : null,
+      fieldValues: item.fieldValues.map((v) => ({ fieldDefId: v.fieldDefId, value: v.value })),
+    }))
+  );
   const uninvoicedItems = items.filter((i) => !i.invoiceId);
+  const itemsById = new Map(items.map((i) => [i.id, i]));
 
   const invoices: InvoiceRow[] = project.invoices.map((inv) => ({
     id: inv.id,
@@ -92,20 +110,25 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     taxBase: inv.taxBase,
     issuedDate: inv.issuedDate ? inv.issuedDate.toISOString() : null,
     dueDate: inv.dueDate ? inv.dueDate.toISOString() : null,
-    items: inv.items.map(serializeItem),
+    items: inv.items.map((it) => itemsById.get(it.id)!).filter(Boolean),
   }));
 
   // Signed URLs are minted fresh on every load (they expire) — never
   // read the raw storage path back to the browser.
-  const documents: DocumentRow[] = await Promise.all(
-    project.documents.map(async (d) => ({
-      id: d.id,
-      type: d.type,
-      filename: d.filename,
-      url: await createSignedDocumentUrl(d.storagePath),
-      uploadedAt: d.uploadedAt.toISOString(),
-    }))
+  const allDocuments = await Promise.all(
+    project.documents
+      .filter((d) => !d.itemId)
+      .map(async (d) => ({
+        id: d.id,
+        type: d.type,
+        filename: d.filename,
+        folder: d.folder,
+        url: await createSignedDocumentUrl(d.storagePath),
+        uploadedAt: d.uploadedAt.toISOString(),
+      }))
   );
+  const contractDocuments: DocumentRow[] = allDocuments.filter((d) => d.type === 'CONTRACT');
+  const presentationDocuments: FolderDocumentRow[] = allDocuments.filter((d) => d.type !== 'CONTRACT');
 
   const payments: PaymentRow[] = project.payments
     .filter((p) => p.category === 'MERCHANDISE')
@@ -122,18 +145,23 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   const merchandise = summarizeProjectFinancials(project);
   const designFee = summarizeDesignFee(project);
 
+  const procurementLists = project.procurementLists.map((list) => ({
+    id: list.id,
+    name: list.name,
+    items: items.filter((i) => i.procurementListId === list.id),
+  }));
+  const unassignedItems = items.filter((i) => !i.procurementListId);
+  if (unassignedItems.length > 0) {
+    procurementLists.push({ id: 'unassigned', name: 'Unassigned', items: unassignedItems });
+  }
+
   const tabs: ProjectTab[] = [];
   if (perms.documentsPresentations) {
     tabs.push({
       key: 'documents',
       label: 'Documents and Presentations',
       content: (
-        <DocumentsTab
-          projectId={project.id}
-          documents={documents.filter((d) => d.type !== 'CONTRACT')}
-          allowedTypes={['PRESENTATION', 'VENDOR_INVOICE', 'OTHER']}
-          defaultType="PRESENTATION"
-        />
+        <ProjectDocumentsBrowser projectId={project.id} documents={presentationDocuments} defaultFolders={DEFAULT_DOCUMENT_FOLDERS} />
       ),
     });
   }
@@ -144,7 +172,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       content: (
         <DocumentsTab
           projectId={project.id}
-          documents={documents.filter((d) => d.type === 'CONTRACT')}
+          documents={contractDocuments}
           allowedTypes={['CONTRACT']}
           defaultType="CONTRACT"
           emptyLabel="No contracts uploaded yet."
@@ -181,10 +209,13 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       key: 'procurement',
       label: 'Procurement',
       content: (
-        <ItemsTable
+        <ProcurementTabs
           projectId={project.id}
-          initialItems={items}
+          lists={procurementLists}
           vendors={vendors}
+          offeringOptions={offerings.map((o) => ({ id: o.id, name: o.name }))}
+          itemFieldDefs={itemFieldDefs}
+          isAdmin={admin}
           projectDefaultMarkupPct={String(project.defaultMarkupPct)}
           projectMarkupMode={project.markupMode}
         />
@@ -223,6 +254,9 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         canViewFinancials={perms.financials}
         merchandise={merchandise}
         designFee={designFee}
+        fieldDefs={projectFieldDefs}
+        fieldValues={project.fieldValues.map((v) => ({ fieldDefId: v.fieldDefId, value: v.value }))}
+        isAdmin={admin}
       />
 
       <ProjectTabs tabs={tabs} />

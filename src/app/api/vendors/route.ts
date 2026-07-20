@@ -22,7 +22,7 @@ const VENDOR_SELECT = {
   accountType: true,
   productType: true,
   priceRange: true,
-  offerings: true,
+  offerings: { select: { id: true, name: true }, orderBy: { name: 'asc' as const } },
   notes: true,
   accountNumber: true,
   tradeAccountUsername: true,
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { tradeAccountPassword, ...rest } = parsed.data;
+  const { tradeAccountPassword, offerings, ...rest } = parsed.data;
 
   const hasCredentialInput = !!(tradeAccountPassword || rest.tradeAccountUsername || rest.tradeAccountNotes);
   if (hasCredentialInput) {
@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
   const vendor = await prisma.vendor.create({
     data: {
       ...rest,
+      offerings: { connect: offerings.map((id) => ({ id })) },
       tradeAccountPasswordEncrypted: tradeAccountPassword ? encryptSecret(tradeAccountPassword) : null,
     },
     select: VENDOR_SELECT,
