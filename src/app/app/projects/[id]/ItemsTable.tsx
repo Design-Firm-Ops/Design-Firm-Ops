@@ -80,6 +80,7 @@ export default function ItemsTable({
   isAdmin,
   projectDefaultMarkupPct,
   projectMarkupMode,
+  copyTargets,
 }: {
   projectId: string;
   procurementListId: string | null;
@@ -90,6 +91,7 @@ export default function ItemsTable({
   isAdmin: boolean;
   projectDefaultMarkupPct: string;
   projectMarkupMode: string;
+  copyTargets: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
@@ -99,6 +101,7 @@ export default function ItemsTable({
   const [deleting, setDeleting] = useState(false);
   const [addingRow, setAddingRow] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
 
   function updateLocal(id: string, patch: Partial<ItemRow>) {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
@@ -185,6 +188,18 @@ export default function ItemsTable({
     router.refresh();
   }
 
+  async function handleCopy(itemId: string, procurementListId: string) {
+    if (!procurementListId) return;
+    setCopyingId(itemId);
+    await fetch(`/api/items/${itemId}/copy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ procurementListId }),
+    });
+    setCopyingId(null);
+    router.refresh();
+  }
+
   const totals = useMemo(() => {
     let subtotal = new Decimal(0);
     let cost = new Decimal(0);
@@ -258,6 +273,7 @@ export default function ItemsTable({
               <th className="px-2 py-2 text-right">Extended</th>
               <th className="px-2 py-2 text-right">Profit</th>
               <th className="px-2 py-2">Status</th>
+              <th className="px-2 py-2" />
               <th className="px-2 py-2" />
             </tr>
           </thead>
@@ -384,7 +400,7 @@ export default function ItemsTable({
                       onBlur={(e) => saveField(item.id, { markupPct: e.target.value === '' ? null : Number(e.target.value) })}
                     />
                   </td>
-                  <td className="px-2 py-1 text-right tabular-nums">{formatMoney(priced.unitPrice)}</td>
+                    <td className="px-2 py-1 text-right tabular-nums">{formatMoney(priced.unitPrice)}</td>
                   <td className="px-2 py-1 text-right tabular-nums font-medium">{formatMoney(priced.extended)}</td>
                   <td className="px-2 py-1 text-right tabular-nums text-green-800">{formatMoney(priced.profit)}</td>
                   <td className="px-2 py-1">
@@ -403,6 +419,25 @@ export default function ItemsTable({
                       ))}
                     </select>
                   </td>
+                  <td className="px-2 py-1">
+                    {copyTargets.length > 0 && (
+                      <select
+                        className="rounded border border-taupe/40 bg-white px-1 py-0.5 text-xs"
+                        value=""
+                        disabled={copyingId === item.id}
+                        onChange={(e) => handleCopy(item.id, e.target.value)}
+                      >
+                        <option value="" disabled>
+                          {copyingId === item.id ? 'Copying…' : 'Copy to…'}
+                        </option>
+                        {copyTargets.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </td>
                   <td className="px-2 py-1 text-right">
                     <button className="text-red-700 hover:text-red-900" onClick={() => setPendingDelete(item)}>
                       ✕
@@ -413,7 +448,7 @@ export default function ItemsTable({
             })}
             {items.length === 0 && (
               <tr>
-                <td colSpan={16} className="px-4 py-8 text-center text-brown/50">
+                <td colSpan={17} className="px-4 py-8 text-center text-brown/50">
                   No line items yet. Click "Add Row" to get started.
                 </td>
               </tr>
@@ -427,7 +462,7 @@ export default function ItemsTable({
                 </td>
                 <td className="px-2 py-2 text-right tabular-nums">{formatMoney(totals.subtotal)}</td>
                 <td className="px-2 py-2 text-right tabular-nums text-green-800">{formatMoney(totals.profit)}</td>
-                <td colSpan={2} />
+                <td colSpan={3} />
               </tr>
             </tfoot>
           )}

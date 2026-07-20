@@ -7,6 +7,7 @@ import { formatMoney, formatPercent, formatPercentFromFraction } from '@/lib/mon
 import ConfirmDialog from '@/components/ConfirmDialog';
 import DesignFeeSection from './DesignFeeSection';
 import ProjectCustomFields, { FieldDefRow, FieldValueRow } from './ProjectCustomFields';
+import ProjectFieldsManager from './ProjectFieldsManager';
 
 export interface ProjectData {
   id: string;
@@ -54,7 +55,7 @@ export default function ProjectHeader({
   canViewFinancials,
   merchandise,
   designFee,
-  fieldDefs,
+  fieldDefs: initialFieldDefs,
   fieldValues,
   isAdmin,
 }: {
@@ -69,6 +70,7 @@ export default function ProjectHeader({
   isAdmin: boolean;
 }) {
   const router = useRouter();
+  const [fieldDefs, setFieldDefs] = useState(initialFieldDefs);
   const [showForm, setShowForm] = useState(false);
   const [showClientForm, setShowClientForm] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(false);
@@ -398,6 +400,8 @@ export default function ProjectHeader({
                 />
               </div>
             </div>
+
+            {isAdmin && <ProjectFieldsManager fieldDefs={fieldDefs} onChange={setFieldDefs} />}
 
             {error && <p className="text-sm text-red-700">{error}</p>}
 

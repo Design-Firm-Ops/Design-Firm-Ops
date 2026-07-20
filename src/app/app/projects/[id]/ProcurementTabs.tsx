@@ -122,15 +122,30 @@ export default function ProcurementTabs({
                 {list.name} <span className="text-xs text-brown/40">({list.items.length})</span>
               </button>
             )}
-            {active === list.id && list.id !== 'unassigned' && lists.filter((l) => l.id !== 'unassigned').length > 1 && (
+            {active === list.id && list.id !== 'unassigned' && renamingId !== list.id && (
               <button
-                className="text-xs text-brown/30 hover:text-red-700"
-                title="Delete list"
-                onClick={() => handleDeleteList(list.id)}
+                className="ml-1 text-xs text-brown/30 hover:text-brown"
+                title="Rename list"
+                onClick={() => {
+                  setRenamingId(list.id);
+                  setRenameValue(list.name);
+                }}
               >
-                ✕
+                ✎
               </button>
             )}
+            {active === list.id &&
+              list.id !== 'unassigned' &&
+              renamingId !== list.id &&
+              lists.filter((l) => l.id !== 'unassigned').length > 1 && (
+                <button
+                  className="ml-1 text-xs text-brown/30 hover:text-red-700"
+                  title="Delete list"
+                  onClick={() => handleDeleteList(list.id)}
+                >
+                  ✕
+                </button>
+              )}
           </div>
         ))}
         <button className="px-3 py-2 text-sm text-brown/50 hover:text-brown" onClick={() => setShowNewList(true)}>
@@ -170,6 +185,7 @@ export default function ProcurementTabs({
           isAdmin={isAdmin}
           projectDefaultMarkupPct={projectDefaultMarkupPct}
           projectMarkupMode={projectMarkupMode}
+          copyTargets={lists.filter((l) => l.id !== activeList.id && l.id !== 'unassigned').map((l) => ({ id: l.id, name: l.name }))}
         />
       )}
       {!activeList && <p className="py-8 text-center text-brown/50">No procurement lists yet.</p>}

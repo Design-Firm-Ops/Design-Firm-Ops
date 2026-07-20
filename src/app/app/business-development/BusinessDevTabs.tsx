@@ -30,6 +30,8 @@ export default function BusinessDevTabs({
   const [newBoardName, setNewBoardName] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
 
   async function handleCreateBoard(e: React.FormEvent) {
     e.preventDefault();
@@ -57,6 +59,20 @@ export default function BusinessDevTabs({
     router.refresh();
   }
 
+  async function handleRenameBoard(boardId: string) {
+    if (!renameValue.trim()) {
+      setRenamingId(null);
+      return;
+    }
+    await fetch(`/api/lead-boards/${boardId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: renameValue.trim() }),
+    });
+    setRenamingId(null);
+    router.refresh();
+  }
+
   async function handleDeleteBoard(boardId: string) {
     const res = await fetch(`/api/lead-boards/${boardId}`, { method: 'DELETE' });
     if (!res.ok) {
@@ -73,15 +89,38 @@ export default function BusinessDevTabs({
       <div className="mb-4 flex flex-wrap items-center gap-1 border-b border-taupe/40">
         {boards.map((board) => (
           <div key={board.id} className="group relative flex items-center">
-            <button
-              onClick={() => setActive(board.id)}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                active === board.id ? 'border-b-2 border-gold text-brown' : 'text-brown/50 hover:text-brown'
-              }`}
-            >
-              {board.name}
-            </button>
-            {boards.length > 1 && active === board.id && (
+            {renamingId === board.id ? (
+              <input
+                className="w-32 rounded border border-gold px-2 py-1 text-sm"
+                value={renameValue}
+                autoFocus
+                onChange={(e) => setRenameValue(e.target.value)}
+                onBlur={() => handleRenameBoard(board.id)}
+                onKeyDown={(e) => e.key === 'Enter' && handleRenameBoard(board.id)}
+              />
+            ) : (
+              <button
+                onClick={() => setActive(board.id)}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  active === board.id ? 'border-b-2 border-gold text-brown' : 'text-brown/50 hover:text-brown'
+                }`}
+              >
+                {board.name}
+              </button>
+            )}
+            {active === board.id && renamingId !== board.id && (
+              <button
+                className="ml-1 text-xs text-brown/30 hover:text-brown"
+                title="Rename board"
+                onClick={() => {
+                  setRenamingId(board.id);
+                  setRenameValue(board.name);
+                }}
+              >
+                ✎
+              </button>
+            )}
+            {boards.length > 1 && active === board.id && renamingId !== board.id && (
               <button
                 className="ml-1 text-xs text-brown/30 hover:text-red-700"
                 title="Delete board"
