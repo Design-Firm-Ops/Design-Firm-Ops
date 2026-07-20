@@ -20,7 +20,7 @@ export default function Nav({ userName }: { userName?: string | null }) {
     <header className="border-b border-taupe/40 bg-brown text-cream">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
         <Link href="/app/projects" className="letterspaced-title text-sm font-semibold">
-          M D I&nbsp; S T U D I O
+          D E S I G N&nbsp; F I R M&nbsp; O P S
         </Link>
 
         <nav className="flex flex-wrap items-center gap-1 text-sm">

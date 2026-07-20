@@ -342,7 +342,7 @@ async function seedDemoProject() {
 }
 
 async function main() {
-  console.log('Seeding MDI Studio...');
+  console.log('Seeding Design Firm Ops...');
   await seedUsers();
   await seedSettings();
   await seedPipelineStages();

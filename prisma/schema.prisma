@@ -1,4 +1,4 @@
-// MDI Studio — Prisma schema
+// Design Firm Ops — Prisma schema
 // Postgres (Supabase). Money fields always use Decimal, never Float.
 
 generator client {

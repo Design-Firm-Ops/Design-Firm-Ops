@@ -16,7 +16,7 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: 'MDI Studio',
+  title: 'Design Firm Ops',
   description: 'Internal project management, procurement, and invoicing for Madison Ditton Interiors',
 };
 

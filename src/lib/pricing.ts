@@ -1,4 +1,4 @@
-// MDI Studio — pricing engine.
+// Design Firm Ops — pricing engine.
 //
 // This is the core of the business: every dollar amount here uses
 // decimal.js (never native floats) and rounds to the cent at the same
