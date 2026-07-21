@@ -304,6 +304,7 @@ model Project {
   items             Item[]
   procurementLists  ProcurementList[]
   documentFolders   ProjectDocumentFolder[]
+  rooms             ProjectRoom[]
   documents         Document[]
   invoices          Invoice[]
   payments          Payment[]
@@ -473,8 +474,12 @@ model Item {
   weight               Decimal?      @db.Decimal(8, 2)
 
   // Lighting-only fields — shown in the UI when category is "Lighting".
+  // bulbIncluded is deliberately tri-state: null means not yet reviewed,
+  // so the Bulbs summary (derived, see ItemsTable.tsx) only ever picks
+  // up items someone has explicitly marked "No".
   bulbSpec     String?
-  bulbIncluded Boolean @default(false)
+  bulbQty      Int?
+  bulbIncluded Boolean?
 
   finish        String?
   link          String?
@@ -541,6 +546,23 @@ model ProjectDocumentFolder {
   createdAt DateTime @default(now())
 
   @@index([projectId])
+}
+
+/// A project-scoped, growable list of room-name suggestions — Item.room
+/// stays plain text (not a FK), this table just backs the dropdown so
+/// re-typing "Living Room" twice can't drift into a typo. Same
+/// find-or-create pattern as ProjectType, but scoped per project since
+/// a project's rooms are specific to its own floor plan.
+model ProjectRoom {
+  id        String  @id @default(cuid())
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  name      String
+  order     Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, name])
 }
 
 model Document {

@@ -32,7 +32,8 @@ export interface ItemRow {
   dimensionUnit: string;
   weight: string | null;
   bulbSpec: string | null;
-  bulbIncluded: boolean;
+  bulbQty: number | null;
+  bulbIncluded: boolean | null;
   finish: string | null;
   link: string | null;
   shippingNotes: string | null;
@@ -79,6 +80,7 @@ export default function ItemsTable({
   categoryOptions,
   defaultCategory,
   itemTypeOptions,
+  roomOptions,
   itemFieldDefs,
   isAdmin,
   canOverrideLock,
@@ -93,6 +95,7 @@ export default function ItemsTable({
   categoryOptions: string[];
   defaultCategory: string;
   itemTypeOptions: ItemTypeOption[];
+  roomOptions: string[];
   itemFieldDefs: ItemFieldDefRow[];
   isAdmin: boolean;
   canOverrideLock: boolean;
@@ -112,6 +115,13 @@ export default function ItemsTable({
   const [overriddenIds, setOverriddenIds] = useState<Set<string>>(new Set());
   const [pendingOverride, setPendingOverride] = useState<ItemRow | null>(null);
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
+  const [itemTypeOptionsState, setItemTypeOptionsState] = useState(itemTypeOptions);
+  const [roomOptionsState, setRoomOptionsState] = useState(roomOptions);
+  const [showAddItemType, setShowAddItemType] = useState(false);
+  const [newItemTypeCategory, setNewItemTypeCategory] = useState(defaultCategory);
+  const [newItemTypeName, setNewItemTypeName] = useState('');
+  const [addingItemType, setAddingItemType] = useState(false);
+  const [addItemTypeError, setAddItemTypeError] = useState<string | null>(null);
 
   function updateLocal(id: string, patch: Partial<ItemRow>) {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
@@ -167,6 +177,34 @@ export default function ItemsTable({
       ]);
       router.refresh();
     }
+  }
+
+  async function handleAddItemType(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newItemTypeName.trim()) return;
+    setAddingItemType(true);
+    setAddItemTypeError(null);
+
+    const res = await fetch('/api/item-types', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category: newItemTypeCategory, name: newItemTypeName.trim() }),
+    });
+    setAddingItemType(false);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setAddItemTypeError(data?.error ?? 'Could not add item type.');
+      return;
+    }
+
+    const created = await res.json();
+    setItemTypeOptionsState((prev) =>
+      prev.some((t) => t.id === created.id) ? prev : [...prev, created],
+    );
+    setShowAddItemType(false);
+    setNewItemTypeName('');
+    router.refresh();
   }
 
   function toggleSelect(id: string) {
@@ -263,9 +301,24 @@ export default function ItemsTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, groupBy, vendors]);
 
-  const COLUMN_COUNT = 21;
-  const stickyTh = 'sticky z-20 bg-taupe/10 px-2 py-2';
+  const COLUMN_COUNT = 22;
+  const stickyTh = 'sticky z-20 bg-[#f8f6f3] px-2 py-2';
   const stickyTd = 'sticky z-10 bg-white px-2 py-1';
+
+  const bulbGroups = useMemo(() => {
+    const map = new Map<string, { spec: string; qty: number; items: string[] }>();
+    for (const item of items) {
+      if (item.category !== LIGHTING_CATEGORY) continue;
+      if (item.bulbIncluded !== false || !item.bulbQty) continue;
+      const spec = item.bulbSpec?.trim();
+      if (!spec) continue;
+      const existing = map.get(spec) ?? { spec, qty: 0, items: [] };
+      existing.qty += item.qty * item.bulbQty;
+      existing.items.push(item.tag ? `${item.tag} — ${item.name}` : item.name);
+      map.set(spec, existing);
+    }
+    return Array.from(map.values()).sort((a, b) => a.spec.localeCompare(b.spec));
+  }, [items]);
 
   function renderRow(item: ItemRow) {
     const priced = computeRow(item, projectDefaultMarkupPct, projectMarkupMode);
@@ -273,7 +326,7 @@ export default function ItemsTable({
     const editable = isEditable(item);
     const locked = !editable;
     const isLighting = item.category === LIGHTING_CATEGORY;
-    const relevantItemTypes = itemTypeOptions.filter((t) => t.category === item.category);
+    const relevantItemTypes = itemTypeOptionsState.filter((t) => t.category === item.category);
 
     return (
       <tr key={item.id} className="hover:bg-taupe/5">
@@ -335,7 +388,17 @@ export default function ItemsTable({
             disabled={locked}
             placeholder="Type…"
             onChange={(e) => updateLocal(item.id, { itemTypeName: e.target.value })}
-            onBlur={(e) => saveField(item.id, { itemType: e.target.value })}
+            onBlur={(e) => {
+              const value = e.target.value;
+              saveField(item.id, { itemType: value });
+              const trimmed = value.trim();
+              if (trimmed && !relevantItemTypes.some((t) => t.name === trimmed)) {
+                setItemTypeOptionsState((prev) => [
+                  ...prev,
+                  { id: `pending-${item.category}-${trimmed}`, category: item.category, name: trimmed },
+                ]);
+              }
+            }}
           />
           <datalist id={`item-types-${item.id}`}>
             {relevantItemTypes.map((t) => (
@@ -346,11 +409,24 @@ export default function ItemsTable({
         <td className="px-2 py-1">
           <input
             className="w-24 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+            list={`room-options-${item.id}`}
             value={item.room ?? ''}
             disabled={locked}
             onChange={(e) => updateLocal(item.id, { room: e.target.value })}
-            onBlur={(e) => saveField(item.id, { room: e.target.value })}
+            onBlur={(e) => {
+              const value = e.target.value;
+              saveField(item.id, { room: value });
+              const trimmed = value.trim();
+              if (trimmed && !roomOptionsState.includes(trimmed)) {
+                setRoomOptionsState((prev) => [...prev, trimmed]);
+              }
+            }}
           />
+          <datalist id={`room-options-${item.id}`}>
+            {roomOptionsState.map((r) => (
+              <option key={r} value={r} />
+            ))}
+          </datalist>
         </td>
         <td className="px-2 py-1">
           <select
@@ -429,17 +505,51 @@ export default function ItemsTable({
             <span className="text-brown/20">—</span>
           )}
         </td>
-        <td className="px-2 py-1 text-center">
+        <td className="px-2 py-1 text-right">
           {isLighting ? (
             <input
-              type="checkbox"
-              checked={item.bulbIncluded}
+              type="number"
+              min={0}
+              className="w-14 rounded border border-transparent bg-transparent px-1 py-0.5 text-right hover:border-taupe/40 focus:border-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+              value={item.bulbQty ?? ''}
               disabled={locked}
-              onChange={(e) => {
-                updateLocal(item.id, { bulbIncluded: e.target.checked });
-                saveField(item.id, { bulbIncluded: e.target.checked });
-              }}
+              onChange={(e) => updateLocal(item.id, { bulbQty: e.target.value === '' ? null : Number(e.target.value) })}
+              onBlur={(e) => saveField(item.id, { bulbQty: e.target.value === '' ? null : Number(e.target.value) })}
             />
+          ) : (
+            <span className="text-brown/20">—</span>
+          )}
+        </td>
+        <td className="px-2 py-1 text-center">
+          {isLighting ? (
+            <div className="flex items-center justify-center gap-2">
+              <label className="flex items-center gap-1 text-brown/70">
+                <input
+                  type="checkbox"
+                  checked={item.bulbIncluded === true}
+                  disabled={locked}
+                  onChange={(e) => {
+                    const value = e.target.checked ? true : null;
+                    updateLocal(item.id, { bulbIncluded: value });
+                    saveField(item.id, { bulbIncluded: value });
+                  }}
+                />
+                Yes
+              </label>
+              <label className="flex items-center gap-1 text-brown/70">
+                <input
+                  type="checkbox"
+                  checked={item.bulbIncluded === false}
+                  disabled={locked}
+                  onChange={(e) => {
+                    const value = e.target.checked ? false : null;
+                    updateLocal(item.id, { bulbIncluded: value });
+                    saveField(item.id, { bulbIncluded: value });
+                  }}
+                />
+                No
+              </label>
+            </div>
           ) : (
             <span className="text-brown/20">—</span>
           )}
@@ -581,11 +691,63 @@ export default function ItemsTable({
               <option value="itemType">Item Type</option>
             </select>
           </label>
+          <button
+            className="btn-secondary"
+            onClick={() => {
+              setNewItemTypeCategory(defaultCategory);
+              setNewItemTypeName('');
+              setAddItemTypeError(null);
+              setShowAddItemType(true);
+            }}
+          >
+            + Add Item Type
+          </button>
           <button className="btn-primary" onClick={handleAddRow} disabled={addingRow}>
             {addingRow ? 'Adding…' : '+ Add Row'}
           </button>
         </div>
       </div>
+
+      {showAddItemType && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+          <form onSubmit={handleAddItemType} className="card w-full max-w-sm space-y-4 p-6">
+            <h2 className="text-lg font-medium text-brown">Add Item Type</h2>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brown">Category</label>
+              <select
+                className="input"
+                value={newItemTypeCategory}
+                onChange={(e) => setNewItemTypeCategory(e.target.value)}
+              >
+                {categoryOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brown">Name</label>
+              <input
+                className="input"
+                placeholder="e.g. Bench"
+                value={newItemTypeName}
+                autoFocus
+                onChange={(e) => setNewItemTypeName(e.target.value)}
+              />
+            </div>
+            {addItemTypeError && <p className="text-sm text-red-700">{addItemTypeError}</p>}
+            <div className="flex justify-end gap-3">
+              <button type="button" className="btn-secondary" onClick={() => setShowAddItemType(false)}>
+                Cancel
+              </button>
+              <button type="submit" className="btn-primary" disabled={addingItemType}>
+                {addingItemType ? 'Adding…' : 'Add'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="card overflow-x-auto">
         <table className="min-w-full divide-y divide-taupe/30 text-xs">
@@ -608,6 +770,7 @@ export default function ItemsTable({
               <th className="bg-taupe/10 px-2 py-2">Dimensions (H x W x L)</th>
               <th className="bg-taupe/10 px-2 py-2">Weight</th>
               <th className="bg-taupe/10 px-2 py-2">Bulb Spec</th>
+              <th className="bg-taupe/10 px-2 py-2 text-right">Bulb Qty</th>
               <th className="bg-taupe/10 px-2 py-2">Bulb Incl.</th>
               <th className="bg-taupe/10 px-2 py-2 text-right">Qty</th>
               <th className="bg-taupe/10 px-2 py-2 text-right">Unit Cost</th>
@@ -644,7 +807,7 @@ export default function ItemsTable({
           {items.length > 0 && (
             <tfoot>
               <tr className="border-t-2 border-brown/30 bg-taupe/10 font-medium text-brown">
-                <td colSpan={16} className="px-2 py-2 text-right">
+                <td colSpan={17} className="px-2 py-2 text-right">
                   Totals
                 </td>
                 <td className="px-2 py-2 text-right tabular-nums">{formatMoney(totals.subtotal)}</td>
@@ -656,12 +819,36 @@ export default function ItemsTable({
         </table>
       </div>
 
+      {bulbGroups.length > 0 && (
+        <div className="card mt-4 p-4">
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-[0.24em] text-taupe">Bulbs</h3>
+          <table className="min-w-full divide-y divide-taupe/30 text-xs">
+            <thead className="text-left font-medium uppercase tracking-[0.2em] text-taupe">
+              <tr>
+                <th className="px-2 py-2">Bulb Spec</th>
+                <th className="px-2 py-2 text-right">Total Qty</th>
+                <th className="px-2 py-2">Used In</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-taupe/20">
+              {bulbGroups.map((g) => (
+                <tr key={g.spec}>
+                  <td className="px-2 py-1 font-medium text-brown">{g.spec}</td>
+                  <td className="px-2 py-1 text-right tabular-nums">{g.qty}</td>
+                  <td className="px-2 py-1 text-brown/70">{g.items.join(', ')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {detailItem && (
         <ItemDetailModal
           item={detailItem}
           projectId={projectId}
           vendors={vendors}
-          itemTypeOptions={itemTypeOptions}
+          itemTypeOptions={itemTypeOptionsState}
           fieldDefs={itemFieldDefs}
           isAdmin={isAdmin}
           projectDefaultMarkupPct={projectDefaultMarkupPct}

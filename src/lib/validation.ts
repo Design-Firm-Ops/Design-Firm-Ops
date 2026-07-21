@@ -94,7 +94,10 @@ export const itemSchema = z.object({
   dimensionUnit: z.enum(['IN', 'CM']).default('IN'),
   weight: z.coerce.number().min(0).nullable().optional(),
   bulbSpec: z.string().optional().or(z.literal('')),
-  bulbIncluded: z.boolean().default(false),
+  bulbQty: z.coerce.number().int().min(0).nullable().optional(),
+  // Tri-state: null/omitted = not yet reviewed, true = included, false
+  // = confirmed not included (only "false" rows feed the Bulbs summary).
+  bulbIncluded: z.boolean().nullable().optional(),
   finish: z.string().optional().or(z.literal('')),
   link: z.string().optional().or(z.literal('')),
   shippingNotes: z.string().optional().or(z.literal('')),
@@ -274,6 +277,11 @@ export const offeringSchema = z.object({
 export const feeStructureOptionSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   scope: z.enum(['DESIGN_FEE', 'PROCUREMENT']),
+});
+
+export const itemTypeCreateSchema = z.object({
+  category: z.string().min(1, 'Category is required'),
+  name: z.string().min(1, 'Name is required'),
 });
 
 export const procurementListSchema = z.object({

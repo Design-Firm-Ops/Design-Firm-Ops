@@ -6,6 +6,7 @@ import { resolvePermissions } from '@/lib/permissions';
 import { isItemLocked, lockedItemMessage } from '@/lib/itemLock';
 import { findOrCreateItemType } from '@/lib/itemType';
 import { nextItemTag } from '@/lib/itemTag';
+import { findOrCreateRoom } from '@/lib/room';
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const { session, unauthorized } = await requireSession();
@@ -38,6 +39,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const itemTypeId =
     itemType !== undefined ? await findOrCreateItemType(rest.category ?? existing.category, itemType) : undefined;
+
+  if (rest.room) await findOrCreateRoom(existing.projectId, rest.room);
 
   // A blank tag auto-fills the moment an item type is set — matches
   // the same rule as item creation — but never overwrites a tag

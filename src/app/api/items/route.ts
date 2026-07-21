@@ -5,6 +5,7 @@ import { itemSchema } from '@/lib/validation';
 import { resolvePermissions } from '@/lib/permissions';
 import { findOrCreateItemType } from '@/lib/itemType';
 import { nextItemTag } from '@/lib/itemTag';
+import { findOrCreateRoom } from '@/lib/room';
 
 export async function POST(req: NextRequest) {
   const { session, unauthorized } = await requireSession();
@@ -24,6 +25,7 @@ export async function POST(req: NextRequest) {
   const { vendorId, itemType, procurementListId, tag, ...rest } = parsed.data;
 
   const itemTypeId = await findOrCreateItemType(parsed.data.category, itemType);
+  if (rest.room) await findOrCreateRoom(parsed.data.projectId, rest.room);
 
   // A blank tag auto-fills from the item type's tag prefix — "TA-1"
   // for the first Table on this project, etc. A manually-typed tag is

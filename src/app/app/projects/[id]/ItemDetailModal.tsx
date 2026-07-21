@@ -55,6 +55,7 @@ export default function ItemDetailModal({
     dimensionUnit: item.dimensionUnit,
     weight: item.weight ?? '',
     bulbSpec: item.bulbSpec ?? '',
+    bulbQty: item.bulbQty ?? '',
     bulbIncluded: item.bulbIncluded,
     finish: item.finish ?? '',
     link: item.link ?? '',
@@ -117,6 +118,7 @@ export default function ItemDetailModal({
       dimensionWidth: form.dimensionWidth === '' ? null : Number(form.dimensionWidth),
       dimensionLength: form.dimensionLength === '' ? null : Number(form.dimensionLength),
       weight: form.weight === '' ? null : Number(form.weight),
+      bulbQty: form.bulbQty === '' ? null : Number(form.bulbQty),
     };
 
     const res = await fetch(`/api/items/${item.id}`, {
@@ -144,6 +146,7 @@ export default function ItemDetailModal({
       dimensionWidth: payload.dimensionWidth === null ? null : String(payload.dimensionWidth),
       dimensionLength: payload.dimensionLength === null ? null : String(payload.dimensionLength),
       weight: payload.weight === null ? null : String(payload.weight),
+      bulbQty: payload.bulbQty,
       tag: updated.tag,
     });
   }
@@ -335,7 +338,7 @@ export default function ItemDetailModal({
         {isLighting && (
           <div className="rounded-md border border-taupe/40 p-4">
             <h3 className="mb-3 text-sm font-medium text-brown">Lighting</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-brown">Bulb Spec</label>
                 <input
@@ -345,14 +348,34 @@ export default function ItemDetailModal({
                   onChange={(e) => setForm({ ...form, bulbSpec: e.target.value })}
                 />
               </div>
-              <label className="mt-6 flex items-center gap-2 text-sm text-brown">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-brown">Bulb Qty</label>
                 <input
-                  type="checkbox"
-                  checked={form.bulbIncluded}
-                  onChange={(e) => setForm({ ...form, bulbIncluded: e.target.checked })}
+                  type="number"
+                  min={0}
+                  className="input"
+                  value={form.bulbQty}
+                  onChange={(e) => setForm({ ...form, bulbQty: e.target.value === '' ? '' : Number(e.target.value) })}
                 />
-                Bulb included
-              </label>
+              </div>
+              <div className="mt-6 flex items-center gap-4 text-sm text-brown">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={form.bulbIncluded === true}
+                    onChange={(e) => setForm({ ...form, bulbIncluded: e.target.checked ? true : null })}
+                  />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={form.bulbIncluded === false}
+                    onChange={(e) => setForm({ ...form, bulbIncluded: e.target.checked ? false : null })}
+                  />
+                  No
+                </label>
+              </div>
             </div>
           </div>
         )}

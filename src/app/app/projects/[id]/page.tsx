@@ -38,7 +38,8 @@ function serializeInvoiceItem(item: {
   dimensionUnit: string;
   weight: unknown;
   bulbSpec: string | null;
-  bulbIncluded: boolean;
+  bulbQty: number | null;
+  bulbIncluded: boolean | null;
   finish: string | null;
   link: string | null;
   shippingNotes: string | null;
@@ -67,6 +68,7 @@ function serializeInvoiceItem(item: {
     dimensionUnit: item.dimensionUnit,
     weight: item.weight === null ? null : String(item.weight),
     bulbSpec: item.bulbSpec,
+    bulbQty: item.bulbQty,
     bulbIncluded: item.bulbIncluded,
     finish: item.finish,
     link: item.link,
@@ -94,6 +96,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         include: { fieldValues: true, invoice: { select: { invoiceNumber: true } }, itemType: { select: { name: true } } },
       },
       procurementLists: { orderBy: { order: 'asc' } },
+      rooms: { orderBy: { order: 'asc' } },
       documentFolders: { orderBy: { order: 'asc' } },
       documents: { orderBy: { uploadedAt: 'desc' } },
       invoices: { include: { items: true, designFeeCharges: true }, orderBy: { createdAt: 'desc' } },
@@ -307,6 +310,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           lists={procurementLists}
           vendors={vendors}
           itemTypeOptions={itemTypeOptions.map((t) => ({ id: t.id, category: t.category, name: t.name }))}
+          roomOptions={project.rooms.map((r) => r.name)}
           itemFieldDefs={itemFieldDefs}
           isAdmin={admin}
           canOverrideLock={perms.invoices}

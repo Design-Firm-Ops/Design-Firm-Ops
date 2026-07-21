@@ -17,6 +17,7 @@ export default function ProcurementTabs({
   lists,
   vendors,
   itemTypeOptions,
+  roomOptions,
   itemFieldDefs,
   isAdmin,
   canOverrideLock,
@@ -30,6 +31,7 @@ export default function ProcurementTabs({
   lists: ProcurementListData[];
   vendors: { id: string; name: string }[];
   itemTypeOptions: { id: string; category: string; name: string }[];
+  roomOptions: string[];
   itemFieldDefs: ItemFieldDefRow[];
   isAdmin: boolean;
   canOverrideLock: boolean;
@@ -204,6 +206,7 @@ export default function ProcurementTabs({
               : activeList.name
           }
           itemTypeOptions={itemTypeOptions}
+          roomOptions={roomOptions}
           itemFieldDefs={itemFieldDefs}
           isAdmin={isAdmin}
           canOverrideLock={canOverrideLock}
