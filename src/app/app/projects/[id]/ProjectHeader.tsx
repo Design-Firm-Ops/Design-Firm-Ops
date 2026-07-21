@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import Decimal from 'decimal.js';
 import { formatMoney } from '@/lib/money';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import DesignFeeSection, { DesignFeeChargeRow, DesignFeeInvoiceRow } from './DesignFeeSection';
 import ProjectCustomFields, { FieldDefRow, FieldValueRow } from './ProjectCustomFields';
 import ProjectFieldsManager from './ProjectFieldsManager';
 import { COLUMN_LABELS, COLUMN_PRESETS, INVOICE_COLUMNS, InvoiceColumnKey, resolveColumnConfig } from '@/lib/invoiceColumns';
@@ -53,8 +52,6 @@ export default function ProjectHeader({
   canViewFinancials,
   merchandise,
   designFee,
-  designFeeCharges,
-  designFeeInvoices,
   fieldDefs: initialFieldDefs,
   fieldValues,
   isAdmin,
@@ -66,8 +63,6 @@ export default function ProjectHeader({
   canViewFinancials: boolean;
   merchandise: MerchandiseFinancials;
   designFee: DesignFeeFinancials;
-  designFeeCharges: DesignFeeChargeRow[];
-  designFeeInvoices: DesignFeeInvoiceRow[];
   fieldDefs: FieldDefRow[];
   fieldValues: FieldValueRow[];
   isAdmin: boolean;
@@ -257,12 +252,23 @@ export default function ProjectHeader({
             </dl>
           </div>
 
-          <DesignFeeSection
-            projectId={project.id}
-            summary={designFee}
-            charges={designFeeCharges}
-            invoices={designFeeInvoices}
-          />
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase tracking-[0.24em] text-taupe">Design Fee</p>
+            <dl className="grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <dt className="text-brown/50">Billed</dt>
+                <dd className="tabular-nums font-medium">{formatMoney(designFee.billed)}</dd>
+              </div>
+              <div>
+                <dt className="text-brown/50">Paid</dt>
+                <dd className="tabular-nums font-medium">{formatMoney(designFee.paid)}</dd>
+              </div>
+              <div>
+                <dt className="text-brown/50">Outstanding</dt>
+                <dd className="tabular-nums font-medium text-brown">{formatMoney(designFee.outstanding)}</dd>
+              </div>
+            </dl>
+          </div>
         </div>
       )}
 

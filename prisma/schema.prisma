@@ -270,6 +270,7 @@ model Project {
 
   items             Item[]
   procurementLists  ProcurementList[]
+  documentFolders   ProjectDocumentFolder[]
   documents         Document[]
   invoices          Invoice[]
   payments          Payment[]
@@ -467,6 +468,23 @@ model ProcurementList {
   order     Int     @default(0)
 
   items Item[]
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}
+
+/// A named folder shown in a project's Project Documents tab — same
+/// rename/reorder pattern as ProcurementList. Document.folder stores
+/// the folder's current name as free text (not a FK), so renaming here
+/// must cascade to every Document row tagged with the old name — see
+/// PATCH /api/document-folders/[id].
+model ProjectDocumentFolder {
+  id        String  @id @default(cuid())
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  name      String
+  order     Int     @default(0)
 
   createdAt DateTime @default(now())
 

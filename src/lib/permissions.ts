@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 /**
  * Resolved, ready-to-render visibility flags for the current session.
  * ADMIN always sees everything; DESIGNER is gated by the toggles an
- * admin sets on Administration > Permissions (Settings.designerCanView*).
+ * admin sets on Settings > Permissions (Settings.designerCanView*).
  */
 export interface ResolvedPermissions {
   isAdmin: boolean;

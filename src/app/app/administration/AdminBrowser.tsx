@@ -17,17 +17,13 @@ interface Tile {
 
 export default function AdminBrowser({
   resourceRows,
-  usersForSearch,
   allUsers,
   folderPermissions,
-  usersContent,
   isAdmin,
 }: {
   resourceRows: ResourceRow[];
-  usersForSearch: { name: string; email: string }[];
   allUsers: { id: string; name: string; email: string }[];
   folderPermissions: { name: string; allowedUserIds: string[] }[];
-  usersContent: React.ReactNode;
   isAdmin: boolean;
 }) {
   const router = useRouter();
@@ -77,7 +73,7 @@ export default function AdminBrowser({
   const folderNames = useMemo(() => Array.from(resourcesByFolder.keys()).sort(), [resourcesByFolder]);
 
   const tiles: Tile[] = useMemo(() => {
-    const list: Tile[] = folderNames.map((f) => {
+    return folderNames.map((f) => {
       const files = resourcesByFolder.get(f) ?? [];
       return {
         key: `folder:${f}`,
@@ -86,18 +82,7 @@ export default function AdminBrowser({
         keywords: [f, ...files.map((r) => r.filename)].join(' ').toLowerCase(),
       };
     });
-    if (isAdmin) {
-      list.push({
-        key: 'users',
-        label: 'Users',
-        sublabel: `${usersForSearch.length} teammate${usersForSearch.length === 1 ? '' : 's'}`,
-        keywords: ['users', 'teammates', 'accounts', ...usersForSearch.map((u) => `${u.name} ${u.email}`)]
-          .join(' ')
-          .toLowerCase(),
-      });
-    }
-    return list;
-  }, [folderNames, resourcesByFolder, isAdmin, usersForSearch]);
+  }, [folderNames, resourcesByFolder]);
 
   const q = query.trim().toLowerCase();
   const visibleTiles = q ? tiles.filter((t) => t.keywords.includes(q)) : tiles;
@@ -146,7 +131,7 @@ export default function AdminBrowser({
           </button>
           <div className="flex items-center gap-2">
             <button className="text-brown/60 hover:text-brown" onClick={goHome}>
-              Administration
+              Documents
             </button>
             <span className="text-brown/30">/</span>
             <span className="font-medium text-brown">{openTile.label}</span>
@@ -162,7 +147,6 @@ export default function AdminBrowser({
           />
         </div>
 
-        {openKey === 'users' && usersContent}
         {openKey.startsWith('folder:') && (
           <>
             {isAdmin && (
@@ -184,7 +168,7 @@ export default function AdminBrowser({
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <input
           className="input max-w-sm"
-          placeholder="Search all of Administration…"
+          placeholder="Search all documents…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -210,7 +194,7 @@ export default function AdminBrowser({
       </div>
 
       {visibleTiles.length === 0 && (
-        <p className="py-8 text-center text-brown/50">Nothing in Administration matches "{query}".</p>
+        <p className="py-8 text-center text-brown/50">Nothing matches "{query}".</p>
       )}
 
       {view === 'rows' ? (

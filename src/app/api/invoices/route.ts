@@ -15,7 +15,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { projectId, type, itemIds, designFeeChargeIds, shippingTotal, taxRate, taxBase, dueDate, notes } = parsed.data;
+  const { projectId, type, itemIds, designFeeChargeIds, newDesignFeeCharges, shippingTotal, taxRate, taxBase, dueDate, notes } =
+    parsed.data;
 
   const perms = await resolvePermissions(session);
   const allowed = type === 'DESIGN_FEE' ? perms.financials : perms.invoices;
@@ -27,8 +28,8 @@ export async function POST(req: NextRequest) {
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
 
   if (type === 'DESIGN_FEE') {
-    if (designFeeChargeIds.length === 0) {
-      return NextResponse.json({ error: 'Select at least one design fee charge' }, { status: 400 });
+    if (designFeeChargeIds.length === 0 && newDesignFeeCharges.length === 0) {
+      return NextResponse.json({ error: 'Select a charge or add a custom line item' }, { status: 400 });
     }
     const charges = await prisma.designFeeCharge.findMany({ where: { id: { in: designFeeChargeIds }, projectId } });
     if (charges.length !== designFeeChargeIds.length) {
@@ -44,18 +45,27 @@ export async function POST(req: NextRequest) {
 
     const invoiceNumber = await nextInvoiceNumber(projectId, project.invoicePrefix, 'DESIGN_FEE');
 
+    // Custom line items typed directly into the invoice form are
+    // auto-billed here — creating the invoice is what bills them, no
+    // separate "Bill Design Fee" step required.
+    const createdCharges = await Promise.all(
+      newDesignFeeCharges.map((line) =>
+        prisma.designFeeCharge.create({ data: { projectId, description: line.description, amount: line.amount } })
+      )
+    );
+    const allChargeIds = [...designFeeChargeIds, ...createdCharges.map((c) => c.id)];
+
     const invoice = await prisma.invoice.create({
       data: {
         projectId,
         invoiceNumber,
         type: 'DESIGN_FEE',
-        // Design fee invoices are a flat sum of charges — no shipping/tax/markup.
-        shippingTotal: 0,
-        taxRate: 0,
-        taxBase: 'MERCH_ONLY',
+        shippingTotal,
+        taxRate: taxRate ?? 0,
+        taxBase: taxBase ?? 'MERCH_ONLY',
         dueDate: dueDate ? new Date(dueDate) : null,
         notes: notes || null,
-        designFeeCharges: { connect: designFeeChargeIds.map((id) => ({ id })) },
+        designFeeCharges: { connect: allChargeIds.map((id) => ({ id })) },
       },
       include: { designFeeCharges: true },
     });

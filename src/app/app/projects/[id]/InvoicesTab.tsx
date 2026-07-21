@@ -7,6 +7,7 @@ import { formatMoney, formatPercentFromFraction } from '@/lib/money';
 import { COLUMN_LABELS, COLUMN_PRESETS, INVOICE_COLUMNS, InvoiceColumnKey, resolveColumnConfig } from '@/lib/invoiceColumns';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Tooltip from '@/components/Tooltip';
+import VoidedInvoicesDropdown from './VoidedInvoicesDropdown';
 import type { ItemRow } from './ItemsTable';
 
 export interface InvoiceRow {
@@ -202,6 +203,9 @@ export default function InvoicesTab({
     router.refresh();
   }
 
+  const activeInvoices = invoices.filter((i) => i.status !== 'VOID');
+  const voidedInvoices = invoices.filter((i) => i.status === 'VOID');
+
   return (
     <div>
       <div className="mb-4 flex justify-end">
@@ -215,7 +219,7 @@ export default function InvoicesTab({
       {actionError && <p className="mb-3 text-sm text-red-700">{actionError}</p>}
 
       <div className="space-y-4">
-        {invoices.map((invoice) => {
+        {activeInvoices.map((invoice) => {
           const extendedPrices = invoice.items.map((i) => priceOf(i).extended);
           const totals = computeInvoiceTotals({
             extendedPrices,
@@ -223,17 +227,14 @@ export default function InvoicesTab({
             taxRate: invoice.taxRate,
             taxBase: invoice.taxBase as 'MERCH_ONLY' | 'MERCH_PLUS_SHIPPING',
           });
-          const isVoid = invoice.status === 'VOID';
           const resolved = resolveColumnConfig(invoice.columnConfig, projectDefaultColumnConfig);
           const columnsOpen = expandedColumnsId === invoice.id;
 
           return (
-            <div key={invoice.id} className={`card p-5 ${isVoid ? 'opacity-60' : ''}`}>
+            <div key={invoice.id} className="card p-5">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h3 className={`font-serif text-lg font-medium text-brown ${isVoid ? 'line-through' : ''}`}>
-                    {invoice.invoiceNumber}
-                  </h3>
+                  <h3 className="font-serif text-lg font-medium text-brown">{invoice.invoiceNumber}</h3>
                   <span
                     className={`inline-block rounded px-2 py-0.5 text-xs font-medium uppercase tracking-[0.1em] ${STATUS_STYLES[invoice.status] ?? 'bg-taupe/20 text-brown/70'}`}
                   >
@@ -266,36 +267,34 @@ export default function InvoicesTab({
                 </div>
               </dl>
 
-              {!isVoid && (
-                <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-taupe/20 pt-3">
-                  <a
-                    className="text-sm font-medium text-gold hover:underline"
-                    href={`/api/invoices/${invoice.id}/pdf`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    View PDF
-                  </a>
-                  <button
-                    className="text-sm font-medium text-brown hover:underline"
-                    onClick={() => setExpandedColumnsId(columnsOpen ? null : invoice.id)}
-                  >
-                    {columnsOpen ? 'Hide columns' : 'Client-visible columns'}
-                  </button>
-                  <button
-                    className="text-sm font-medium text-brown hover:underline disabled:opacity-50"
-                    onClick={() => handleSend(invoice.id)}
-                    disabled={sendingId === invoice.id}
-                  >
-                    {sendingId === invoice.id ? 'Sending…' : invoice.status === 'DRAFT' ? 'Send Invoice' : 'Resend Invoice'}
-                  </button>
-                  <button className="ml-auto text-sm text-red-700 hover:underline" onClick={() => setPendingVoid(invoice)}>
-                    Void
-                  </button>
-                </div>
-              )}
+              <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-taupe/20 pt-3">
+                <a
+                  className="text-sm font-medium text-gold hover:underline"
+                  href={`/api/invoices/${invoice.id}/pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View PDF
+                </a>
+                <button
+                  className="text-sm font-medium text-brown hover:underline"
+                  onClick={() => setExpandedColumnsId(columnsOpen ? null : invoice.id)}
+                >
+                  {columnsOpen ? 'Hide columns' : 'Client-visible columns'}
+                </button>
+                <button
+                  className="text-sm font-medium text-brown hover:underline disabled:opacity-50"
+                  onClick={() => handleSend(invoice.id)}
+                  disabled={sendingId === invoice.id}
+                >
+                  {sendingId === invoice.id ? 'Sending…' : invoice.status === 'DRAFT' ? 'Send Invoice' : 'Resend Invoice'}
+                </button>
+                <button className="ml-auto text-sm text-red-700 hover:underline" onClick={() => setPendingVoid(invoice)}>
+                  Void
+                </button>
+              </div>
 
-              {!isVoid && columnsOpen && (
+              {columnsOpen && (
                 <div className="mt-3 rounded-md border border-taupe/40 bg-cream/60 p-4">
                   <p className="mb-2 text-xs uppercase tracking-[0.24em] text-taupe">Presets</p>
                   <div className="mb-3 flex flex-wrap gap-2">
@@ -339,9 +338,22 @@ export default function InvoicesTab({
             </div>
           );
         })}
-        {invoices.length === 0 && (
+        {activeInvoices.length === 0 && (
           <div className="card p-8 text-center text-brown/50">No invoices yet.</div>
         )}
+
+        <VoidedInvoicesDropdown
+          invoices={voidedInvoices.map((invoice) => ({
+            id: invoice.id,
+            invoiceNumber: invoice.invoiceNumber,
+            total: computeInvoiceTotals({
+              extendedPrices: invoice.items.map((i) => priceOf(i).extended),
+              shippingTotal: invoice.shippingTotal,
+              taxRate: invoice.taxRate,
+              taxBase: invoice.taxBase as 'MERCH_ONLY' | 'MERCH_PLUS_SHIPPING',
+            }).grandTotal,
+          }))}
+        />
       </div>
 
       {showForm && (

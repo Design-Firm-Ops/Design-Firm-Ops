@@ -285,6 +285,12 @@ async function seedDemoProject() {
   );
   const lightingList = procurementLists[0];
 
+  await prisma.projectDocumentFolder.createMany({
+    data: ['Outside Design Documents', 'Notes and Markups', 'Precedent Images', 'Presentations', 'Drawings'].map(
+      (name, order) => ({ projectId: project.id, name, order })
+    ),
+  });
+
   // Small lighting-specific vendors for the demo line items — distinct
   // from the firm's real FF&E vendor list above, kept minimal since
   // their only role is to populate the Vendor column on these items.

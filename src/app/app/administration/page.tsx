@@ -4,7 +4,6 @@ import { prisma } from '@/lib/prisma';
 import { createSignedResourceUrl } from '@/lib/supabase';
 import { isAdmin } from '@/lib/permissions';
 import AdminBrowser from './AdminBrowser';
-import UsersManager from './UsersManager';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,22 +42,13 @@ export default async function AdministrationPage() {
       }))
   );
 
-  const usersTab = admin ? (
-    <UsersManager
-      initialUsers={users.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}
-      currentUserId={currentUserId}
-    />
-  ) : null;
-
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-medium text-brown">Administration</h1>
+      <h1 className="mb-6 text-2xl font-medium text-brown">Documents</h1>
       <AdminBrowser
         resourceRows={resourceRows}
-        usersForSearch={users.map((u) => ({ name: u.name, email: u.email }))}
         allUsers={admin ? users.map((u) => ({ id: u.id, name: u.name, email: u.email })) : []}
         folderPermissions={folderPermissions.map((f) => ({ name: f.name, allowedUserIds: f.allowedUserIds }))}
-        usersContent={usersTab}
         isAdmin={admin}
       />
     </div>

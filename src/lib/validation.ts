@@ -141,9 +141,15 @@ export const paymentUpdateSchema = paymentSchema.partial().omit({ projectId: tru
 export const invoiceCreateSchema = z.object({
   projectId: z.string().min(1),
   type: z.enum(['PROCUREMENT', 'DESIGN_FEE']).default('PROCUREMENT'),
-  // Exactly one of these is used, depending on type — see /api/invoices POST.
+  // Exactly one of itemIds/designFeeChargeIds is used, depending on
+  // type — see /api/invoices POST. newDesignFeeCharges (DESIGN_FEE
+  // only) are created as DesignFeeCharge rows and attached in the same
+  // request — this is how "billing" and "invoicing" merge into one step.
   itemIds: z.array(z.string()).default([]),
   designFeeChargeIds: z.array(z.string()).default([]),
+  newDesignFeeCharges: z
+    .array(z.object({ description: z.string().min(1), amount: z.coerce.number().positive() }))
+    .default([]),
   shippingTotal: z.coerce.number().min(0).default(0),
   taxRate: z.coerce.number().min(0).max(1).optional(),
   taxBase: z.enum(['MERCH_ONLY', 'MERCH_PLUS_SHIPPING']).optional(),
@@ -283,5 +289,10 @@ export const fieldValueSchema = z.object({
 
 export const documentFolderSchema = z.object({
   projectId: z.string().min(1),
-  folder: z.string().min(1, 'Folder is required'),
+  name: z.string().min(1, 'Folder name is required'),
+});
+
+export const documentFolderUpdateSchema = z.object({
+  name: z.string().min(1).optional(),
+  order: z.number().int().optional(),
 });

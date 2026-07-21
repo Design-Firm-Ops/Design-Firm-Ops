@@ -1,7 +1,7 @@
 /** Default Procurement sub-lists seeded for every new project. */
 export const DEFAULT_PROCUREMENT_LISTS = ['Lighting', 'Furniture', 'Decor', 'Materials', 'Other Merchandise'];
 
-/** Default folders shown in a new project's Documents and Presentations tab. */
+/** Default folders shown in a new project's Project Documents tab. */
 export const DEFAULT_DOCUMENT_FOLDERS = [
   'Outside Design Documents',
   'Notes and Markups',

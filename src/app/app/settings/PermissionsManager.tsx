@@ -38,7 +38,7 @@ const PERMS: { key: PermKey; roleKey: keyof RoleDefaults; label: string; descrip
   {
     key: 'documentsPresentations',
     roleKey: 'designerCanViewDocumentsPresentations',
-    label: 'Documents and Presentations tab',
+    label: 'Project Documents tab',
     description: 'Presentations, vendor invoices, and other project files.',
   },
   {
@@ -50,8 +50,8 @@ const PERMS: { key: PermKey; roleKey: keyof RoleDefaults; label: string; descrip
   {
     key: 'invoices',
     roleKey: 'designerCanViewInvoices',
-    label: 'Invoices tab',
-    description: 'Merchandise invoices and payments.',
+    label: 'Invoices and Payments tab',
+    description: 'Procurement invoices/payments and design fee invoices/payments.',
   },
   {
     key: 'procurement',

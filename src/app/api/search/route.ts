@@ -21,16 +21,16 @@ const STATIC_PAGES: { label: string; sublabel: string; href: string; keywords: s
   },
   { label: 'Referral Partners', sublabel: 'Business Development', href: '/app/business-development', keywords: 'referral partners' },
   { label: 'Vendors', sublabel: 'Page', href: '/app/vendors', keywords: 'vendors ffe suppliers showroom rep' },
-  { label: 'Administration', sublabel: 'Page', href: '/app/administration', keywords: 'administration storage files' },
-  { label: 'Users', sublabel: 'Administration', href: '/app/administration', keywords: 'users teammates accounts', adminOnly: true },
+  { label: 'Documents', sublabel: 'Page', href: '/app/administration', keywords: 'documents administration storage files' },
+  { label: 'Settings', sublabel: 'Page', href: '/app/settings', keywords: 'settings company logo payment instructions' },
+  { label: 'Users', sublabel: 'Settings', href: '/app/settings', keywords: 'users teammates accounts', adminOnly: true },
   {
     label: 'Permissions',
-    sublabel: 'Administration',
-    href: '/app/administration',
+    sublabel: 'Settings',
+    href: '/app/settings',
     keywords: 'permissions designer role visibility',
     adminOnly: true,
   },
-  { label: 'Settings', sublabel: 'Page', href: '/app/settings', keywords: 'settings company logo payment instructions' },
 ];
 
 export async function GET(req: NextRequest) {
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
     ...resources.map((r) => ({
       type: 'resource' as const,
       label: r.filename,
-      sublabel: `File · Administration / ${r.folder}`,
+      sublabel: `File · Documents / ${r.folder}`,
       href: '/app/administration',
     })),
   ];

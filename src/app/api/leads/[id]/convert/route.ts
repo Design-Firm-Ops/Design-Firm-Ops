@@ -45,7 +45,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   });
 
   // Move any documents saved on the lead card into the new project's
-  // Documents and Presentations tab rather than copying files.
+  // Project Documents tab rather than copying files.
   await prisma.document.updateMany({
     where: { leadId: lead.id },
     data: { leadId: null, projectId: project.id, folder: 'Outside Design Documents' },

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { isAdmin } from '@/lib/permissions';
 import SettingsForm from './SettingsForm';
 import PermissionsManager from './PermissionsManager';
+import UsersManager from './UsersManager';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,9 +14,14 @@ export default async function SettingsPage() {
 
   const settings = await prisma.settings.findUnique({ where: { id: 1 } });
 
+  let usersSection = null;
   let permissionsSection = null;
   if (admin) {
-    const [designers, overrides] = await Promise.all([
+    const [allUsers, designers, overrides] = await Promise.all([
+      prisma.user.findMany({
+        select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
       prisma.user.findMany({
         where: { role: 'DESIGNER' },
         select: { id: true, name: true, email: true },
@@ -23,6 +29,13 @@ export default async function SettingsPage() {
       }),
       prisma.userPermissionOverride.findMany(),
     ]);
+
+    usersSection = (
+      <UsersManager
+        initialUsers={allUsers.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}
+        currentUserId={session!.user.id}
+      />
+    );
 
     const overrideMap = Object.fromEntries(
       overrides.map((o) => [
@@ -62,6 +75,13 @@ export default async function SettingsPage() {
         <h1 className="mb-6 text-2xl font-medium text-brown">Company Settings</h1>
         <SettingsForm initialSettings={settings} />
       </div>
+
+      {usersSection && (
+        <div>
+          <h2 className="mb-6 text-2xl font-medium text-brown">Users</h2>
+          {usersSection}
+        </div>
+      )}
 
       {permissionsSection && (
         <div>

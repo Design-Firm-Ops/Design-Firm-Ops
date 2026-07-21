@@ -59,11 +59,33 @@ export function summarizeProjectFinancials(
 /**
  * Rolls up the separate design fee ledger: what's been billed toward
  * the design fee, what's been paid against it, and what's outstanding.
+ * Mirrors summarizeProjectFinancials — "billed" is the grand total
+ * (including any tax/reimbursable expenses) of non-void Design Fee
+ * Invoices, not the raw sum of DesignFeeCharge rows, since a charge
+ * that hasn't been invoiced yet isn't billed to the client yet either.
  */
-export function summarizeDesignFee(project: { designFeeCharges: DesignFeeCharge[]; payments: Payment[] }) {
-  const billed = toCents(project.designFeeCharges.reduce((sum, c) => sum.plus(c.amount), new Decimal(0)));
+export function summarizeDesignFee(project: {
+  invoices: (Invoice & { designFeeCharges: DesignFeeCharge[] })[];
+  payments: Payment[];
+}) {
+  let billed = new Decimal(0);
+
+  const liveInvoices = project.invoices.filter((invoice) => invoice.status !== 'VOID' && invoice.type === 'DESIGN_FEE');
+
+  for (const invoice of liveInvoices) {
+    const extendedPrices = invoice.designFeeCharges.map((c) => c.amount);
+    const totals = computeInvoiceTotals({
+      extendedPrices,
+      shippingTotal: invoice.shippingTotal,
+      taxRate: invoice.taxRate,
+      taxBase: invoice.taxBase,
+    });
+    billed = billed.plus(totals.grandTotal);
+  }
+
   const designFeePayments = project.payments.filter((p) => p.category === 'DESIGN_FEE');
   const paid = toCents(designFeePayments.reduce((sum, p) => sum.plus(p.amount), new Decimal(0)));
+  billed = toCents(billed);
   const outstanding = toCents(billed.minus(paid));
 
   return { billed, paid, outstanding };
