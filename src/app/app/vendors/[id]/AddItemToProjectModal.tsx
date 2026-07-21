@@ -7,8 +7,9 @@ interface ProjectOption {
   name: string;
 }
 
-interface OfferingOption {
+interface ItemTypeOption {
   id: string;
+  category: string;
   name: string;
 }
 
@@ -17,18 +18,16 @@ interface ProcurementListOption {
   name: string;
 }
 
-const CATEGORIES = ['LIGHTING', 'FURNITURE', 'PLUMBING', 'HARDWARE', 'TEXTILES', 'ART', 'ACCESSORIES', 'APPLIANCES', 'OTHER'];
-
 export default function AddItemToProjectModal({
   vendorId,
   activeProjects,
-  offeringOptions,
+  itemTypeOptions,
   onClose,
   onCreated,
 }: {
   vendorId: string;
   activeProjects: ProjectOption[];
-  offeringOptions: OfferingOption[];
+  itemTypeOptions: ItemTypeOption[];
   onClose: () => void;
   onCreated: () => void;
 }) {
@@ -37,10 +36,10 @@ export default function AddItemToProjectModal({
   const [form, setForm] = useState({
     tag: '',
     name: '',
-    category: 'OTHER',
+    category: '',
+    itemType: '',
     room: '',
     procurementListId: '',
-    offeringId: '',
     qty: 1,
     unitCost: '',
   });
@@ -58,13 +57,15 @@ export default function AddItemToProjectModal({
       .then((data) => {
         if (!cancelled) {
           setLists(data);
-          setForm((prev) => ({ ...prev, procurementListId: data[0]?.id ?? '' }));
+          setForm((prev) => ({ ...prev, procurementListId: data[0]?.id ?? '', category: data[0]?.name ?? '' }));
         }
       });
     return () => {
       cancelled = true;
     };
   }, [projectId]);
+
+  const relevantItemTypes = itemTypeOptions.filter((t) => t.category === form.category);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -116,7 +117,10 @@ export default function AddItemToProjectModal({
             <select
               className="input"
               value={form.procurementListId}
-              onChange={(e) => setForm({ ...form, procurementListId: e.target.value })}
+              onChange={(e) => {
+                const list = lists.find((l) => l.id === e.target.value);
+                setForm({ ...form, procurementListId: e.target.value, category: list?.name ?? form.category, itemType: '' });
+              }}
             >
               {lists.map((l) => (
                 <option key={l.id} value={l.id}>
@@ -130,7 +134,12 @@ export default function AddItemToProjectModal({
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-brown">Tag</label>
-            <input className="input" required value={form.tag} onChange={(e) => setForm({ ...form, tag: e.target.value })} />
+            <input
+              className="input"
+              placeholder="Auto-fills from item type if left blank"
+              value={form.tag}
+              onChange={(e) => setForm({ ...form, tag: e.target.value })}
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-brown">Name</label>
@@ -138,24 +147,28 @@ export default function AddItemToProjectModal({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-brown">Category</label>
-            <select className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
+            <select className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value, itemType: '' })}>
+              {lists.map((l) => (
+                <option key={l.id} value={l.name}>
+                  {l.name}
                 </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-brown">Offering Type</label>
-            <select className="input" value={form.offeringId} onChange={(e) => setForm({ ...form, offeringId: e.target.value })}>
-              <option value="">—</option>
-              {offeringOptions.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                </option>
+            <label className="mb-1 block text-sm font-medium text-brown">Item Type</label>
+            <input
+              className="input"
+              list="add-item-type-options"
+              placeholder="e.g. Sconce"
+              value={form.itemType}
+              onChange={(e) => setForm({ ...form, itemType: e.target.value })}
+            />
+            <datalist id="add-item-type-options">
+              {relevantItemTypes.map((t) => (
+                <option key={t.id} value={t.name} />
               ))}
-            </select>
+            </datalist>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-brown">Room</label>

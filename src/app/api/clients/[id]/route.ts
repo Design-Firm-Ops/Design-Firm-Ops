@@ -13,7 +13,33 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const client = await prisma.client.update({ where: { id: params.id }, data: parsed.data });
+  const { contacts, ...rest } = parsed.data;
+
+  // Additional contacts are sent as the full current list — replace
+  // all existing rows rather than trying to diff/reconcile individual
+  // adds/edits/removes.
+  const client = await prisma.$transaction(async (tx) => {
+    if (contacts !== undefined) {
+      await tx.clientContact.deleteMany({ where: { clientId: params.id } });
+      if (contacts.length > 0) {
+        await tx.clientContact.createMany({
+          data: contacts.map((c, order) => ({
+            clientId: params.id,
+            name: c.name || null,
+            email: c.email || null,
+            phone: c.phone || null,
+            order,
+          })),
+        });
+      }
+    }
+    return tx.client.update({
+      where: { id: params.id },
+      data: rest,
+      include: { contacts: { orderBy: { order: 'asc' } } },
+    });
+  });
+
   return NextResponse.json(client);
 }
 

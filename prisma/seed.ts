@@ -303,23 +303,30 @@ async function seedDemoProject() {
 
   // Unit costs solved so the 13-item extended-price sum matches the
   // reference subtotal exactly at the project's 15% default markup.
+  // height/width/length are a best-effort read of the original
+  // freeform dimension text (still preserved verbatim as
+  // legacyDimensionsNote); itemType is left unset where the product
+  // doesn't match one of the seeded Lighting item types.
   const items = [
-    { tag: 'LT-1', name: 'Bordeaux Sconce', room: 'Reception', vendor: circa, qty: 4, unitCost: '210.00', finish: 'Antique Brass', dimensions: '6"W x 12"H' },
-    { tag: 'LT-2', name: 'Marchetti Pendant', room: 'Conference Room', vendor: visualComfort, qty: 2, unitCost: '685.00', finish: 'Bronze', dimensions: '18" dia' },
-    { tag: 'LT-3', name: 'Axis Linear Suspension', room: 'Conference Room', vendor: visualComfort, qty: 1, unitCost: '1240.00', finish: 'Matte Black', dimensions: "72\"L" },
-    { tag: 'LT-4', name: 'Circa Table Lamp', room: "Principal's Office", vendor: circa, qty: 3, unitCost: '320.00', finish: 'Alabaster', dimensions: '14"W x 26"H' },
-    { tag: 'LT-5', name: 'Halo Recessed Downlight', room: 'Open Office', vendor: hinkley, qty: 12, unitCost: '48.00', finish: 'White Trim', dimensions: '4" aperture' },
-    { tag: 'LT-6', name: 'Verona Chandelier', room: 'Reception', vendor: circa, qty: 1, unitCost: '2450.00', finish: 'Aged Iron', dimensions: '36" dia x 40"H' },
-    { tag: 'LT-7', name: 'Nomad Floor Lamp', room: 'Lounge', vendor: rh, qty: 2, unitCost: '415.00', finish: 'Blackened Steel', dimensions: '20"W x 62"H' },
-    { tag: 'LT-8', name: 'Cortina Wall Wash', room: 'Corridor', vendor: hinkley, qty: 6, unitCost: '96.00', finish: 'Bronze', dimensions: '5"W x 9"H' },
-    { tag: 'LT-9', name: 'Solstice Picture Light', room: 'Lounge', vendor: visualComfort, qty: 3, unitCost: '175.00', finish: 'Brass', dimensions: '18"L' },
-    { tag: 'LT-10', name: 'Ridgeline Outdoor Sconce', room: 'Exterior Entry', vendor: hinkley, qty: 4, unitCost: '130.00', finish: 'Textured Black', dimensions: '8"W x 14"H' },
-    { tag: 'LT-11', name: 'Aria Cove Light Strip', room: "Principal's Office", vendor: rh, qty: 1, unitCost: '540.00', finish: 'N/A', dimensions: '16ft run' },
-    { tag: 'LT-12', name: 'Belmont Library Lamp', room: 'Lounge', vendor: rh, qty: 2, unitCost: '260.00', finish: 'Antique Nickel', dimensions: '12"W x 24"H' },
-    { tag: 'LT-13', name: 'Meridian Statement Chandelier', room: 'Reception', vendor: circa, qty: 1, unitCost: '5825.04', finish: 'Polished Brass', dimensions: '54" dia x 48"H' },
+    { tag: 'LT-1', name: 'Bordeaux Sconce', room: 'Reception', vendor: circa, qty: 4, unitCost: '210.00', finish: 'Antique Brass', dimensions: '6"W x 12"H', width: 6, height: 12, itemType: 'Sconce' },
+    { tag: 'LT-2', name: 'Marchetti Pendant', room: 'Conference Room', vendor: visualComfort, qty: 2, unitCost: '685.00', finish: 'Bronze', dimensions: '18" dia', width: 18, length: 18, itemType: 'Pendant' },
+    { tag: 'LT-3', name: 'Axis Linear Suspension', room: 'Conference Room', vendor: visualComfort, qty: 1, unitCost: '1240.00', finish: 'Matte Black', dimensions: "72\"L", length: 72, itemType: null },
+    { tag: 'LT-4', name: 'Circa Table Lamp', room: "Principal's Office", vendor: circa, qty: 3, unitCost: '320.00', finish: 'Alabaster', dimensions: '14"W x 26"H', width: 14, height: 26, itemType: 'Table Lamp' },
+    { tag: 'LT-5', name: 'Halo Recessed Downlight', room: 'Open Office', vendor: hinkley, qty: 12, unitCost: '48.00', finish: 'White Trim', dimensions: '4" aperture', width: 4, itemType: null },
+    { tag: 'LT-6', name: 'Verona Chandelier', room: 'Reception', vendor: circa, qty: 1, unitCost: '2450.00', finish: 'Aged Iron', dimensions: '36" dia x 40"H', width: 36, length: 36, height: 40, itemType: 'Chandelier' },
+    { tag: 'LT-7', name: 'Nomad Floor Lamp', room: 'Lounge', vendor: rh, qty: 2, unitCost: '415.00', finish: 'Blackened Steel', dimensions: '20"W x 62"H', width: 20, height: 62, itemType: 'Floor Lamp' },
+    { tag: 'LT-8', name: 'Cortina Wall Wash', room: 'Corridor', vendor: hinkley, qty: 6, unitCost: '96.00', finish: 'Bronze', dimensions: '5"W x 9"H', width: 5, height: 9, itemType: null },
+    { tag: 'LT-9', name: 'Solstice Picture Light', room: 'Lounge', vendor: visualComfort, qty: 3, unitCost: '175.00', finish: 'Brass', dimensions: '18"L', length: 18, itemType: null },
+    { tag: 'LT-10', name: 'Ridgeline Outdoor Sconce', room: 'Exterior Entry', vendor: hinkley, qty: 4, unitCost: '130.00', finish: 'Textured Black', dimensions: '8"W x 14"H', width: 8, height: 14, itemType: 'Sconce' },
+    { tag: 'LT-11', name: 'Aria Cove Light Strip', room: "Principal's Office", vendor: rh, qty: 1, unitCost: '540.00', finish: 'N/A', dimensions: '16ft run', length: 192, itemType: null },
+    { tag: 'LT-12', name: 'Belmont Library Lamp', room: 'Lounge', vendor: rh, qty: 2, unitCost: '260.00', finish: 'Antique Nickel', dimensions: '12"W x 24"H', width: 12, height: 24, itemType: 'Table Lamp' },
+    { tag: 'LT-13', name: 'Meridian Statement Chandelier', room: 'Reception', vendor: circa, qty: 1, unitCost: '5825.04', finish: 'Polished Brass', dimensions: '54" dia x 48"H', width: 54, length: 54, height: 48, itemType: 'Chandelier' },
   ];
 
   const statuses = ['APPROVED', 'APPROVED', 'PROPOSED', 'APPROVED', 'APPROVED', 'APPROVED', 'PROPOSED', 'APPROVED', 'APPROVED', 'PROPOSED', 'APPROVED', 'APPROVED', 'APPROVED'];
+
+  const lightingTypes = await prisma.itemTypeOption.findMany({ where: { category: 'Lighting' } });
+  const lightingTypeIdByName = new Map(lightingTypes.map((t) => [t.name, t.id]));
 
   let sortOrder = 1;
   for (const [i, item] of items.entries()) {
@@ -328,14 +335,18 @@ async function seedDemoProject() {
         projectId: project.id,
         tag: item.tag,
         name: item.name,
-        category: 'LIGHTING',
+        category: 'Lighting',
+        itemTypeId: item.itemType ? lightingTypeIdByName.get(item.itemType) ?? null : null,
         room: item.room,
         vendorId: item.vendor.id,
         procurementListId: lightingList.id,
         qty: item.qty,
         unitCost: item.unitCost,
         finish: item.finish,
-        dimensions: item.dimensions,
+        legacyDimensionsNote: item.dimensions,
+        dimensionHeight: item.height ?? null,
+        dimensionWidth: item.width ?? null,
+        dimensionLength: item.length ?? null,
         status: statuses[i] as
           | 'PROPOSED'
           | 'APPROVED'

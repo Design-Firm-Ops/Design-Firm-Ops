@@ -23,6 +23,8 @@ function serializeInvoiceItem(item: {
   name: string;
   invoiceDisplayName: string | null;
   category: string;
+  itemTypeId: string | null;
+  itemType?: { name: string } | null;
   room: string | null;
   vendorId: string | null;
   qty: number;
@@ -30,7 +32,13 @@ function serializeInvoiceItem(item: {
   platformFee: unknown;
   markupPct: unknown;
   markupMode: string | null;
-  dimensions: string | null;
+  dimensionHeight: unknown;
+  dimensionWidth: unknown;
+  dimensionLength: unknown;
+  dimensionUnit: string;
+  weight: unknown;
+  bulbSpec: string | null;
+  bulbIncluded: boolean;
   finish: string | null;
   link: string | null;
   shippingNotes: string | null;
@@ -44,6 +52,8 @@ function serializeInvoiceItem(item: {
     name: item.name,
     invoiceDisplayName: item.invoiceDisplayName,
     category: item.category,
+    itemTypeId: item.itemTypeId,
+    itemTypeName: item.itemType?.name ?? null,
     room: item.room,
     vendorId: item.vendorId,
     qty: item.qty,
@@ -51,7 +61,13 @@ function serializeInvoiceItem(item: {
     platformFee: String(item.platformFee),
     markupPct: item.markupPct === null ? null : String(item.markupPct),
     markupMode: item.markupMode,
-    dimensions: item.dimensions,
+    dimensionHeight: item.dimensionHeight === null ? null : String(item.dimensionHeight),
+    dimensionWidth: item.dimensionWidth === null ? null : String(item.dimensionWidth),
+    dimensionLength: item.dimensionLength === null ? null : String(item.dimensionLength),
+    dimensionUnit: item.dimensionUnit,
+    weight: item.weight === null ? null : String(item.weight),
+    bulbSpec: item.bulbSpec,
+    bulbIncluded: item.bulbIncluded,
     finish: item.finish,
     link: item.link,
     shippingNotes: item.shippingNotes,
@@ -69,11 +85,14 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   const project = await prisma.project.findUnique({
     where: { id: params.id },
     include: {
-      client: true,
+      client: { include: { contacts: { orderBy: { order: 'asc' } } } },
       projectType: true,
       designFeeStructure: true,
       procurementFeeStructure: true,
-      items: { orderBy: { sortOrder: 'asc' }, include: { fieldValues: true, invoice: { select: { invoiceNumber: true } } } },
+      items: {
+        orderBy: { sortOrder: 'asc' },
+        include: { fieldValues: true, invoice: { select: { invoiceNumber: true } }, itemType: { select: { name: true } } },
+      },
       procurementLists: { orderBy: { order: 'asc' } },
       documentFolders: { orderBy: { order: 'asc' } },
       documents: { orderBy: { uploadedAt: 'desc' } },
@@ -86,11 +105,11 @@ export default async function ProjectPage({ params }: { params: { id: string } }
 
   if (!project) notFound();
 
-  const [vendors, projectTypes, feeStructureOptions, offerings, itemFieldDefs, projectFieldDefs] = await Promise.all([
+  const [vendors, projectTypes, feeStructureOptions, itemTypeOptions, itemFieldDefs, projectFieldDefs] = await Promise.all([
     prisma.vendor.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     prisma.projectType.findMany({ orderBy: { name: 'asc' }, select: { name: true } }),
     prisma.feeStructureOption.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
-    prisma.offering.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
+    prisma.itemTypeOption.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
     prisma.itemFieldDef.findMany({ orderBy: { order: 'asc' } }),
     prisma.projectFieldDef.findMany({ orderBy: { order: 'asc' } }),
   ]);
@@ -101,7 +120,6 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   const items: ItemRow[] = await Promise.all(
     project.items.map(async (item) => ({
       ...serializeInvoiceItem(item),
-      offeringId: item.offeringId,
       procurementListId: item.procurementListId,
       imageUrl: item.imageStoragePath ? await createSignedDocumentUrl(item.imageStoragePath) : null,
       fieldValues: item.fieldValues.map((v) => ({ fieldDefId: v.fieldDefId, value: v.value })),
@@ -288,7 +306,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           projectId={project.id}
           lists={procurementLists}
           vendors={vendors}
-          offeringOptions={offerings.map((o) => ({ id: o.id, name: o.name }))}
+          itemTypeOptions={itemTypeOptions.map((t) => ({ id: t.id, category: t.category, name: t.name }))}
           itemFieldDefs={itemFieldDefs}
           isAdmin={admin}
           canOverrideLock={perms.invoices}
@@ -326,9 +344,11 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           client: {
             id: project.client.id,
             name: project.client.name,
+            contactName: project.client.contactName,
             email: project.client.email,
             phone: project.client.phone,
             billingAddress: project.client.billingAddress,
+            contacts: project.client.contacts.map((c) => ({ name: c.name, email: c.email, phone: c.phone })),
           },
         }}
         projectTypeOptions={projectTypes.map((t) => t.name)}

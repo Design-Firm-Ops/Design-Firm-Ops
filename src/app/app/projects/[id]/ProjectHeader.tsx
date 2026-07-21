@@ -24,9 +24,11 @@ export interface ProjectData {
   client: {
     id: string;
     name: string;
+    contactName: string | null;
     email: string | null;
     phone: string | null;
     billingAddress: string | null;
+    contacts: { name: string | null; email: string | null; phone: string | null }[];
   };
 }
 
@@ -89,12 +91,28 @@ export default function ProjectHeader({
   const [invoiceColumns, setInvoiceColumns] = useState<string[] | null>(project.defaultInvoiceColumnConfig?.columns ?? null);
   const [clientForm, setClientForm] = useState({
     name: project.client.name,
+    contactName: project.client.contactName ?? '',
     email: project.client.email ?? '',
     phone: project.client.phone ?? '',
     billingAddress: project.client.billingAddress ?? '',
   });
+  const [additionalContacts, setAdditionalContacts] = useState(
+    project.client.contacts.map((c) => ({ name: c.name ?? '', email: c.email ?? '', phone: c.phone ?? '' }))
+  );
   const [savingClient, setSavingClient] = useState(false);
   const [clientError, setClientError] = useState<string | null>(null);
+
+  function addContactRow() {
+    setAdditionalContacts((prev) => [...prev, { name: '', email: '', phone: '' }]);
+  }
+
+  function updateContactRow(index: number, patch: Partial<{ name: string; email: string; phone: string }>) {
+    setAdditionalContacts((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+  }
+
+  function removeContactRow(index: number) {
+    setAdditionalContacts((prev) => prev.filter((_, i) => i !== index));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -130,7 +148,7 @@ export default function ProjectHeader({
     const res = await fetch(`/api/clients/${project.client.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(clientForm),
+      body: JSON.stringify({ ...clientForm, contacts: additionalContacts }),
     });
 
     setSavingClient(false);
@@ -214,20 +232,35 @@ export default function ProjectHeader({
               Edit
             </button>
           </div>
-          <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-            <div>
-              <dt className="text-brown/50">Email</dt>
-              <dd className="font-medium">{project.client.email || '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-brown/50">Phone</dt>
-              <dd className="font-medium">{project.client.phone || '—'}</dd>
-            </div>
+          <dl className="mb-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
             <div>
               <dt className="text-brown/50">Billing Address</dt>
               <dd className="font-medium">{project.client.billingAddress || '—'}</dd>
             </div>
           </dl>
+          <table className="min-w-full text-sm">
+            <thead className="text-left text-xs uppercase tracking-[0.24em] text-taupe">
+              <tr>
+                <th className="py-1 pr-4">Name</th>
+                <th className="py-1 pr-4">Email</th>
+                <th className="py-1">Phone</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-taupe/20">
+              <tr>
+                <td className="py-1.5 pr-4 font-medium">{project.client.contactName || '—'}</td>
+                <td className="py-1.5 pr-4">{project.client.email || '—'}</td>
+                <td className="py-1.5">{project.client.phone || '—'}</td>
+              </tr>
+              {project.client.contacts.map((c, i) => (
+                <tr key={i}>
+                  <td className="py-1.5 pr-4 font-medium">{c.name || '—'}</td>
+                  <td className="py-1.5 pr-4">{c.email || '—'}</td>
+                  <td className="py-1.5">{c.phone || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -424,34 +457,17 @@ export default function ProjectHeader({
       )}
 
       {showClientForm && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <form onSubmit={handleClientSubmit} className="card w-full max-w-md space-y-4 p-6">
+        <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
+          <form onSubmit={handleClientSubmit} className="card w-full max-w-lg space-y-4 p-6">
             <h2 className="text-lg font-medium text-brown">Edit Client Contact</h2>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Name</label>
+              <label className="mb-1 block text-sm font-medium text-brown">Client Name</label>
               <input
                 className="input"
                 required
                 value={clientForm.name}
                 onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Email</label>
-              <input
-                type="email"
-                className="input"
-                value={clientForm.email}
-                onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Phone</label>
-              <input
-                className="input"
-                value={clientForm.phone}
-                onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })}
               />
             </div>
             <div>
@@ -462,6 +478,70 @@ export default function ProjectHeader({
                 value={clientForm.billingAddress}
                 onChange={(e) => setClientForm({ ...clientForm, billingAddress: e.target.value })}
               />
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-brown">Points of Contact</p>
+              <div className="space-y-2 rounded-md border border-taupe/40 p-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    className="input"
+                    placeholder="Name"
+                    value={clientForm.contactName}
+                    onChange={(e) => setClientForm({ ...clientForm, contactName: e.target.value })}
+                  />
+                  <input
+                    type="email"
+                    className="input"
+                    placeholder="Email"
+                    value={clientForm.email}
+                    onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })}
+                  />
+                  <input
+                    className="input"
+                    placeholder="Phone"
+                    value={clientForm.phone}
+                    onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })}
+                  />
+                </div>
+                {additionalContacts.map((c, i) => (
+                  <div key={i} className="grid grid-cols-3 gap-2">
+                    <input
+                      className="input"
+                      placeholder="Name"
+                      value={c.name}
+                      onChange={(e) => updateContactRow(i, { name: e.target.value })}
+                    />
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="email"
+                        className="input"
+                        placeholder="Email"
+                        value={c.email}
+                        onChange={(e) => updateContactRow(i, { email: e.target.value })}
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <input
+                        className="input"
+                        placeholder="Phone"
+                        value={c.phone}
+                        onChange={(e) => updateContactRow(i, { phone: e.target.value })}
+                      />
+                      <button
+                        type="button"
+                        className="text-red-700 hover:text-red-900"
+                        onClick={() => removeContactRow(i)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className="text-sm text-brown hover:text-gold" onClick={addContactRow}>
+                  + Add Contact
+                </button>
+              </div>
             </div>
 
             {clientError && <p className="text-sm text-red-700">{clientError}</p>}

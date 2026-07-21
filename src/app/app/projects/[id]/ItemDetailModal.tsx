@@ -9,13 +9,16 @@ import type { ItemRow } from './ItemsTable';
 
 export type { ItemFieldDefRow };
 
+const LIGHTING_CATEGORY = 'Lighting';
+
 interface VendorOption {
   id: string;
   name: string;
 }
 
-interface OfferingOption {
+interface ItemTypeOption {
   id: string;
+  category: string;
   name: string;
 }
 
@@ -23,7 +26,7 @@ export default function ItemDetailModal({
   item,
   projectId,
   vendors,
-  offeringOptions,
+  itemTypeOptions,
   fieldDefs,
   isAdmin,
   projectDefaultMarkupPct,
@@ -34,7 +37,7 @@ export default function ItemDetailModal({
   item: ItemRow;
   projectId: string;
   vendors: VendorOption[];
-  offeringOptions: OfferingOption[];
+  itemTypeOptions: ItemTypeOption[];
   fieldDefs: ItemFieldDefRow[];
   isAdmin: boolean;
   projectDefaultMarkupPct: string;
@@ -45,13 +48,19 @@ export default function ItemDetailModal({
   const [form, setForm] = useState({
     name: item.name,
     invoiceDisplayName: item.invoiceDisplayName ?? '',
-    dimensions: item.dimensions ?? '',
+    itemType: item.itemTypeName ?? '',
+    dimensionHeight: item.dimensionHeight ?? '',
+    dimensionWidth: item.dimensionWidth ?? '',
+    dimensionLength: item.dimensionLength ?? '',
+    dimensionUnit: item.dimensionUnit,
+    weight: item.weight ?? '',
+    bulbSpec: item.bulbSpec ?? '',
+    bulbIncluded: item.bulbIncluded,
     finish: item.finish ?? '',
     link: item.link ?? '',
     shippingNotes: item.shippingNotes ?? '',
     platformFee: item.platformFee,
     vendorId: item.vendorId ?? '',
-    offeringId: item.offeringId ?? '',
     qty: item.qty,
     unitCost: item.unitCost,
     markupPct: item.markupPct ?? '',
@@ -64,6 +73,8 @@ export default function ItemDetailModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const locked = !!item.invoiceId;
+  const isLighting = item.category === LIGHTING_CATEGORY;
+  const relevantItemTypes = itemTypeOptions.filter((t) => t.category === item.category);
 
   const priced = priceLine({
     unitCost: form.unitCost,
@@ -102,6 +113,10 @@ export default function ItemDetailModal({
       ...form,
       markupPct: form.markupPct === '' ? null : Number(form.markupPct),
       markupMode: form.markupMode || null,
+      dimensionHeight: form.dimensionHeight === '' ? null : Number(form.dimensionHeight),
+      dimensionWidth: form.dimensionWidth === '' ? null : Number(form.dimensionWidth),
+      dimensionLength: form.dimensionLength === '' ? null : Number(form.dimensionLength),
+      weight: form.weight === '' ? null : Number(form.weight),
     };
 
     const res = await fetch(`/api/items/${item.id}`, {
@@ -118,7 +133,19 @@ export default function ItemDetailModal({
       return;
     }
 
-    onSaved({ id: item.id, ...form, markupPct: payload.markupPct === null ? null : String(payload.markupPct) });
+    const updated = await res.json();
+    onSaved({
+      id: item.id,
+      ...form,
+      itemTypeId: updated.itemTypeId,
+      itemTypeName: form.itemType || null,
+      markupPct: payload.markupPct === null ? null : String(payload.markupPct),
+      dimensionHeight: payload.dimensionHeight === null ? null : String(payload.dimensionHeight),
+      dimensionWidth: payload.dimensionWidth === null ? null : String(payload.dimensionWidth),
+      dimensionLength: payload.dimensionLength === null ? null : String(payload.dimensionLength),
+      weight: payload.weight === null ? null : String(payload.weight),
+      tag: updated.tag,
+    });
   }
 
   return (
@@ -228,31 +255,111 @@ export default function ItemDetailModal({
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-brown">Offering Type</label>
-            <select className="input" value={form.offeringId} onChange={(e) => setForm({ ...form, offeringId: e.target.value })}>
-              <option value="">—</option>
-              {offeringOptions.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                </option>
+            <label className="mb-1 block text-sm font-medium text-brown">Item Type ({item.category})</label>
+            <input
+              className="input"
+              list="item-detail-type-options"
+              placeholder="e.g. Sconce"
+              value={form.itemType}
+              onChange={(e) => setForm({ ...form, itemType: e.target.value })}
+            />
+            <datalist id="item-detail-type-options">
+              {relevantItemTypes.map((t) => (
+                <option key={t.id} value={t.name} />
               ))}
-            </select>
+            </datalist>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-brown">Dimensions</label>
+        <div className="rounded-md border border-taupe/40 p-4">
+          <h3 className="mb-3 text-sm font-medium text-brown">Dimensions & Weight</h3>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brown">Height</label>
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                className="input"
+                value={form.dimensionHeight}
+                onChange={(e) => setForm({ ...form, dimensionHeight: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brown">Width</label>
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                className="input"
+                value={form.dimensionWidth}
+                onChange={(e) => setForm({ ...form, dimensionWidth: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brown">Length</label>
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                className="input"
+                value={form.dimensionLength}
+                onChange={(e) => setForm({ ...form, dimensionLength: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brown">Unit</label>
+              <select
+                className="input"
+                value={form.dimensionUnit}
+                onChange={(e) => setForm({ ...form, dimensionUnit: e.target.value as 'IN' | 'CM' })}
+              >
+                <option value="IN">Inches</option>
+                <option value="CM">Centimeters</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-4">
+            <label className="mb-1 block text-xs font-medium text-brown">Weight (lbs)</label>
             <input
-              className="input"
-              value={form.dimensions}
-              onChange={(e) => setForm({ ...form, dimensions: e.target.value })}
+              type="number"
+              step="0.01"
+              min={0}
+              className="input max-w-[10rem]"
+              value={form.weight}
+              onChange={(e) => setForm({ ...form, weight: e.target.value })}
             />
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-brown">Finish</label>
-            <input className="input" value={form.finish} onChange={(e) => setForm({ ...form, finish: e.target.value })} />
+        </div>
+
+        {isLighting && (
+          <div className="rounded-md border border-taupe/40 p-4">
+            <h3 className="mb-3 text-sm font-medium text-brown">Lighting</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-brown">Bulb Spec</label>
+                <input
+                  className="input"
+                  placeholder="e.g. E26, 60W, 2700K"
+                  value={form.bulbSpec}
+                  onChange={(e) => setForm({ ...form, bulbSpec: e.target.value })}
+                />
+              </div>
+              <label className="mt-6 flex items-center gap-2 text-sm text-brown">
+                <input
+                  type="checkbox"
+                  checked={form.bulbIncluded}
+                  onChange={(e) => setForm({ ...form, bulbIncluded: e.target.checked })}
+                />
+                Bulb included
+              </label>
+            </div>
           </div>
+        )}
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-brown">Finish</label>
+          <input className="input" value={form.finish} onChange={(e) => setForm({ ...form, finish: e.target.value })} />
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-brown">Link</label>

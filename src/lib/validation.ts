@@ -1,11 +1,22 @@
 import { z } from 'zod';
 
+// Additional points of contact beyond the primary name/email/phone on
+// Client itself — the whole array replaces a client's existing rows on
+// save, same "full replace" pattern as folder allow-lists.
+export const clientContactRowSchema = z.object({
+  name: z.string().optional().or(z.literal('')),
+  email: z.string().email().optional().or(z.literal('')),
+  phone: z.string().optional().or(z.literal('')),
+});
+
 export const clientSchema = z.object({
   name: z.string().min(1, 'Name is required'),
+  contactName: z.string().optional().or(z.literal('')),
   email: z.string().email().optional().or(z.literal('')),
   phone: z.string().optional().or(z.literal('')),
   billingAddress: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
+  contacts: z.array(clientContactRowSchema).optional(),
 });
 
 export const vendorSchema = z.object({
@@ -57,22 +68,33 @@ export const projectSchema = z.object({
 
 export const itemSchema = z.object({
   projectId: z.string().min(1),
-  tag: z.string().min(1, 'Tag is required'),
+  // Left blank on creation until an item type is chosen, which
+  // auto-fills it — see lib/itemTag.ts.
+  tag: z.string().optional().or(z.literal('')),
   name: z.string().min(1, 'Name is required'),
   invoiceDisplayName: z.string().optional().or(z.literal('')),
-  category: z
-    .enum(['LIGHTING', 'FURNITURE', 'PLUMBING', 'HARDWARE', 'TEXTILES', 'ART', 'ACCESSORIES', 'APPLIANCES', 'OTHER'])
-    .default('OTHER'),
+  // Free text — matches this project's Procurement list names, see
+  // Item.category comment in schema.prisma.
+  category: z.string().min(1).default('Other Merchandise'),
+  // Free text, resolved to an ItemTypeOption row (creating a new
+  // custom type if it doesn't exist yet) scoped under category — see
+  // lib/itemType.ts.
+  itemType: z.string().optional().or(z.literal('')),
   room: z.string().optional().or(z.literal('')),
   vendorId: z.string().optional().or(z.literal('')),
-  offeringId: z.string().optional().or(z.literal('')),
   procurementListId: z.string().optional().or(z.literal('')),
   qty: z.coerce.number().int().min(1).default(1),
   unitCost: z.coerce.number().min(0),
   platformFee: z.coerce.number().min(0).default(0),
   markupPct: z.coerce.number().min(0).max(1000).nullable().optional(),
   markupMode: z.enum(['MARKUP', 'MARGIN']).nullable().optional(),
-  dimensions: z.string().optional().or(z.literal('')),
+  dimensionHeight: z.coerce.number().min(0).nullable().optional(),
+  dimensionWidth: z.coerce.number().min(0).nullable().optional(),
+  dimensionLength: z.coerce.number().min(0).nullable().optional(),
+  dimensionUnit: z.enum(['IN', 'CM']).default('IN'),
+  weight: z.coerce.number().min(0).nullable().optional(),
+  bulbSpec: z.string().optional().or(z.literal('')),
+  bulbIncluded: z.boolean().default(false),
   finish: z.string().optional().or(z.literal('')),
   link: z.string().optional().or(z.literal('')),
   shippingNotes: z.string().optional().or(z.literal('')),

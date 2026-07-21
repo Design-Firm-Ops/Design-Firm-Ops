@@ -44,16 +44,9 @@ enum TaxBase {
   MERCH_PLUS_SHIPPING
 }
 
-enum ItemCategory {
-  LIGHTING
-  FURNITURE
-  PLUMBING
-  HARDWARE
-  TEXTILES
-  ART
-  ACCESSORIES
-  APPLIANCES
-  OTHER
+enum DimensionUnit {
+  IN
+  CM
 }
 
 enum ItemStatus {
@@ -135,18 +128,36 @@ enum FieldType {
 
 // ---------- Models ----------
 
-/// A user-customizable product category, shared between Vendor.offerings
-/// and Item.offering — labels are entirely up to the firm (seeded with
-/// the original FF&E spreadsheet categories, but freely renamable).
+/// A user-customizable product category tagged on Vendor.offerings —
+/// labels are entirely up to the firm (seeded with the original FF&E
+/// spreadsheet categories, but freely renamable).
 model Offering {
   id    String @id @default(cuid())
   name  String @unique
   order Int    @default(0)
 
   vendors Vendor[]
-  items   Item[]
 
   createdAt DateTime @default(now())
+}
+
+/// A user-customizable line-item sub-type scoped to a category (e.g.
+/// "Sconce" under "Lighting") — tagPrefix drives auto-generated tags
+/// (the first Sconce added to a project becomes "SC-1"), see
+/// lib/itemType.ts / lib/itemTag.ts. Global across the firm, same
+/// growable pattern as Offering.
+model ItemTypeOption {
+  id        String @id @default(cuid())
+  category  String
+  name      String
+  tagPrefix String
+  order     Int    @default(0)
+
+  items Item[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([category, name])
 }
 
 /// A user-customizable label for how a project's design fee or its
@@ -207,15 +218,37 @@ model UserPermissionOverride {
 }
 
 model Client {
-  id             String    @id @default(cuid())
+  id             String          @id @default(cuid())
   name           String
+  // Primary contact — used wherever exactly one email/phone is needed
+  // (e.g. invoice sending). Additional points of contact live in
+  // ClientContact below.
+  contactName    String?
   email          String?
   phone          String?
   billingAddress String?
   notes          String?
+  contacts       ClientContact[]
   projects       Project[]
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+/// An additional point of contact for a client beyond the primary
+/// name/email/phone on Client itself — a project may have more than
+/// one person to reach (e.g. a property manager alongside the owner).
+model ClientContact {
+  id       String  @id @default(cuid())
+  client   Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+  name     String?
+  email    String?
+  phone    String?
+  order    Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([clientId])
 }
 
 /// Expandable lookup shared by Project and Lead — grows as users type
@@ -398,20 +431,26 @@ model Vendor {
 
 /// A single merchandise line item within a project.
 model Item {
-  id                 String       @id @default(cuid())
-  project            Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id                 String  @id @default(cuid())
+  project            Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId          String
   tag                String
   name               String
   invoiceDisplayName String?
-  category           ItemCategory @default(OTHER)
+  // Free text, deliberately not an enum — matches this project's
+  // Procurement tab list names 1:1 (see ProcurementList), so a new
+  // item's category defaults to whichever list it's added into.
+  category           String  @default("Other Merchandise")
   room               String?
 
   vendor   Vendor? @relation(fields: [vendorId], references: [id])
   vendorId String?
 
-  offering   Offering? @relation(fields: [offeringId], references: [id])
-  offeringId String?
+  // A user-customizable sub-type scoped to a category (e.g. "Sconce"
+  // under "Lighting") — its tagPrefix drives auto-generated tags, see
+  // lib/itemType.ts / lib/itemTag.ts.
+  itemType   ItemTypeOption? @relation(fields: [itemTypeId], references: [id], onDelete: SetNull)
+  itemTypeId String?
 
   procurementList   ProcurementList? @relation(fields: [procurementListId], references: [id])
   procurementListId String?
@@ -424,7 +463,19 @@ model Item {
   markupPct  Decimal?    @db.Decimal(6, 3)
   markupMode MarkupMode?
 
-  dimensions    String?
+  // Structured H x W x L — legacyDimensionsNote preserves whatever
+  // freeform text lived in the old single "dimensions" field.
+  dimensionHeight      Decimal?      @db.Decimal(8, 2)
+  dimensionWidth       Decimal?      @db.Decimal(8, 2)
+  dimensionLength      Decimal?      @db.Decimal(8, 2)
+  dimensionUnit        DimensionUnit @default(IN)
+  legacyDimensionsNote String?
+  weight               Decimal?      @db.Decimal(8, 2)
+
+  // Lighting-only fields — shown in the UI when category is "Lighting".
+  bulbSpec     String?
+  bulbIncluded Boolean @default(false)
+
   finish        String?
   link          String?
   shippingNotes String?
@@ -455,6 +506,7 @@ model Item {
 
   @@index([projectId])
   @@index([procurementListId])
+  @@index([itemTypeId])
 }
 
 /// A user-defined sub-list within a project's Procurement tab (e.g.

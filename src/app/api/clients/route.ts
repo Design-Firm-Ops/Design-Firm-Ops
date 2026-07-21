@@ -7,7 +7,7 @@ export async function GET() {
   const { unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const clients = await prisma.client.findMany({ orderBy: { name: 'asc' } });
+  const clients = await prisma.client.findMany({ orderBy: { name: 'asc' }, include: { contacts: { orderBy: { order: 'asc' } } } });
   return NextResponse.json(clients);
 }
 
@@ -21,6 +21,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const client = await prisma.client.create({ data: parsed.data });
+  const { contacts, ...rest } = parsed.data;
+
+  const client = await prisma.client.create({
+    data: {
+      ...rest,
+      contacts: contacts
+        ? { create: contacts.map((c, order) => ({ name: c.name || null, email: c.email || null, phone: c.phone || null, order })) }
+        : undefined,
+    },
+    include: { contacts: { orderBy: { order: 'asc' } } },
+  });
   return NextResponse.json(client, { status: 201 });
 }

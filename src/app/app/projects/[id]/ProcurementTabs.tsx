@@ -16,7 +16,7 @@ export default function ProcurementTabs({
   projectId,
   lists,
   vendors,
-  offeringOptions,
+  itemTypeOptions,
   itemFieldDefs,
   isAdmin,
   canOverrideLock,
@@ -29,7 +29,7 @@ export default function ProcurementTabs({
   projectId: string;
   lists: ProcurementListData[];
   vendors: { id: string; name: string }[];
-  offeringOptions: { id: string; name: string }[];
+  itemTypeOptions: { id: string; category: string; name: string }[];
   itemFieldDefs: ItemFieldDefRow[];
   isAdmin: boolean;
   canOverrideLock: boolean;
@@ -197,7 +197,13 @@ export default function ProcurementTabs({
           procurementListId={activeList.id}
           initialItems={activeList.items}
           vendors={vendors}
-          offeringOptions={offeringOptions}
+          categoryOptions={lists.filter((l) => l.id !== 'unassigned').map((l) => l.name)}
+          defaultCategory={
+            activeList.id === 'unassigned'
+              ? lists.find((l) => l.id !== 'unassigned')?.name ?? 'Other Merchandise'
+              : activeList.name
+          }
+          itemTypeOptions={itemTypeOptions}
           itemFieldDefs={itemFieldDefs}
           isAdmin={isAdmin}
           canOverrideLock={canOverrideLock}

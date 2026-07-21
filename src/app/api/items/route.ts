@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
 import { itemSchema } from '@/lib/validation';
 import { resolvePermissions } from '@/lib/permissions';
+import { findOrCreateItemType } from '@/lib/itemType';
+import { nextItemTag } from '@/lib/itemTag';
 
 export async function POST(req: NextRequest) {
   const { session, unauthorized } = await requireSession();
@@ -19,7 +21,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { vendorId, offeringId, procurementListId, ...rest } = parsed.data;
+  const { vendorId, itemType, procurementListId, tag, ...rest } = parsed.data;
+
+  const itemTypeId = await findOrCreateItemType(parsed.data.category, itemType);
+
+  // A blank tag auto-fills from the item type's tag prefix — "TA-1"
+  // for the first Table on this project, etc. A manually-typed tag is
+  // always left as-is.
+  const resolvedTag = tag?.trim() || (itemTypeId ? await nextItemTag(parsed.data.projectId, itemTypeId) : null) || '';
 
   const maxSort = await prisma.item.aggregate({
     where: { projectId: parsed.data.projectId },
@@ -29,8 +38,9 @@ export async function POST(req: NextRequest) {
   const item = await prisma.item.create({
     data: {
       ...rest,
+      tag: resolvedTag,
       vendorId: vendorId || null,
-      offeringId: offeringId || null,
+      itemTypeId,
       procurementListId: procurementListId || null,
       sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
     },
