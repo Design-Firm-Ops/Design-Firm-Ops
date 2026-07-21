@@ -25,11 +25,13 @@ enum ProjectStatus {
   COMPLETE
 }
 
-enum FeeStructure {
-  FLAT_FEE
-  HOURLY
-  COST_PLUS
-  HYBRID
+/// Which kind of fee a FeeStructureOption describes — a project's
+/// design fee arrangement (Fixed Fee, Hourly, ...) and its procurement
+/// arrangement (Cost Plus, Fixed Fee, Hourly, ...) are separate,
+/// independently customizable lists.
+enum FeeStructureScope {
+  DESIGN_FEE
+  PROCUREMENT
 }
 
 enum MarkupMode {
@@ -76,6 +78,15 @@ enum InvoiceStatus {
   PARTIALLY_PAID
   PAID
   VOID
+}
+
+/// A Procurement Invoice bills merchandise line Items; a Design Fee
+/// Invoice bills DesignFeeCharge rows instead. Two independent
+/// numbering/locking sets on the same Invoice model rather than two
+/// tables, so both share status/send/void/PDF machinery.
+enum InvoiceType {
+  PROCUREMENT
+  DESIGN_FEE
 }
 
 enum PaymentMethod {
@@ -138,6 +149,26 @@ model Offering {
   createdAt DateTime @default(now())
 }
 
+/// A user-customizable label for how a project's design fee or its
+/// procurement work is commercially structured (Fixed Fee / Hourly /
+/// Cost Plus / anything custom a user types). Purely descriptive —
+/// separate from the markup/tax fields that actually drive pricing.
+/// Same growable-list pattern as Offering and ProjectType, scoped so
+/// the design-fee list and procurement list never mix.
+model FeeStructureOption {
+  id    String            @id @default(cuid())
+  name  String
+  scope FeeStructureScope
+  order Int               @default(0)
+
+  designFeeProjects      Project[] @relation("ProjectDesignFeeStructure")
+  procurementFeeProjects Project[] @relation("ProjectProcurementFeeStructure")
+
+  createdAt DateTime @default(now())
+
+  @@unique([scope, name])
+}
+
 /// Internal user (owner or designer). Role gates visibility of
 /// sensitive project/vendor data — see Settings' designerCanView* flags.
 model User {
@@ -150,7 +181,29 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  uploadedResources Resource[]
+  uploadedResources  Resource[]
+  permissionOverride UserPermissionOverride?
+}
+
+/// Per-user permission overrides. Null on any field means "inherit the
+/// Designer role default" (Settings.designerCanView*); true/false pins
+/// that permission for this one person regardless of the role default —
+/// e.g. one designer can see pricing while another can't. ADMIN-role
+/// users never consult this table; they always see everything.
+model UserPermissionOverride {
+  id     String @id @default(cuid())
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique
+
+  financials             Boolean?
+  clientContact          Boolean?
+  documentsPresentations Boolean?
+  contracts              Boolean?
+  invoices               Boolean?
+  procurement            Boolean?
+  vendorCredentials      Boolean?
+
+  updatedAt DateTime @updatedAt
 }
 
 model Client {
@@ -191,8 +244,14 @@ model Project {
 
   leadDesignerName String?
 
-  feeStructure FeeStructure @default(COST_PLUS)
-  feeNotes     String?
+  designFeeStructure   FeeStructureOption? @relation("ProjectDesignFeeStructure", fields: [designFeeStructureId], references: [id], onDelete: SetNull)
+  designFeeStructureId String?
+  feeNotes             String?
+
+  // Shown at the top of the Procurement tab — purely descriptive, same
+  // pattern as designFeeStructure above.
+  procurementFeeStructure   FeeStructureOption? @relation("ProjectProcurementFeeStructure", fields: [procurementFeeStructureId], references: [id], onDelete: SetNull)
+  procurementFeeStructureId String?
 
   // Pricing defaults — overridable per line item.
   defaultMarkupPct Decimal    @default(15) @db.Decimal(6, 3)
@@ -282,6 +341,9 @@ model ItemFieldValue {
 
 /// A single billed-toward-the-design-fee line entry. Separate from
 /// merchandise Invoices — design fees are billed on their own ledger.
+/// A single billed-toward-the-design-fee line entry. Locked (cannot be
+/// edited or deleted) the moment it's attached to a Design Fee Invoice —
+/// same invoiceId-presence-is-the-lock pattern as Item, see lib/itemLock.ts.
 model DesignFeeCharge {
   id          String   @id @default(cuid())
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -291,7 +353,11 @@ model DesignFeeCharge {
   date        DateTime @default(now())
   createdAt   DateTime @default(now())
 
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+  invoiceId String?
+
   @@index([projectId])
+  @@index([invoiceId])
 }
 
 model Vendor {
@@ -448,6 +514,7 @@ model Invoice {
   projectId     String
   invoiceNumber String        @unique
   status        InvoiceStatus @default(DRAFT)
+  type          InvoiceType   @default(PROCUREMENT)
 
   shippingTotal Decimal @default(0) @db.Decimal(10, 2)
   taxRate       Decimal @db.Decimal(6, 4)
@@ -468,8 +535,9 @@ model Invoice {
   // that's also null).
   columnConfig Json?
 
-  items    Item[]
-  payments Payment[]
+  items            Item[]
+  designFeeCharges DesignFeeCharge[]
+  payments         Payment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

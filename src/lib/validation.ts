@@ -36,7 +36,10 @@ export const projectSchema = z.object({
   startDate: z.string().optional().or(z.literal('')),
   projectType: z.string().optional().or(z.literal('')),
   leadDesignerName: z.string().optional().or(z.literal('')),
-  feeStructure: z.enum(['FLAT_FEE', 'HOURLY', 'COST_PLUS', 'HYBRID']).default('COST_PLUS'),
+  // Free text — resolved to a FeeStructureOption row (creating a new
+  // custom option if it doesn't exist yet). See lib/feeStructure.ts.
+  designFeeStructure: z.string().optional().or(z.literal('')),
+  procurementFeeStructure: z.string().optional().or(z.literal('')),
   feeNotes: z.string().optional().or(z.literal('')),
   defaultMarkupPct: z.coerce.number().min(0).max(1000).default(15),
   markupMode: z.enum(['MARKUP', 'MARGIN']).default('MARKUP'),
@@ -110,6 +113,18 @@ export const permissionsSchema = z.object({
   designerCanViewVendorCredentials: z.boolean(),
 });
 
+// A field left out (or set to null) means "inherit the Designer role
+// default" for that one person — see lib/permissions.ts.
+export const userPermissionOverrideSchema = z.object({
+  financials: z.boolean().nullable().optional(),
+  clientContact: z.boolean().nullable().optional(),
+  documentsPresentations: z.boolean().nullable().optional(),
+  contracts: z.boolean().nullable().optional(),
+  invoices: z.boolean().nullable().optional(),
+  procurement: z.boolean().nullable().optional(),
+  vendorCredentials: z.boolean().nullable().optional(),
+});
+
 export const paymentSchema = z.object({
   projectId: z.string().min(1),
   invoiceId: z.string().optional().or(z.literal('')),
@@ -125,7 +140,10 @@ export const paymentUpdateSchema = paymentSchema.partial().omit({ projectId: tru
 
 export const invoiceCreateSchema = z.object({
   projectId: z.string().min(1),
-  itemIds: z.array(z.string()).min(1, 'Select at least one item'),
+  type: z.enum(['PROCUREMENT', 'DESIGN_FEE']).default('PROCUREMENT'),
+  // Exactly one of these is used, depending on type — see /api/invoices POST.
+  itemIds: z.array(z.string()).default([]),
+  designFeeChargeIds: z.array(z.string()).default([]),
   shippingTotal: z.coerce.number().min(0).default(0),
   taxRate: z.coerce.number().min(0).max(1).optional(),
   taxBase: z.enum(['MERCH_ONLY', 'MERCH_PLUS_SHIPPING']).optional(),
@@ -223,6 +241,11 @@ export const resourceFolderPermissionSchema = z.object({
 
 export const offeringSchema = z.object({
   name: z.string().min(1, 'Name is required'),
+});
+
+export const feeStructureOptionSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  scope: z.enum(['DESIGN_FEE', 'PROCUREMENT']),
 });
 
 export const procurementListSchema = z.object({

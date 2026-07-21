@@ -9,21 +9,63 @@ export async function POST(req: NextRequest) {
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const perms = await resolvePermissions(session);
-  if (!perms.invoices) {
-    return NextResponse.json({ error: 'You do not have permission to create invoices' }, { status: 403 });
-  }
-
   const body = await req.json();
   const parsed = invoiceCreateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { projectId, itemIds, shippingTotal, taxRate, taxBase, dueDate, notes } = parsed.data;
+  const { projectId, type, itemIds, designFeeChargeIds, shippingTotal, taxRate, taxBase, dueDate, notes } = parsed.data;
+
+  const perms = await resolvePermissions(session);
+  const allowed = type === 'DESIGN_FEE' ? perms.financials : perms.invoices;
+  if (!allowed) {
+    return NextResponse.json({ error: 'You do not have permission to create this invoice' }, { status: 403 });
+  }
 
   const project = await prisma.project.findUnique({ where: { id: projectId } });
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+
+  if (type === 'DESIGN_FEE') {
+    if (designFeeChargeIds.length === 0) {
+      return NextResponse.json({ error: 'Select at least one design fee charge' }, { status: 400 });
+    }
+    const charges = await prisma.designFeeCharge.findMany({ where: { id: { in: designFeeChargeIds }, projectId } });
+    if (charges.length !== designFeeChargeIds.length) {
+      return NextResponse.json({ error: 'Some charges were not found on this project' }, { status: 400 });
+    }
+    const alreadyInvoiced = charges.filter((c) => c.invoiceId);
+    if (alreadyInvoiced.length > 0) {
+      return NextResponse.json(
+        { error: `${alreadyInvoiced.length} of the selected charges are already on an invoice` },
+        { status: 409 }
+      );
+    }
+
+    const invoiceNumber = await nextInvoiceNumber(projectId, project.invoicePrefix, 'DESIGN_FEE');
+
+    const invoice = await prisma.invoice.create({
+      data: {
+        projectId,
+        invoiceNumber,
+        type: 'DESIGN_FEE',
+        // Design fee invoices are a flat sum of charges — no shipping/tax/markup.
+        shippingTotal: 0,
+        taxRate: 0,
+        taxBase: 'MERCH_ONLY',
+        dueDate: dueDate ? new Date(dueDate) : null,
+        notes: notes || null,
+        designFeeCharges: { connect: designFeeChargeIds.map((id) => ({ id })) },
+      },
+      include: { designFeeCharges: true },
+    });
+
+    return NextResponse.json(invoice, { status: 201 });
+  }
+
+  if (itemIds.length === 0) {
+    return NextResponse.json({ error: 'Select at least one item' }, { status: 400 });
+  }
 
   const items = await prisma.item.findMany({ where: { id: { in: itemIds }, projectId } });
   if (items.length !== itemIds.length) {
@@ -37,12 +79,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const invoiceNumber = await nextInvoiceNumber(projectId, project.invoicePrefix);
+  const invoiceNumber = await nextInvoiceNumber(projectId, project.invoicePrefix, 'PROCUREMENT');
 
   const invoice = await prisma.invoice.create({
     data: {
       projectId,
       invoiceNumber,
+      type: 'PROCUREMENT',
       shippingTotal,
       taxRate: taxRate ?? project.salesTaxRate,
       taxBase: taxBase ?? project.taxBase,

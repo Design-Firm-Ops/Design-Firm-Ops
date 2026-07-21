@@ -1,7 +1,8 @@
 import React from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
 import { prisma } from '@/lib/prisma';
-import { resolveColumnConfig } from '@/lib/invoiceColumns';
+import { createSignedDocumentUrl } from '@/lib/supabase';
+import { resolveColumnConfig, InvoiceColumnKey } from '@/lib/invoiceColumns';
 import { InvoiceDocument } from './InvoiceDocument';
 
 /** Fetches everything an invoice PDF needs and renders it to a Buffer. */
@@ -10,6 +11,7 @@ export async function renderInvoicePdf(invoiceId: string): Promise<{ buffer: Buf
     where: { id: invoiceId },
     include: {
       items: true,
+      designFeeCharges: true,
       project: { include: { client: true } },
     },
   });
@@ -17,10 +19,48 @@ export async function renderInvoicePdf(invoiceId: string): Promise<{ buffer: Buf
 
   const settings = await prisma.settings.findUnique({ where: { id: 1 } });
 
-  const columnConfig = resolveColumnConfig(invoice.columnConfig, invoice.project.defaultInvoiceColumnConfig);
+  // Design Fee Invoices are a flat list of charges — no tag/markup/photo
+  // columns apply, so their PDF always uses a fixed minimal layout
+  // regardless of the project's or invoice's column config.
+  const columnConfig =
+    invoice.type === 'DESIGN_FEE'
+      ? { columns: ['description', 'extended'] as InvoiceColumnKey[] }
+      : resolveColumnConfig(invoice.columnConfig, invoice.project.defaultInvoiceColumnConfig);
+
+  const items =
+    invoice.type === 'DESIGN_FEE'
+      ? invoice.designFeeCharges.map((charge) => ({
+          id: charge.id,
+          tag: '',
+          name: charge.description,
+          invoiceDisplayName: charge.description,
+          room: 'Design Fee',
+          qty: 1,
+          unitCost: String(charge.amount),
+          platformFee: '0',
+          markupPct: '0',
+          markupMode: 'MARKUP' as const,
+          imageUrl: null,
+        }))
+      : await Promise.all(
+          invoice.items.map(async (item) => ({
+            id: item.id,
+            tag: item.tag,
+            name: item.name,
+            invoiceDisplayName: item.invoiceDisplayName,
+            room: item.room,
+            qty: item.qty,
+            unitCost: String(item.unitCost),
+            platformFee: String(item.platformFee),
+            markupPct: item.markupPct === null ? null : String(item.markupPct),
+            markupMode: item.markupMode,
+            imageUrl: item.imageStoragePath ? await createSignedDocumentUrl(item.imageStoragePath) : null,
+          }))
+        );
 
   const doc = React.createElement(InvoiceDocument, {
     invoiceNumber: invoice.invoiceNumber,
+    documentLabel: invoice.type === 'DESIGN_FEE' ? 'Design Fee Invoice' : 'Invoice',
     status: invoice.status,
     issuedDate: invoice.issuedDate ? invoice.issuedDate.toISOString() : null,
     dueDate: invoice.dueDate ? invoice.dueDate.toISOString() : null,
@@ -29,18 +69,7 @@ export async function renderInvoicePdf(invoiceId: string): Promise<{ buffer: Buf
     taxBase: invoice.taxBase,
     notes: invoice.notes,
     columnConfig,
-    items: invoice.items.map((item) => ({
-      id: item.id,
-      tag: item.tag,
-      name: item.name,
-      invoiceDisplayName: item.invoiceDisplayName,
-      room: item.room,
-      qty: item.qty,
-      unitCost: String(item.unitCost),
-      platformFee: String(item.platformFee),
-      markupPct: item.markupPct === null ? null : String(item.markupPct),
-      markupMode: item.markupMode,
-    })),
+    items,
     project: {
       name: invoice.project.name,
       projectAddress: invoice.project.projectAddress,

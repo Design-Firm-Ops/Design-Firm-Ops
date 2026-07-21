@@ -6,6 +6,7 @@ import Decimal from 'decimal.js';
 import { priceLine } from '@/lib/pricing';
 import { formatMoney } from '@/lib/money';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import Tooltip from '@/components/Tooltip';
 import ItemDetailModal, { ItemFieldDefRow } from './ItemDetailModal';
 
 export interface ItemRow {
@@ -318,9 +319,9 @@ export default function ItemsTable({
                   <td className="px-2 py-1">
                     <div className="flex items-center gap-1">
                       {locked && (
-                        <span title={`Locked to invoice ${item.invoiceNumber}`} className="text-brown/40">
-                          🔒
-                        </span>
+                        <Tooltip reason={`Locked to invoice ${item.invoiceNumber}`}>
+                          <span className="text-brown/40">🔒</span>
+                        </Tooltip>
                       )}
                       <input
                         className="w-20 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-taupe/40 focus:border-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
@@ -483,9 +484,9 @@ export default function ItemsTable({
                   </td>
                   <td className="px-2 py-1 text-right">
                     {locked ? (
-                      <span className="text-brown/20" title="Void the invoice to remove this item">
-                        ✕
-                      </span>
+                      <Tooltip reason="Void the invoice to remove this item">
+                        <span className="text-brown/20">✕</span>
+                      </Tooltip>
                     ) : (
                       <button className="text-red-700 hover:text-red-900" onClick={() => setPendingDelete(item)}>
                         ✕

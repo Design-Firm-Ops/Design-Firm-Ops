@@ -21,7 +21,6 @@ export default function AdminBrowser({
   allUsers,
   folderPermissions,
   usersContent,
-  permissionsContent,
   isAdmin,
 }: {
   resourceRows: ResourceRow[];
@@ -29,7 +28,6 @@ export default function AdminBrowser({
   allUsers: { id: string; name: string; email: string }[];
   folderPermissions: { name: string; allowedUserIds: string[] }[];
   usersContent: React.ReactNode;
-  permissionsContent: React.ReactNode;
   isAdmin: boolean;
 }) {
   const router = useRouter();
@@ -96,12 +94,6 @@ export default function AdminBrowser({
         keywords: ['users', 'teammates', 'accounts', ...usersForSearch.map((u) => `${u.name} ${u.email}`)]
           .join(' ')
           .toLowerCase(),
-      });
-      list.push({
-        key: 'permissions',
-        label: 'Permissions',
-        sublabel: 'Designer role visibility',
-        keywords: 'permissions designer role visibility financials vendor credentials access',
       });
     }
     return list;
@@ -171,7 +163,6 @@ export default function AdminBrowser({
         </div>
 
         {openKey === 'users' && usersContent}
-        {openKey === 'permissions' && permissionsContent}
         {openKey.startsWith('folder:') && (
           <>
             {isAdmin && (

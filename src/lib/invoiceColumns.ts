@@ -2,7 +2,7 @@
 // includes vendor name or internal notes — those aren't in this list at
 // all, so there's no config that can expose them.
 
-export const INVOICE_COLUMNS = ['tag', 'description', 'qty', 'unitCost', 'unitPrice', 'extended'] as const;
+export const INVOICE_COLUMNS = ['image', 'tag', 'description', 'qty', 'unitCost', 'unitPrice', 'extended'] as const;
 export type InvoiceColumnKey = (typeof INVOICE_COLUMNS)[number];
 
 export interface InvoiceColumnConfig {
@@ -10,6 +10,7 @@ export interface InvoiceColumnConfig {
 }
 
 export const COLUMN_LABELS: Record<InvoiceColumnKey, string> = {
+  image: 'Photo',
   tag: 'Tag',
   description: 'Description',
   qty: 'Qty',

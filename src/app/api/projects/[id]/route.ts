@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
 import { projectSchema } from '@/lib/validation';
 import { findOrCreateProjectType } from '@/lib/projectType';
+import { findOrCreateFeeStructureOption } from '@/lib/feeStructure';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const { unauthorized } = await requireSession();
@@ -27,13 +28,29 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { startDate, projectType, newClientName, newClientEmail, newClientPhone, newClientAddress, clientId, ...rest } =
-    parsed.data;
+  const {
+    startDate,
+    projectType,
+    designFeeStructure,
+    procurementFeeStructure,
+    newClientName,
+    newClientEmail,
+    newClientPhone,
+    newClientAddress,
+    clientId,
+    ...rest
+  } = parsed.data;
 
   const data: Record<string, unknown> = { ...rest };
   if (clientId) data.clientId = clientId;
   if (startDate !== undefined) data.startDate = startDate ? new Date(startDate) : null;
   if (projectType !== undefined) data.projectTypeId = await findOrCreateProjectType(projectType);
+  if (designFeeStructure !== undefined) {
+    data.designFeeStructureId = await findOrCreateFeeStructureOption(designFeeStructure, 'DESIGN_FEE');
+  }
+  if (procurementFeeStructure !== undefined) {
+    data.procurementFeeStructureId = await findOrCreateFeeStructureOption(procurementFeeStructure, 'PROCUREMENT');
+  }
   if (data.defaultInvoiceColumnConfig === null) data.defaultInvoiceColumnConfig = Prisma.JsonNull;
 
   const project = await prisma.project.update({

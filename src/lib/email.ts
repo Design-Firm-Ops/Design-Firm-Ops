@@ -13,6 +13,8 @@ export interface InvoiceEmailParams {
   clientName: string;
   companyName: string;
   invoiceNumber: string;
+  // "Invoice" for a Procurement Invoice, "Design Fee Invoice" for the other type.
+  documentLabel: string;
   grandTotal: string;
   dueDate: string | null;
   portalUrl: string;
@@ -28,15 +30,15 @@ function invoiceEmailHtml(params: InvoiceEmailParams): string {
       <h1 style="font-size: 18px; font-weight: 600; margin: 0;">${params.companyName}</h1>
     </div>
     <p>Hi ${params.clientName},</p>
-    <p>Invoice ${params.invoiceNumber} is attached — total due is ${params.grandTotal}${
+    <p>${params.documentLabel} ${params.invoiceNumber} is attached — total due is ${params.grandTotal}${
       params.dueDate ? ` by ${params.dueDate}` : ''
     }.</p>
     <p>
       <a href="${params.portalUrl}" style="display: inline-block; background: ${params.primaryColor}; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
-        View Invoice
+        View ${params.documentLabel}
       </a>
     </p>
-    <p style="color: #6b5744; font-size: 13px;">Questions about this invoice? Just reply to this email.</p>
+    <p style="color: #6b5744; font-size: 13px;">Questions about this ${params.documentLabel.toLowerCase()}? Just reply to this email.</p>
   </div>`;
 }
 
@@ -47,7 +49,7 @@ export async function sendInvoiceEmail(params: InvoiceEmailParams): Promise<void
   await resend.emails.send({
     from: `${params.companyName} <${from}>`,
     to: params.to,
-    subject: `Invoice ${params.invoiceNumber} from ${params.companyName}`,
+    subject: `${params.documentLabel} ${params.invoiceNumber} from ${params.companyName}`,
     html: invoiceEmailHtml(params),
     attachments: [
       {

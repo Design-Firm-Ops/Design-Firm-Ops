@@ -6,9 +6,13 @@ import { useRouter } from 'next/navigation';
 export default function NewProjectForm({
   clients,
   projectTypeOptions,
+  designFeeStructureOptions,
+  procurementFeeStructureOptions,
 }: {
   clients: { id: string; name: string }[];
   projectTypeOptions: string[];
+  designFeeStructureOptions: string[];
+  procurementFeeStructureOptions: string[];
 }) {
   const router = useRouter();
   const [useNewClient, setUseNewClient] = useState(clients.length === 0);
@@ -24,11 +28,13 @@ export default function NewProjectForm({
     startDate: '',
     projectType: '',
     leadDesignerName: '',
-    feeStructure: 'COST_PLUS',
+    designFeeStructure: '',
+    procurementFeeStructure: '',
     feeNotes: '',
     defaultMarkupPct: '15',
     markupMode: 'MARKUP',
-    salesTaxRate: '0.07',
+    // Entered as a percentage (e.g. "7" = 7%) — converted to a fraction on submit.
+    salesTaxRatePct: '7',
     taxBase: 'MERCH_ONLY',
     invoicePrefix: '',
   });
@@ -40,10 +46,15 @@ export default function NewProjectForm({
     setSaving(true);
     setError(null);
 
+    const { salesTaxRatePct, ...rest } = form;
     const res = await fetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, clientId: useNewClient ? '' : form.clientId }),
+      body: JSON.stringify({
+        ...rest,
+        clientId: useNewClient ? '' : form.clientId,
+        salesTaxRate: salesTaxRatePct ? Number(salesTaxRatePct) / 100 : 0,
+      }),
     });
 
     setSaving(false);
@@ -169,17 +180,34 @@ export default function NewProjectForm({
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-brown">Fee Structure</label>
-          <select
+          <label className="mb-1 block text-sm font-medium text-brown">Design Fee Structure</label>
+          <input
             className="input"
-            value={form.feeStructure}
-            onChange={(e) => setForm({ ...form, feeStructure: e.target.value })}
-          >
-            <option value="FLAT_FEE">Flat Fee</option>
-            <option value="HOURLY">Hourly</option>
-            <option value="COST_PLUS">Cost Plus</option>
-            <option value="HYBRID">Hybrid</option>
-          </select>
+            list="design-fee-structure-options"
+            placeholder="e.g. Fixed Fee"
+            value={form.designFeeStructure}
+            onChange={(e) => setForm({ ...form, designFeeStructure: e.target.value })}
+          />
+          <datalist id="design-fee-structure-options">
+            {designFeeStructureOptions.map((f) => (
+              <option key={f} value={f} />
+            ))}
+          </datalist>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-brown">Procurement Fee Structure</label>
+          <input
+            className="input"
+            list="procurement-fee-structure-options"
+            placeholder="e.g. Cost Plus"
+            value={form.procurementFeeStructure}
+            onChange={(e) => setForm({ ...form, procurementFeeStructure: e.target.value })}
+          />
+          <datalist id="procurement-fee-structure-options">
+            {procurementFeeStructureOptions.map((f) => (
+              <option key={f} value={f} />
+            ))}
+          </datalist>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-brown">Invoice Prefix</label>
@@ -208,13 +236,13 @@ export default function NewProjectForm({
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-brown">Sales Tax Rate (e.g. 0.07)</label>
+          <label className="mb-1 block text-sm font-medium text-brown">Sales Tax Rate (%)</label>
           <input
             type="number"
-            step="0.0001"
+            step="0.01"
             className="input"
-            value={form.salesTaxRate}
-            onChange={(e) => setForm({ ...form, salesTaxRate: e.target.value })}
+            value={form.salesTaxRatePct}
+            onChange={(e) => setForm({ ...form, salesTaxRatePct: e.target.value })}
           />
         </div>
         <div>

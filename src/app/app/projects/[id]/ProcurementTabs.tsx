@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ItemsTable, { ItemRow } from './ItemsTable';
 import { ItemFieldDefRow } from './ItemDetailModal';
+import ProcurementFeeSection, { ProcurementFeeData } from './ProcurementFeeSection';
 
 export interface ProcurementListData {
   id: string;
@@ -19,6 +20,9 @@ export default function ProcurementTabs({
   itemFieldDefs,
   isAdmin,
   canOverrideLock,
+  canViewFees,
+  feeData,
+  procurementFeeStructureOptions,
   projectDefaultMarkupPct,
   projectMarkupMode,
 }: {
@@ -29,6 +33,9 @@ export default function ProcurementTabs({
   itemFieldDefs: ItemFieldDefRow[];
   isAdmin: boolean;
   canOverrideLock: boolean;
+  canViewFees: boolean;
+  feeData: ProcurementFeeData;
+  procurementFeeStructureOptions: string[];
   projectDefaultMarkupPct: string;
   projectMarkupMode: string;
 }) {
@@ -96,6 +103,14 @@ export default function ProcurementTabs({
 
   return (
     <div>
+      {canViewFees && (
+        <ProcurementFeeSection
+          projectId={projectId}
+          data={feeData}
+          procurementFeeStructureOptions={procurementFeeStructureOptions}
+        />
+      )}
+
       <div className="mb-4 flex flex-wrap items-center gap-1 border-b border-taupe/40">
         {lists.map((list) => (
           <div key={list.id} className="group flex items-center">

@@ -125,8 +125,11 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Set
         </div>
 
         <div>
-          <p className="mb-1 text-sm font-medium text-brown">Invoice Branding Colors</p>
-          <p className="mb-3 text-xs text-brown/50">Used on invoice PDFs and emails. Defaults to the Design Firm Ops brand palette.</p>
+          <p className="mb-1 text-sm font-medium text-brown">Invoice Customizer</p>
+          <p className="mb-3 text-xs text-brown/50">
+            The logo and colors above are used on invoice PDFs and emails. Defaults to the Design Firm Ops brand
+            palette.
+          </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-medium text-brown">Primary Color</label>
@@ -160,6 +163,39 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Set
                   value={form.invoiceAccentColor}
                   onChange={(e) => setForm({ ...form, invoiceAccentColor: e.target.value })}
                 />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium uppercase tracking-[0.24em] text-taupe">Preview</p>
+            <div
+              className="rounded-md border border-taupe/40 bg-white p-5"
+              style={{ color: form.invoicePrimaryColor || DEFAULT_PRIMARY_COLOR }}
+            >
+              <div className="mb-4 flex items-start justify-between">
+                {logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrl} alt="Company logo" className="h-10 max-w-[160px] object-contain" />
+                ) : (
+                  <span className="text-base font-semibold">{form.companyName || 'Your Company'}</span>
+                )}
+                <div className="text-right text-xs">
+                  <p className="font-semibold">{form.companyName || 'Your Company'}</p>
+                  {form.companyAddress && <p className="text-[11px] opacity-70">{form.companyAddress}</p>}
+                </div>
+              </div>
+              <p className="mb-3 text-lg font-medium">Invoice 2506-001</p>
+              <div
+                className="flex items-center justify-between border-b pb-2 text-xs"
+                style={{ borderColor: form.invoiceAccentColor || DEFAULT_ACCENT_COLOR }}
+              >
+                <span style={{ color: form.invoiceAccentColor || DEFAULT_ACCENT_COLOR }} className="uppercase tracking-[0.1em]">
+                  Bill To
+                </span>
+                <span style={{ color: form.invoiceAccentColor || DEFAULT_ACCENT_COLOR }} className="uppercase tracking-[0.1em]">
+                  Issue Date
+                </span>
               </div>
             </div>
           </div>

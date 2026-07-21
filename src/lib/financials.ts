@@ -33,8 +33,9 @@ export function summarizeProjectFinancials(
   let invoicedTotal = new Decimal(0);
 
   // A voided invoice's items are detached and revert to APPROVED — it
-  // never counted as real invoiced revenue in the first place.
-  const liveInvoices = project.invoices.filter((invoice) => invoice.status !== 'VOID');
+  // never counted as real invoiced revenue in the first place. Design
+  // Fee Invoices are excluded too — that's summarizeDesignFee's ledger.
+  const liveInvoices = project.invoices.filter((invoice) => invoice.status !== 'VOID' && invoice.type === 'PROCUREMENT');
 
   for (const invoice of liveInvoices) {
     const extendedPrices = invoice.items.map((item) => priceItem(item, project).extended);

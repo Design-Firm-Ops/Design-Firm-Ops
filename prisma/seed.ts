@@ -245,6 +245,19 @@ async function seedDemoProject() {
     update: {},
   });
 
+  const [designFeeStructure, procurementFeeStructure] = await Promise.all([
+    prisma.feeStructureOption.upsert({
+      where: { scope_name: { scope: 'DESIGN_FEE', name: 'Hourly' } },
+      create: { scope: 'DESIGN_FEE', name: 'Hourly', order: 1 },
+      update: {},
+    }),
+    prisma.feeStructureOption.upsert({
+      where: { scope_name: { scope: 'PROCUREMENT', name: 'Cost Plus' } },
+      create: { scope: 'PROCUREMENT', name: 'Cost Plus', order: 0 },
+      update: {},
+    }),
+  ]);
+
   const project = await prisma.project.create({
     data: {
       clientId: client.id,
@@ -254,7 +267,8 @@ async function seedDemoProject() {
       startDate: new Date('2025-04-01'),
       projectTypeId: projectType.id,
       leadDesignerName: 'Madison Ditton',
-      feeStructure: 'COST_PLUS',
+      designFeeStructureId: designFeeStructure.id,
+      procurementFeeStructureId: procurementFeeStructure.id,
       feeNotes: '15% cost-plus on all merchandise; design fee billed hourly, invoiced separately.',
       defaultMarkupPct: 15,
       markupMode: 'MARKUP',

@@ -5,7 +5,6 @@ import { createSignedResourceUrl } from '@/lib/supabase';
 import { isAdmin } from '@/lib/permissions';
 import AdminBrowser from './AdminBrowser';
 import UsersManager from './UsersManager';
-import PermissionsForm from './PermissionsForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,10 +13,9 @@ export default async function AdministrationPage() {
   const admin = isAdmin(session);
   const currentUserId = session!.user.id;
 
-  const [resources, folderPermissions, settings, users] = await Promise.all([
+  const [resources, folderPermissions, users] = await Promise.all([
     prisma.resource.findMany({ include: { uploadedBy: true }, orderBy: { uploadedAt: 'desc' } }),
     prisma.resourceFolder.findMany(),
-    admin ? prisma.settings.findUnique({ where: { id: 1 } }) : Promise.resolve(null),
     prisma.user.findMany({
       select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
@@ -51,19 +49,6 @@ export default async function AdministrationPage() {
       currentUserId={currentUserId}
     />
   ) : null;
-  const permissionsTab = admin ? (
-    <PermissionsForm
-      initialSettings={{
-        designerCanViewFinancials: settings?.designerCanViewFinancials ?? false,
-        designerCanViewClientContact: settings?.designerCanViewClientContact ?? true,
-        designerCanViewDocumentsPresentations: settings?.designerCanViewDocumentsPresentations ?? true,
-        designerCanViewContracts: settings?.designerCanViewContracts ?? true,
-        designerCanViewInvoices: settings?.designerCanViewInvoices ?? true,
-        designerCanViewProcurement: settings?.designerCanViewProcurement ?? true,
-        designerCanViewVendorCredentials: settings?.designerCanViewVendorCredentials ?? false,
-      }}
-    />
-  ) : null;
 
   return (
     <div>
@@ -74,7 +59,6 @@ export default async function AdministrationPage() {
         allUsers={admin ? users.map((u) => ({ id: u.id, name: u.name, email: u.email })) : []}
         folderPermissions={folderPermissions.map((f) => ({ name: f.name, allowedUserIds: f.allowedUserIds }))}
         usersContent={usersTab}
-        permissionsContent={permissionsTab}
         isAdmin={admin}
       />
     </div>

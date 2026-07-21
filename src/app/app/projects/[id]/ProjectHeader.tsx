@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Decimal from 'decimal.js';
-import { formatMoney, formatPercent, formatPercentFromFraction } from '@/lib/money';
+import { formatMoney } from '@/lib/money';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import DesignFeeSection from './DesignFeeSection';
+import DesignFeeSection, { DesignFeeChargeRow, DesignFeeInvoiceRow } from './DesignFeeSection';
 import ProjectCustomFields, { FieldDefRow, FieldValueRow } from './ProjectCustomFields';
 import ProjectFieldsManager from './ProjectFieldsManager';
 import { COLUMN_LABELS, COLUMN_PRESETS, INVOICE_COLUMNS, InvoiceColumnKey, resolveColumnConfig } from '@/lib/invoiceColumns';
@@ -18,12 +18,8 @@ export interface ProjectData {
   startDate: string | null;
   projectType: string | null;
   leadDesignerName: string | null;
-  feeStructure: string;
+  designFeeStructure: string | null;
   feeNotes: string | null;
-  defaultMarkupPct: string;
-  markupMode: string;
-  salesTaxRate: string;
-  taxBase: string;
   invoicePrefix: string | null;
   defaultInvoiceColumnConfig: { columns: string[] } | null;
   client: {
@@ -48,25 +44,30 @@ export interface DesignFeeFinancials {
 }
 
 const STATUSES = ['LEAD', 'ACTIVE', 'ON_HOLD', 'COMPLETE'];
-const FEE_STRUCTURES = ['FLAT_FEE', 'HOURLY', 'COST_PLUS', 'HYBRID'];
 
 export default function ProjectHeader({
   project,
   projectTypeOptions,
+  designFeeStructureOptions,
   canViewClientContact,
   canViewFinancials,
   merchandise,
   designFee,
+  designFeeCharges,
+  designFeeInvoices,
   fieldDefs: initialFieldDefs,
   fieldValues,
   isAdmin,
 }: {
   project: ProjectData;
   projectTypeOptions: string[];
+  designFeeStructureOptions: string[];
   canViewClientContact: boolean;
   canViewFinancials: boolean;
   merchandise: MerchandiseFinancials;
   designFee: DesignFeeFinancials;
+  designFeeCharges: DesignFeeChargeRow[];
+  designFeeInvoices: DesignFeeInvoiceRow[];
   fieldDefs: FieldDefRow[];
   fieldValues: FieldValueRow[];
   isAdmin: boolean;
@@ -86,12 +87,8 @@ export default function ProjectHeader({
     startDate: project.startDate ? project.startDate.slice(0, 10) : '',
     projectType: project.projectType ?? '',
     leadDesignerName: project.leadDesignerName ?? '',
-    feeStructure: project.feeStructure,
+    designFeeStructure: project.designFeeStructure ?? '',
     feeNotes: project.feeNotes ?? '',
-    defaultMarkupPct: project.defaultMarkupPct,
-    markupMode: project.markupMode,
-    salesTaxRate: project.salesTaxRate,
-    taxBase: project.taxBase,
     invoicePrefix: project.invoicePrefix ?? '',
   });
   const [invoiceColumns, setInvoiceColumns] = useState<string[] | null>(project.defaultInvoiceColumnConfig?.columns ?? null);
@@ -199,21 +196,8 @@ export default function ProjectHeader({
           <dd className="font-medium">{project.leadDesignerName || '—'}</dd>
         </div>
         <div>
-          <dt className="text-brown/50">Fee Structure</dt>
-          <dd className="font-medium">{project.feeStructure.replace('_', ' ')}</dd>
-        </div>
-        <div>
-          <dt className="text-brown/50">Default Markup</dt>
-          <dd className="font-medium">
-            {formatPercent(project.defaultMarkupPct)} ({project.markupMode.toLowerCase()})
-          </dd>
-        </div>
-        <div>
-          <dt className="text-brown/50">Sales Tax</dt>
-          <dd className="font-medium">
-            {formatPercentFromFraction(project.salesTaxRate)} on{' '}
-            {project.taxBase === 'MERCH_PLUS_SHIPPING' ? 'merch + shipping' : 'merch only'}
-          </dd>
+          <dt className="text-brown/50">Design Fee Structure</dt>
+          <dd className="font-medium">{project.designFeeStructure || '—'}</dd>
         </div>
         <div>
           <dt className="text-brown/50">Invoice Prefix</dt>
@@ -273,7 +257,12 @@ export default function ProjectHeader({
             </dl>
           </div>
 
-          <DesignFeeSection projectId={project.id} summary={designFee} />
+          <DesignFeeSection
+            projectId={project.id}
+            summary={designFee}
+            charges={designFeeCharges}
+            invoices={designFeeInvoices}
+          />
         </div>
       )}
 
@@ -340,18 +329,19 @@ export default function ProjectHeader({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Fee Structure</label>
-                <select
+                <label className="mb-1 block text-sm font-medium text-brown">Design Fee Structure</label>
+                <input
                   className="input"
-                  value={form.feeStructure}
-                  onChange={(e) => setForm({ ...form, feeStructure: e.target.value })}
-                >
-                  {FEE_STRUCTURES.map((f) => (
-                    <option key={f} value={f}>
-                      {f.replace('_', ' ')}
-                    </option>
+                  list="design-fee-structure-options"
+                  placeholder="e.g. Fixed Fee"
+                  value={form.designFeeStructure}
+                  onChange={(e) => setForm({ ...form, designFeeStructure: e.target.value })}
+                />
+                <datalist id="design-fee-structure-options">
+                  {designFeeStructureOptions.map((f) => (
+                    <option key={f} value={f} />
                   ))}
-                </select>
+                </datalist>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-brown">Invoice Prefix</label>
@@ -361,40 +351,6 @@ export default function ProjectHeader({
                   value={form.invoicePrefix}
                   onChange={(e) => setForm({ ...form, invoicePrefix: e.target.value })}
                 />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Default Markup %</label>
-                <input
-                  type="number"
-                  step="0.001"
-                  className="input"
-                  value={form.defaultMarkupPct}
-                  onChange={(e) => setForm({ ...form, defaultMarkupPct: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Markup Mode</label>
-                <select className="input" value={form.markupMode} onChange={(e) => setForm({ ...form, markupMode: e.target.value })}>
-                  <option value="MARKUP">Markup %</option>
-                  <option value="MARGIN">Margin %</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Sales Tax Rate (e.g. 0.07)</label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  className="input"
-                  value={form.salesTaxRate}
-                  onChange={(e) => setForm({ ...form, salesTaxRate: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Tax Base</label>
-                <select className="input" value={form.taxBase} onChange={(e) => setForm({ ...form, taxBase: e.target.value })}>
-                  <option value="MERCH_ONLY">Merchandise only</option>
-                  <option value="MERCH_PLUS_SHIPPING">Merchandise + shipping</option>
-                </select>
               </div>
               <div className="col-span-2">
                 <label className="mb-1 block text-sm font-medium text-brown">Fee Notes</label>

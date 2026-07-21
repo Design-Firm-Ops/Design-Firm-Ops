@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  if (payment.invoiceId && payment.category === 'MERCHANDISE') {
+  if (payment.invoiceId) {
     await recalculateInvoiceStatus(payment.invoiceId);
   }
 

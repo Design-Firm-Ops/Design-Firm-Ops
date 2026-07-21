@@ -6,6 +6,7 @@ import { computeInvoiceTotals, priceLine } from '@/lib/pricing';
 import { formatMoney, formatPercentFromFraction } from '@/lib/money';
 import { COLUMN_LABELS, COLUMN_PRESETS, INVOICE_COLUMNS, InvoiceColumnKey, resolveColumnConfig } from '@/lib/invoiceColumns';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import Tooltip from '@/components/Tooltip';
 import type { ItemRow } from './ItemsTable';
 
 export interface InvoiceRow {
@@ -60,7 +61,8 @@ export default function InvoicesTab({
   const [showForm, setShowForm] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [shippingTotal, setShippingTotal] = useState('0.00');
-  const [taxRate, setTaxRate] = useState(defaultTaxRate);
+  // Entered as a percentage (e.g. "7" = 7%) — converted to/from the stored fraction.
+  const [taxRatePct, setTaxRatePct] = useState(String(Number(defaultTaxRate) * 100));
   const [taxBase, setTaxBase] = useState(defaultTaxBase);
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -94,11 +96,11 @@ export default function InvoicesTab({
     return computeInvoiceTotals({
       extendedPrices,
       shippingTotal: shippingTotal || 0,
-      taxRate: taxRate || 0,
+      taxRate: taxRatePct ? Number(taxRatePct) / 100 : 0,
       taxBase: taxBase as 'MERCH_ONLY' | 'MERCH_PLUS_SHIPPING',
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds, shippingTotal, taxRate, taxBase, uninvoicedItems]);
+  }, [selectedIds, shippingTotal, taxRatePct, taxBase, uninvoicedItems]);
 
   function toggle(id: string) {
     setSelectedIds((prev) => {
@@ -119,9 +121,10 @@ export default function InvoicesTab({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         projectId,
+        type: 'PROCUREMENT',
         itemIds: Array.from(selectedIds),
         shippingTotal,
-        taxRate,
+        taxRate: taxRatePct ? Number(taxRatePct) / 100 : 0,
         taxBase,
         dueDate,
         notes,
@@ -202,14 +205,11 @@ export default function InvoicesTab({
   return (
     <div>
       <div className="mb-4 flex justify-end">
-        <button
-          className="btn-primary"
-          onClick={() => setShowForm(true)}
-          disabled={uninvoicedItems.length === 0}
-          title={uninvoicedItems.length === 0 ? 'No approved, un-invoiced items available' : undefined}
-        >
-          + Create Invoice
-        </button>
+        <Tooltip reason={uninvoicedItems.length === 0 ? 'No approved, un-invoiced items available' : undefined}>
+          <button className="btn-primary" onClick={() => setShowForm(true)} disabled={uninvoicedItems.length === 0}>
+            + Create Invoice
+          </button>
+        </Tooltip>
       </div>
 
       {actionError && <p className="mb-3 text-sm text-red-700">{actionError}</p>}
@@ -388,13 +388,13 @@ export default function InvoicesTab({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Tax Rate (e.g. 0.07)</label>
+                <label className="mb-1 block text-sm font-medium text-brown">Tax Rate (%)</label>
                 <input
                   type="number"
-                  step="0.0001"
+                  step="0.01"
                   className="input"
-                  value={taxRate}
-                  onChange={(e) => setTaxRate(e.target.value)}
+                  value={taxRatePct}
+                  onChange={(e) => setTaxRatePct(e.target.value)}
                 />
               </div>
               <div>
