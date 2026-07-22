@@ -153,6 +153,8 @@ No manual bucket setup is required as long as `SUPABASE_SERVICE_ROLE_KEY` is set
 | Script | Description |
 | --- | --- |
 | `npm run setup` | Cross-platform first-run setup (env, install, generate, migrate, seed). |
+| `npm test` | Run the unit test suite once (Vitest). |
+| `npm run test:watch` | Run Vitest in watch mode. |
 | `npm run dev` | Start the Next.js dev server. |
 | `npm run build` | Production build. |
 | `npm run start` | Serve the production build. |
