@@ -5,12 +5,12 @@ import { prisma } from '@/lib/prisma';
 import { createSignedDocumentUrl } from '@/lib/supabase';
 import { resolvePermissions, isAdmin as checkIsAdmin } from '@/lib/permissions';
 import { summarizeProjectFinancials, summarizeDesignFee } from '@/lib/financials';
-import { DEFAULT_DOCUMENT_FOLDERS } from '@/lib/procurement';
 import ProjectHeader from './ProjectHeader';
 import ProjectTabs, { ProjectTab } from './ProjectTabs';
 import ProcurementTabs from './ProcurementTabs';
 import { ItemRow } from './ItemsTable';
 import InvoicesTab, { InvoiceRow } from './InvoicesTab';
+import DesignFeeSection, { DesignFeeChargeRow, DesignFeeInvoiceRow } from './DesignFeeSection';
 import ProjectDocumentsBrowser, { DocumentRow as FolderDocumentRow } from './ProjectDocumentsBrowser';
 import DocumentsTab, { DocumentRow } from './DocumentsTab';
 import PaymentsTab, { PaymentRow } from './PaymentsTab';
@@ -23,6 +23,8 @@ function serializeInvoiceItem(item: {
   name: string;
   invoiceDisplayName: string | null;
   category: string;
+  itemTypeId: string | null;
+  itemType?: { name: string } | null;
   room: string | null;
   vendorId: string | null;
   qty: number;
@@ -30,7 +32,14 @@ function serializeInvoiceItem(item: {
   platformFee: unknown;
   markupPct: unknown;
   markupMode: string | null;
-  dimensions: string | null;
+  dimensionHeight: unknown;
+  dimensionWidth: unknown;
+  dimensionLength: unknown;
+  dimensionUnit: string;
+  weight: unknown;
+  bulbSpec: string | null;
+  bulbQty: number | null;
+  bulbIncluded: boolean | null;
   finish: string | null;
   link: string | null;
   shippingNotes: string | null;
@@ -44,6 +53,8 @@ function serializeInvoiceItem(item: {
     name: item.name,
     invoiceDisplayName: item.invoiceDisplayName,
     category: item.category,
+    itemTypeId: item.itemTypeId,
+    itemTypeName: item.itemType?.name ?? null,
     room: item.room,
     vendorId: item.vendorId,
     qty: item.qty,
@@ -51,7 +62,14 @@ function serializeInvoiceItem(item: {
     platformFee: String(item.platformFee),
     markupPct: item.markupPct === null ? null : String(item.markupPct),
     markupMode: item.markupMode,
-    dimensions: item.dimensions,
+    dimensionHeight: item.dimensionHeight === null ? null : String(item.dimensionHeight),
+    dimensionWidth: item.dimensionWidth === null ? null : String(item.dimensionWidth),
+    dimensionLength: item.dimensionLength === null ? null : String(item.dimensionLength),
+    dimensionUnit: item.dimensionUnit,
+    weight: item.weight === null ? null : String(item.weight),
+    bulbSpec: item.bulbSpec,
+    bulbQty: item.bulbQty,
+    bulbIncluded: item.bulbIncluded,
     finish: item.finish,
     link: item.link,
     shippingNotes: item.shippingNotes,
@@ -69,32 +87,42 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   const project = await prisma.project.findUnique({
     where: { id: params.id },
     include: {
-      client: true,
+      client: { include: { contacts: { orderBy: { order: 'asc' } } } },
       projectType: true,
-      items: { orderBy: { sortOrder: 'asc' }, include: { fieldValues: true, invoice: { select: { invoiceNumber: true } } } },
+      designFeeStructure: true,
+      procurementFeeStructure: true,
+      items: {
+        orderBy: { sortOrder: 'asc' },
+        include: { fieldValues: true, invoice: { select: { invoiceNumber: true } }, itemType: { select: { name: true } } },
+      },
       procurementLists: { orderBy: { order: 'asc' } },
+      rooms: { orderBy: { order: 'asc' } },
+      documentFolders: { orderBy: { order: 'asc' } },
       documents: { orderBy: { uploadedAt: 'desc' } },
-      invoices: { include: { items: true }, orderBy: { createdAt: 'desc' } },
+      invoices: { include: { items: true, designFeeCharges: true }, orderBy: { createdAt: 'desc' } },
       payments: { orderBy: { date: 'desc' } },
-      designFeeCharges: { orderBy: { date: 'desc' } },
+      designFeeCharges: { include: { invoice: { select: { invoiceNumber: true } } }, orderBy: { date: 'desc' } },
       fieldValues: true,
     },
   });
 
   if (!project) notFound();
 
-  const [vendors, projectTypes, offerings, itemFieldDefs, projectFieldDefs] = await Promise.all([
+  const [vendors, projectTypes, feeStructureOptions, itemTypeOptions, itemFieldDefs, projectFieldDefs] = await Promise.all([
     prisma.vendor.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     prisma.projectType.findMany({ orderBy: { name: 'asc' }, select: { name: true } }),
-    prisma.offering.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
+    prisma.feeStructureOption.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
+    prisma.itemTypeOption.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
     prisma.itemFieldDef.findMany({ orderBy: { order: 'asc' } }),
     prisma.projectFieldDef.findMany({ orderBy: { order: 'asc' } }),
   ]);
 
+  const designFeeStructureOptions = feeStructureOptions.filter((f) => f.scope === 'DESIGN_FEE').map((f) => f.name);
+  const procurementFeeStructureOptions = feeStructureOptions.filter((f) => f.scope === 'PROCUREMENT').map((f) => f.name);
+
   const items: ItemRow[] = await Promise.all(
     project.items.map(async (item) => ({
       ...serializeInvoiceItem(item),
-      offeringId: item.offeringId,
       procurementListId: item.procurementListId,
       imageUrl: item.imageStoragePath ? await createSignedDocumentUrl(item.imageStoragePath) : null,
       fieldValues: item.fieldValues.map((v) => ({ fieldDefId: v.fieldDefId, value: v.value })),
@@ -103,18 +131,44 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   const uninvoicedItems = items.filter((i) => !i.invoiceId);
   const itemsById = new Map(items.map((i) => [i.id, i]));
 
-  const invoices: InvoiceRow[] = project.invoices.map((inv) => ({
-    id: inv.id,
-    invoiceNumber: inv.invoiceNumber,
-    status: inv.status,
-    shippingTotal: String(inv.shippingTotal),
-    taxRate: String(inv.taxRate),
-    taxBase: inv.taxBase,
-    issuedDate: inv.issuedDate ? inv.issuedDate.toISOString() : null,
-    dueDate: inv.dueDate ? inv.dueDate.toISOString() : null,
-    columnConfig: inv.columnConfig as { columns: string[] } | null,
-    items: inv.items.map((it) => itemsById.get(it.id)!).filter(Boolean),
+  const invoices: InvoiceRow[] = project.invoices
+    .filter((inv) => inv.type === 'PROCUREMENT')
+    .map((inv) => ({
+      id: inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      status: inv.status,
+      shippingTotal: String(inv.shippingTotal),
+      taxRate: String(inv.taxRate),
+      taxBase: inv.taxBase,
+      issuedDate: inv.issuedDate ? inv.issuedDate.toISOString() : null,
+      dueDate: inv.dueDate ? inv.dueDate.toISOString() : null,
+      columnConfig: inv.columnConfig as { columns: string[] } | null,
+      items: inv.items.map((it) => itemsById.get(it.id)!).filter(Boolean),
+    }));
+
+  const designFeeChargeRows: DesignFeeChargeRow[] = project.designFeeCharges.map((c) => ({
+    id: c.id,
+    description: c.description,
+    amount: String(c.amount),
+    date: c.date.toISOString(),
+    invoiceId: c.invoiceId,
+    invoiceNumber: c.invoice?.invoiceNumber ?? null,
   }));
+  const chargesById = new Map(designFeeChargeRows.map((c) => [c.id, c]));
+
+  const designFeeInvoices: DesignFeeInvoiceRow[] = project.invoices
+    .filter((inv) => inv.type === 'DESIGN_FEE')
+    .map((inv) => ({
+      id: inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      status: inv.status,
+      issuedDate: inv.issuedDate ? inv.issuedDate.toISOString() : null,
+      dueDate: inv.dueDate ? inv.dueDate.toISOString() : null,
+      shippingTotal: String(inv.shippingTotal),
+      taxRate: String(inv.taxRate),
+      taxBase: inv.taxBase,
+      charges: inv.designFeeCharges.map((c) => chargesById.get(c.id)!).filter(Boolean),
+    }));
 
   // Signed URLs are minted fresh on every load (they expire) — never
   // read the raw storage path back to the browser.
@@ -133,9 +187,16 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   const contractDocuments: DocumentRow[] = allDocuments.filter((d) => d.type === 'CONTRACT');
   const presentationDocuments: FolderDocumentRow[] = allDocuments.filter((d) => d.type !== 'CONTRACT');
 
-  const payments: PaymentRow[] = project.payments
-    .filter((p) => p.category === 'MERCHANDISE')
-    .map((p) => ({
+  function serializePayment(p: {
+    id: string;
+    amount: unknown;
+    date: Date;
+    method: string;
+    reference: string | null;
+    notes: string | null;
+    invoiceId: string | null;
+  }): PaymentRow {
+    return {
       id: p.id,
       amount: String(p.amount),
       date: p.date.toISOString(),
@@ -143,7 +204,10 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       reference: p.reference,
       notes: p.notes,
       invoiceId: p.invoiceId,
-    }));
+    };
+  }
+  const merchandisePayments = project.payments.filter((p) => p.category === 'MERCHANDISE').map(serializePayment);
+  const designFeePayments = project.payments.filter((p) => p.category === 'DESIGN_FEE').map(serializePayment);
 
   const merchandise = summarizeProjectFinancials(project);
   const designFee = summarizeDesignFee(project);
@@ -162,9 +226,13 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   if (perms.documentsPresentations) {
     tabs.push({
       key: 'documents',
-      label: 'Documents and Presentations',
+      label: 'Project Documents',
       content: (
-        <ProjectDocumentsBrowser projectId={project.id} documents={presentationDocuments} defaultFolders={DEFAULT_DOCUMENT_FOLDERS} />
+        <ProjectDocumentsBrowser
+          projectId={project.id}
+          documents={presentationDocuments}
+          folders={project.documentFolders.map((f) => ({ id: f.id, name: f.name }))}
+        />
       ),
     });
   }
@@ -183,27 +251,51 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       ),
     });
   }
-  if (perms.invoices) {
+  if (perms.invoices || perms.financials) {
     tabs.push({
       key: 'invoices',
-      label: 'Invoices',
+      label: 'Invoices and Payments',
       content: (
-        <div>
-          <InvoicesTab
-            projectId={project.id}
-            invoices={invoices}
-            uninvoicedItems={uninvoicedItems}
-            projectDefaultMarkupPct={String(project.defaultMarkupPct)}
-            projectMarkupMode={project.markupMode}
-            defaultTaxRate={String(project.salesTaxRate)}
-            defaultTaxBase={project.taxBase}
-            projectDefaultColumnConfig={project.defaultInvoiceColumnConfig as { columns: string[] } | null}
-          />
-          <PaymentsTab
-            projectId={project.id}
-            payments={payments}
-            invoiceOptions={invoices.map((i) => ({ id: i.id, invoiceNumber: i.invoiceNumber }))}
-          />
+        <div className="space-y-10">
+          {perms.invoices && (
+            <section>
+              <h2 className="mb-4 text-lg font-medium text-brown">Procurement</h2>
+              <InvoicesTab
+                projectId={project.id}
+                invoices={invoices}
+                uninvoicedItems={uninvoicedItems}
+                projectDefaultMarkupPct={String(project.defaultMarkupPct)}
+                projectMarkupMode={project.markupMode}
+                defaultTaxRate={String(project.salesTaxRate)}
+                defaultTaxBase={project.taxBase}
+                projectDefaultColumnConfig={project.defaultInvoiceColumnConfig as { columns: string[] } | null}
+              />
+              <div className="mt-6 border-t border-taupe/30 pt-6">
+                <PaymentsTab
+                  projectId={project.id}
+                  category="MERCHANDISE"
+                  title="Procurement Payments"
+                  payments={merchandisePayments}
+                  invoiceOptions={invoices.map((i) => ({ id: i.id, invoiceNumber: i.invoiceNumber }))}
+                />
+              </div>
+            </section>
+          )}
+          {perms.financials && (
+            <section>
+              <h2 className="mb-4 text-lg font-medium text-brown">Design Fee</h2>
+              <DesignFeeSection projectId={project.id} charges={designFeeChargeRows} invoices={designFeeInvoices} />
+              <div className="mt-6 border-t border-taupe/30 pt-6">
+                <PaymentsTab
+                  projectId={project.id}
+                  category="DESIGN_FEE"
+                  title="Design Fee Payments"
+                  payments={designFeePayments}
+                  invoiceOptions={designFeeInvoices.map((i) => ({ id: i.id, invoiceNumber: i.invoiceNumber }))}
+                />
+              </div>
+            </section>
+          )}
         </div>
       ),
     });
@@ -217,10 +309,20 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           projectId={project.id}
           lists={procurementLists}
           vendors={vendors}
-          offeringOptions={offerings.map((o) => ({ id: o.id, name: o.name }))}
+          itemTypeOptions={itemTypeOptions.map((t) => ({ id: t.id, category: t.category, name: t.name }))}
+          roomOptions={project.rooms.map((r) => r.name)}
           itemFieldDefs={itemFieldDefs}
           isAdmin={admin}
           canOverrideLock={perms.invoices}
+          canViewFees={perms.financials}
+          feeData={{
+            procurementFeeStructure: project.procurementFeeStructure?.name ?? null,
+            defaultMarkupPct: String(project.defaultMarkupPct),
+            markupMode: project.markupMode,
+            salesTaxRate: String(project.salesTaxRate),
+            taxBase: project.taxBase,
+          }}
+          procurementFeeStructureOptions={procurementFeeStructureOptions}
           projectDefaultMarkupPct={String(project.defaultMarkupPct)}
           projectMarkupMode={project.markupMode}
         />
@@ -239,23 +341,22 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           startDate: project.startDate ? project.startDate.toISOString() : null,
           projectType: project.projectType?.name ?? null,
           leadDesignerName: project.leadDesignerName,
-          feeStructure: project.feeStructure,
+          designFeeStructure: project.designFeeStructure?.name ?? null,
           feeNotes: project.feeNotes,
-          defaultMarkupPct: String(project.defaultMarkupPct),
-          markupMode: project.markupMode,
-          salesTaxRate: String(project.salesTaxRate),
-          taxBase: project.taxBase,
           invoicePrefix: project.invoicePrefix,
           defaultInvoiceColumnConfig: project.defaultInvoiceColumnConfig as { columns: string[] } | null,
           client: {
             id: project.client.id,
             name: project.client.name,
+            contactName: project.client.contactName,
             email: project.client.email,
             phone: project.client.phone,
             billingAddress: project.client.billingAddress,
+            contacts: project.client.contacts.map((c) => ({ name: c.name, email: c.email, phone: c.phone })),
           },
         }}
         projectTypeOptions={projectTypes.map((t) => t.name)}
+        designFeeStructureOptions={designFeeStructureOptions}
         canViewClientContact={perms.clientContact}
         canViewFinancials={perms.financials}
         merchandise={merchandise}

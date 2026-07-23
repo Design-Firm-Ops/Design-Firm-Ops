@@ -6,6 +6,8 @@ import { computeInvoiceTotals, priceLine } from '@/lib/pricing';
 import { formatMoney, formatPercentFromFraction } from '@/lib/money';
 import { COLUMN_LABELS, COLUMN_PRESETS, INVOICE_COLUMNS, InvoiceColumnKey, resolveColumnConfig } from '@/lib/invoiceColumns';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import Tooltip from '@/components/Tooltip';
+import VoidedInvoicesDropdown from './VoidedInvoicesDropdown';
 import type { ItemRow } from './ItemsTable';
 
 export interface InvoiceRow {
@@ -60,7 +62,8 @@ export default function InvoicesTab({
   const [showForm, setShowForm] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [shippingTotal, setShippingTotal] = useState('0.00');
-  const [taxRate, setTaxRate] = useState(defaultTaxRate);
+  // Entered as a percentage (e.g. "7" = 7%) — converted to/from the stored fraction.
+  const [taxRatePct, setTaxRatePct] = useState(String(Number(defaultTaxRate) * 100));
   const [taxBase, setTaxBase] = useState(defaultTaxBase);
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -94,11 +97,11 @@ export default function InvoicesTab({
     return computeInvoiceTotals({
       extendedPrices,
       shippingTotal: shippingTotal || 0,
-      taxRate: taxRate || 0,
+      taxRate: taxRatePct ? Number(taxRatePct) / 100 : 0,
       taxBase: taxBase as 'MERCH_ONLY' | 'MERCH_PLUS_SHIPPING',
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds, shippingTotal, taxRate, taxBase, uninvoicedItems]);
+  }, [selectedIds, shippingTotal, taxRatePct, taxBase, uninvoicedItems]);
 
   function toggle(id: string) {
     setSelectedIds((prev) => {
@@ -119,9 +122,10 @@ export default function InvoicesTab({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         projectId,
+        type: 'PROCUREMENT',
         itemIds: Array.from(selectedIds),
         shippingTotal,
-        taxRate,
+        taxRate: taxRatePct ? Number(taxRatePct) / 100 : 0,
         taxBase,
         dueDate,
         notes,
@@ -199,23 +203,23 @@ export default function InvoicesTab({
     router.refresh();
   }
 
+  const activeInvoices = invoices.filter((i) => i.status !== 'VOID');
+  const voidedInvoices = invoices.filter((i) => i.status === 'VOID');
+
   return (
     <div>
       <div className="mb-4 flex justify-end">
-        <button
-          className="btn-primary"
-          onClick={() => setShowForm(true)}
-          disabled={uninvoicedItems.length === 0}
-          title={uninvoicedItems.length === 0 ? 'No approved, un-invoiced items available' : undefined}
-        >
-          + Create Invoice
-        </button>
+        <Tooltip reason={uninvoicedItems.length === 0 ? 'No approved, un-invoiced items available' : undefined}>
+          <button className="btn-primary" onClick={() => setShowForm(true)} disabled={uninvoicedItems.length === 0}>
+            + Create Invoice
+          </button>
+        </Tooltip>
       </div>
 
       {actionError && <p className="mb-3 text-sm text-red-700">{actionError}</p>}
 
       <div className="space-y-4">
-        {invoices.map((invoice) => {
+        {activeInvoices.map((invoice) => {
           const extendedPrices = invoice.items.map((i) => priceOf(i).extended);
           const totals = computeInvoiceTotals({
             extendedPrices,
@@ -223,17 +227,14 @@ export default function InvoicesTab({
             taxRate: invoice.taxRate,
             taxBase: invoice.taxBase as 'MERCH_ONLY' | 'MERCH_PLUS_SHIPPING',
           });
-          const isVoid = invoice.status === 'VOID';
           const resolved = resolveColumnConfig(invoice.columnConfig, projectDefaultColumnConfig);
           const columnsOpen = expandedColumnsId === invoice.id;
 
           return (
-            <div key={invoice.id} className={`card p-5 ${isVoid ? 'opacity-60' : ''}`}>
+            <div key={invoice.id} className="card p-5">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h3 className={`font-serif text-lg font-medium text-brown ${isVoid ? 'line-through' : ''}`}>
-                    {invoice.invoiceNumber}
-                  </h3>
+                  <h3 className="font-serif text-lg font-medium text-brown">{invoice.invoiceNumber}</h3>
                   <span
                     className={`inline-block rounded px-2 py-0.5 text-xs font-medium uppercase tracking-[0.1em] ${STATUS_STYLES[invoice.status] ?? 'bg-taupe/20 text-brown/70'}`}
                   >
@@ -266,36 +267,34 @@ export default function InvoicesTab({
                 </div>
               </dl>
 
-              {!isVoid && (
-                <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-taupe/20 pt-3">
-                  <a
-                    className="text-sm font-medium text-gold hover:underline"
-                    href={`/api/invoices/${invoice.id}/pdf`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    View PDF
-                  </a>
-                  <button
-                    className="text-sm font-medium text-brown hover:underline"
-                    onClick={() => setExpandedColumnsId(columnsOpen ? null : invoice.id)}
-                  >
-                    {columnsOpen ? 'Hide columns' : 'Client-visible columns'}
-                  </button>
-                  <button
-                    className="text-sm font-medium text-brown hover:underline disabled:opacity-50"
-                    onClick={() => handleSend(invoice.id)}
-                    disabled={sendingId === invoice.id}
-                  >
-                    {sendingId === invoice.id ? 'Sending…' : invoice.status === 'DRAFT' ? 'Send Invoice' : 'Resend Invoice'}
-                  </button>
-                  <button className="ml-auto text-sm text-red-700 hover:underline" onClick={() => setPendingVoid(invoice)}>
-                    Void
-                  </button>
-                </div>
-              )}
+              <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-taupe/20 pt-3">
+                <a
+                  className="text-sm font-medium text-gold hover:underline"
+                  href={`/api/invoices/${invoice.id}/pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View PDF
+                </a>
+                <button
+                  className="text-sm font-medium text-brown hover:underline"
+                  onClick={() => setExpandedColumnsId(columnsOpen ? null : invoice.id)}
+                >
+                  {columnsOpen ? 'Hide columns' : 'Client-visible columns'}
+                </button>
+                <button
+                  className="text-sm font-medium text-brown hover:underline disabled:opacity-50"
+                  onClick={() => handleSend(invoice.id)}
+                  disabled={sendingId === invoice.id}
+                >
+                  {sendingId === invoice.id ? 'Sending…' : invoice.status === 'DRAFT' ? 'Send Invoice' : 'Resend Invoice'}
+                </button>
+                <button className="ml-auto text-sm text-red-700 hover:underline" onClick={() => setPendingVoid(invoice)}>
+                  Void
+                </button>
+              </div>
 
-              {!isVoid && columnsOpen && (
+              {columnsOpen && (
                 <div className="mt-3 rounded-md border border-taupe/40 bg-cream/60 p-4">
                   <p className="mb-2 text-xs uppercase tracking-[0.24em] text-taupe">Presets</p>
                   <div className="mb-3 flex flex-wrap gap-2">
@@ -339,9 +338,22 @@ export default function InvoicesTab({
             </div>
           );
         })}
-        {invoices.length === 0 && (
+        {activeInvoices.length === 0 && (
           <div className="card p-8 text-center text-brown/50">No invoices yet.</div>
         )}
+
+        <VoidedInvoicesDropdown
+          invoices={voidedInvoices.map((invoice) => ({
+            id: invoice.id,
+            invoiceNumber: invoice.invoiceNumber,
+            total: computeInvoiceTotals({
+              extendedPrices: invoice.items.map((i) => priceOf(i).extended),
+              shippingTotal: invoice.shippingTotal,
+              taxRate: invoice.taxRate,
+              taxBase: invoice.taxBase as 'MERCH_ONLY' | 'MERCH_PLUS_SHIPPING',
+            }).grandTotal,
+          }))}
+        />
       </div>
 
       {showForm && (
@@ -388,13 +400,13 @@ export default function InvoicesTab({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Tax Rate (e.g. 0.07)</label>
+                <label className="mb-1 block text-sm font-medium text-brown">Tax Rate (%)</label>
                 <input
                   type="number"
-                  step="0.0001"
+                  step="0.01"
                   className="input"
-                  value={taxRate}
-                  onChange={(e) => setTaxRate(e.target.value)}
+                  value={taxRatePct}
+                  onChange={(e) => setTaxRatePct(e.target.value)}
                 />
               </div>
               <div>

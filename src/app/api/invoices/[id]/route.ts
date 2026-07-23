@@ -18,13 +18,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const perms = await resolvePermissions(session);
-  if (!perms.invoices) {
-    return NextResponse.json({ error: 'You do not have permission to edit invoices' }, { status: 403 });
-  }
-
   const existing = await prisma.invoice.findUnique({ where: { id: params.id } });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const perms = await resolvePermissions(session);
+  const allowed = existing.type === 'DESIGN_FEE' ? perms.financials : perms.invoices;
+  if (!allowed) {
+    return NextResponse.json({ error: 'You do not have permission to edit this invoice' }, { status: 403 });
+  }
+
   if (existing.status === 'VOID') {
     return NextResponse.json({ error: 'This invoice has been voided and can no longer be edited' }, { status: 409 });
   }

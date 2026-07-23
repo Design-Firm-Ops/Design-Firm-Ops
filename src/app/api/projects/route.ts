@@ -4,7 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
 import { projectSchema } from '@/lib/validation';
 import { findOrCreateProjectType } from '@/lib/projectType';
-import { DEFAULT_PROCUREMENT_LISTS } from '@/lib/procurement';
+import { findOrCreateFeeStructureOption } from '@/lib/feeStructure';
+import { DEFAULT_PROCUREMENT_LISTS, DEFAULT_DOCUMENT_FOLDERS } from '@/lib/procurement';
 
 export async function GET() {
   const { unauthorized } = await requireSession();
@@ -30,6 +31,8 @@ export async function POST(req: NextRequest) {
   const {
     startDate,
     projectType,
+    designFeeStructure,
+    procurementFeeStructure,
     clientId,
     newClientName,
     newClientEmail,
@@ -56,12 +59,16 @@ export async function POST(req: NextRequest) {
   }
 
   const projectTypeId = await findOrCreateProjectType(projectType);
+  const designFeeStructureId = await findOrCreateFeeStructureOption(designFeeStructure, 'DESIGN_FEE');
+  const procurementFeeStructureId = await findOrCreateFeeStructureOption(procurementFeeStructure, 'PROCUREMENT');
 
   const project = await prisma.project.create({
     data: {
       ...rest,
       clientId: resolvedClientId,
       projectTypeId,
+      designFeeStructureId,
+      procurementFeeStructureId,
       startDate: startDate ? new Date(startDate) : null,
       defaultInvoiceColumnConfig: defaultInvoiceColumnConfig === null ? Prisma.JsonNull : defaultInvoiceColumnConfig,
     },
@@ -69,6 +76,9 @@ export async function POST(req: NextRequest) {
 
   await prisma.procurementList.createMany({
     data: DEFAULT_PROCUREMENT_LISTS.map((name, order) => ({ projectId: project.id, name, order })),
+  });
+  await prisma.projectDocumentFolder.createMany({
+    data: DEFAULT_DOCUMENT_FOLDERS.map((name, order) => ({ projectId: project.id, name, order })),
   });
 
   return NextResponse.json(project, { status: 201 });

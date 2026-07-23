@@ -14,6 +14,11 @@ export interface DocumentRow {
   uploadedAt: string;
 }
 
+export interface FolderRow {
+  id: string;
+  name: string;
+}
+
 const TYPE_LABELS: Record<string, string> = {
   PRESENTATION: 'Presentation',
   VENDOR_INVOICE: 'Vendor Invoice',
@@ -23,29 +28,27 @@ const TYPE_LABELS: Record<string, string> = {
 export default function ProjectDocumentsBrowser({
   projectId,
   documents,
-  defaultFolders,
+  folders,
 }: {
   projectId: string;
   documents: DocumentRow[];
-  defaultFolders: string[];
+  folders: FolderRow[];
 }) {
   const router = useRouter();
-  const [openFolder, setOpenFolder] = useState<string | null>(null);
+  const [openFolderId, setOpenFolderId] = useState<string | null>(null);
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [folderError, setFolderError] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
   const [type, setType] = useState('PRESENTATION');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<DocumentRow | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  const folders = useMemo(() => {
-    const names = new Set(defaultFolders);
-    for (const d of documents) {
-      if (d.folder) names.add(d.folder);
-    }
-    return Array.from(names);
-  }, [defaultFolders, documents]);
+  const [pendingDeleteFolder, setPendingDeleteFolder] = useState<FolderRow | null>(null);
+  const [deletingFolder, setDeletingFolder] = useState(false);
 
   const filesByFolder = useMemo(() => {
     const map = new Map<string, DocumentRow[]>();
@@ -58,6 +61,8 @@ export default function ProjectDocumentsBrowser({
     return map;
   }, [documents]);
 
+  const openFolder = folders.find((f) => f.id === openFolderId) ?? null;
+
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !openFolder) return;
@@ -69,7 +74,7 @@ export default function ProjectDocumentsBrowser({
     body.append('file', file);
     body.append('projectId', projectId);
     body.append('type', type);
-    body.append('folder', openFolder);
+    body.append('folder', openFolder.name);
 
     const res = await fetch('/api/documents', { method: 'POST', body });
     setUploading(false);
@@ -93,16 +98,66 @@ export default function ProjectDocumentsBrowser({
     router.refresh();
   }
 
+  async function handleCreateFolder(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newFolderName.trim()) return;
+    setCreatingFolder(true);
+    setFolderError(null);
+
+    const res = await fetch('/api/document-folders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, name: newFolderName.trim() }),
+    });
+    setCreatingFolder(false);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setFolderError(data?.error ?? 'Could not create folder.');
+      return;
+    }
+
+    const folder = await res.json();
+    setShowNewFolder(false);
+    setNewFolderName('');
+    setOpenFolderId(folder.id);
+    router.refresh();
+  }
+
+  async function handleRenameFolder(folderId: string) {
+    if (!renameValue.trim()) {
+      setRenamingId(null);
+      return;
+    }
+    await fetch(`/api/document-folders/${folderId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: renameValue.trim() }),
+    });
+    setRenamingId(null);
+    router.refresh();
+  }
+
+  async function confirmDeleteFolder() {
+    if (!pendingDeleteFolder) return;
+    setDeletingFolder(true);
+    await fetch(`/api/document-folders/${pendingDeleteFolder.id}`, { method: 'DELETE' });
+    setDeletingFolder(false);
+    setPendingDeleteFolder(null);
+    if (openFolderId === pendingDeleteFolder.id) setOpenFolderId(null);
+    router.refresh();
+  }
+
   if (openFolder) {
-    const files = filesByFolder.get(openFolder) ?? [];
+    const files = filesByFolder.get(openFolder.name) ?? [];
     return (
       <div>
         <div className="mb-4 flex items-center gap-2 text-sm">
-          <button className="text-brown/60 hover:text-brown" onClick={() => setOpenFolder(null)}>
-            Documents and Presentations
+          <button className="text-brown/60 hover:text-brown" onClick={() => setOpenFolderId(null)}>
+            Project Documents
           </button>
           <span className="text-brown/30">/</span>
-          <span className="font-medium text-brown">{openFolder}</span>
+          <span className="font-medium text-brown">{openFolder.name}</span>
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -181,34 +236,69 @@ export default function ProjectDocumentsBrowser({
           + New Folder
         </button>
       </div>
+
+      {folderError && <p className="mb-3 text-sm text-red-700">{folderError}</p>}
+
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">
-        {folders.map((folder) => (
-          <button
-            key={folder}
-            onClick={() => setOpenFolder(folder)}
-            className="card flex flex-col items-center gap-2 p-4 text-center hover:bg-taupe/5"
-          >
-            <FolderIcon className="h-10 w-10 text-gold" />
-            <span className="text-sm font-medium text-brown">{folder}</span>
-            <span className="text-xs text-brown/50">
-              {(filesByFolder.get(folder) ?? []).length} file{(filesByFolder.get(folder) ?? []).length === 1 ? '' : 's'}
-            </span>
-          </button>
-        ))}
+        {folders.map((folder) => {
+          const files = filesByFolder.get(folder.name) ?? [];
+          return (
+            <div key={folder.id} className="group relative">
+              {renamingId === folder.id ? (
+                <div className="card flex flex-col items-center gap-2 p-4 text-center">
+                  <FolderIcon className="h-10 w-10 text-gold" />
+                  <input
+                    className="w-full rounded border border-gold px-1 py-0.5 text-center text-sm"
+                    value={renameValue}
+                    autoFocus
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onBlur={() => handleRenameFolder(folder.id)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleRenameFolder(folder.id)}
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => setOpenFolderId(folder.id)}
+                  className="card flex w-full flex-col items-center gap-2 p-4 text-center hover:bg-taupe/5"
+                >
+                  <FolderIcon className="h-10 w-10 text-gold" />
+                  <span className="text-sm font-medium text-brown">{folder.name}</span>
+                  <span className="text-xs text-brown/50">
+                    {files.length} file{files.length === 1 ? '' : 's'}
+                  </span>
+                </button>
+              )}
+              {renamingId !== folder.id && (
+                <div className="absolute right-1 top-1 hidden gap-1 group-hover:flex">
+                  <button
+                    className="rounded bg-white/90 px-1 text-xs text-brown/50 hover:text-brown"
+                    title="Rename folder"
+                    onClick={() => {
+                      setRenamingId(folder.id);
+                      setRenameValue(folder.name);
+                    }}
+                  >
+                    ✎
+                  </button>
+                  {folders.length > 1 && (
+                    <button
+                      className="rounded bg-white/90 px-1 text-xs text-brown/50 hover:text-red-700"
+                      title="Delete folder"
+                      onClick={() => setPendingDeleteFolder(folder)}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {showNewFolder && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <form
-            className="card w-full max-w-sm space-y-4 p-6"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!newFolderName.trim()) return;
-              setOpenFolder(newFolderName.trim());
-              setShowNewFolder(false);
-              setNewFolderName('');
-            }}
-          >
+          <form onSubmit={handleCreateFolder} className="card w-full max-w-sm space-y-4 p-6">
             <h2 className="text-lg font-medium text-brown">New Folder</h2>
             <input
               className="input"
@@ -218,17 +308,27 @@ export default function ProjectDocumentsBrowser({
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
             />
+            {folderError && <p className="text-sm text-red-700">{folderError}</p>}
             <div className="flex justify-end gap-3">
               <button type="button" className="btn-secondary" onClick={() => setShowNewFolder(false)}>
                 Cancel
               </button>
-              <button type="submit" className="btn-primary">
-                Create
+              <button type="submit" className="btn-primary" disabled={creatingFolder}>
+                {creatingFolder ? 'Creating…' : 'Create'}
               </button>
             </div>
           </form>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!pendingDeleteFolder}
+        title="Delete folder?"
+        message={`Files in "${pendingDeleteFolder?.name}" will move to Uncategorized rather than being deleted.`}
+        busy={deletingFolder}
+        onConfirm={confirmDeleteFolder}
+        onCancel={() => setPendingDeleteFolder(null)}
+      />
     </div>
   );
 }

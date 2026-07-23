@@ -3,11 +3,13 @@ import { prisma } from '@/lib/prisma';
 import { computeInvoiceTotals, priceLine, toCents } from '@/lib/pricing';
 
 /**
- * Recomputes and persists an invoice's status from its current items and
- * MERCHANDISE payments. Called after any payment create/update/delete
- * that could move the invoice across a paid/partially-paid boundary —
- * status can move in either direction (e.g. correcting a payment back
- * down un-PAIDs an invoice), and never touches a VOID invoice.
+ * Recomputes and persists an invoice's status from its current line
+ * amounts (items for a Procurement Invoice, charges for a Design Fee
+ * Invoice) and same-category payments. Called after any payment
+ * create/update/delete that could move the invoice across a
+ * paid/partially-paid boundary — status can move in either direction
+ * (e.g. correcting a payment back down un-PAIDs an invoice), and never
+ * touches a VOID invoice.
  */
 export async function recalculateInvoiceStatus(invoiceId: string): Promise<void> {
   const invoice = await prisma.invoice.findUnique({
@@ -15,14 +17,26 @@ export async function recalculateInvoiceStatus(invoiceId: string): Promise<void>
     include: {
       project: { select: { defaultMarkupPct: true, markupMode: true } },
       items: true,
-      payments: { where: { category: 'MERCHANDISE' } },
+      designFeeCharges: true,
+      payments: true,
     },
   });
   if (!invoice || invoice.status === 'VOID') return;
 
-  const extendedPrices = invoice.items.map(
-    (item) => priceLine({ ...item, projectDefaultMarkupPct: invoice.project.defaultMarkupPct, projectMarkupMode: invoice.project.markupMode }).extended
-  );
+  const paymentCategory = invoice.type === 'DESIGN_FEE' ? 'DESIGN_FEE' : 'MERCHANDISE';
+  const payments = invoice.payments.filter((p) => p.category === paymentCategory);
+
+  const extendedPrices =
+    invoice.type === 'DESIGN_FEE'
+      ? invoice.designFeeCharges.map((c) => c.amount)
+      : invoice.items.map(
+          (item) =>
+            priceLine({
+              ...item,
+              projectDefaultMarkupPct: invoice.project.defaultMarkupPct,
+              projectMarkupMode: invoice.project.markupMode,
+            }).extended
+        );
   const totals = computeInvoiceTotals({
     extendedPrices,
     shippingTotal: invoice.shippingTotal,
@@ -30,7 +44,7 @@ export async function recalculateInvoiceStatus(invoiceId: string): Promise<void>
     taxBase: invoice.taxBase,
   });
 
-  const paid = toCents(invoice.payments.reduce((sum, p) => sum.plus(p.amount), new Decimal(0)));
+  const paid = toCents(payments.reduce((sum, p) => sum.plus(p.amount), new Decimal(0)));
 
   let status: 'DRAFT' | 'SENT' | 'PARTIALLY_PAID' | 'PAID';
   if (paid.greaterThanOrEqualTo(totals.grandTotal) && totals.grandTotal.greaterThan(0)) {

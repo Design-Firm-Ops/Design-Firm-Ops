@@ -45,10 +45,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   });
 
   // Recalculate both the old and new invoice if it moved between them.
-  if (payment.category === 'MERCHANDISE') {
-    if (existing.invoiceId) await recalculateInvoiceStatus(existing.invoiceId);
-    if (payment.invoiceId && payment.invoiceId !== existing.invoiceId) await recalculateInvoiceStatus(payment.invoiceId);
-  }
+  if (existing.invoiceId) await recalculateInvoiceStatus(existing.invoiceId);
+  if (payment.invoiceId && payment.invoiceId !== existing.invoiceId) await recalculateInvoiceStatus(payment.invoiceId);
 
   return NextResponse.json(payment);
 }
@@ -68,7 +66,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
   await prisma.payment.delete({ where: { id: params.id } });
 
-  if (payment.invoiceId && payment.category === 'MERCHANDISE') {
+  if (payment.invoiceId) {
     await recalculateInvoiceStatus(payment.invoiceId);
   }
 

@@ -19,10 +19,14 @@ const METHODS = ['ACH', 'WIRE', 'CHECK', 'CREDIT_CARD', 'OTHER'];
 
 export default function PaymentsTab({
   projectId,
+  category,
+  title,
   payments,
   invoiceOptions,
 }: {
   projectId: string;
+  category: 'MERCHANDISE' | 'DESIGN_FEE';
+  title: string;
   payments: PaymentRow[];
   invoiceOptions: { id: string; invoiceNumber: string }[];
 }) {
@@ -49,7 +53,7 @@ export default function PaymentsTab({
     const res = await fetch('/api/payments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, projectId, category: 'MERCHANDISE' }),
+      body: JSON.stringify({ ...form, projectId, category }),
     });
 
     setSaving(false);
@@ -76,10 +80,10 @@ export default function PaymentsTab({
   const total = payments.reduce((sum, p) => sum + Number(p.amount), 0);
 
   return (
-    <div className="mt-8 border-t border-taupe/30 pt-6">
+    <div>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-medium text-brown">Payments</h2>
+          <h2 className="text-lg font-medium text-brown">{title}</h2>
           <p className="text-sm text-brown/60">Total received: {formatMoney(total)}</p>
         </div>
         <button className="btn-primary" onClick={() => setShowForm(true)}>

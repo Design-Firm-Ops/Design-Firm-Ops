@@ -3,9 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Decimal from 'decimal.js';
-import { formatMoney, formatPercent, formatPercentFromFraction } from '@/lib/money';
+import { formatMoney } from '@/lib/money';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import DesignFeeSection from './DesignFeeSection';
 import ProjectCustomFields, { FieldDefRow, FieldValueRow } from './ProjectCustomFields';
 import ProjectFieldsManager from './ProjectFieldsManager';
 import { COLUMN_LABELS, COLUMN_PRESETS, INVOICE_COLUMNS, InvoiceColumnKey, resolveColumnConfig } from '@/lib/invoiceColumns';
@@ -18,20 +17,18 @@ export interface ProjectData {
   startDate: string | null;
   projectType: string | null;
   leadDesignerName: string | null;
-  feeStructure: string;
+  designFeeStructure: string | null;
   feeNotes: string | null;
-  defaultMarkupPct: string;
-  markupMode: string;
-  salesTaxRate: string;
-  taxBase: string;
   invoicePrefix: string | null;
   defaultInvoiceColumnConfig: { columns: string[] } | null;
   client: {
     id: string;
     name: string;
+    contactName: string | null;
     email: string | null;
     phone: string | null;
     billingAddress: string | null;
+    contacts: { name: string | null; email: string | null; phone: string | null }[];
   };
 }
 
@@ -48,11 +45,11 @@ export interface DesignFeeFinancials {
 }
 
 const STATUSES = ['LEAD', 'ACTIVE', 'ON_HOLD', 'COMPLETE'];
-const FEE_STRUCTURES = ['FLAT_FEE', 'HOURLY', 'COST_PLUS', 'HYBRID'];
 
 export default function ProjectHeader({
   project,
   projectTypeOptions,
+  designFeeStructureOptions,
   canViewClientContact,
   canViewFinancials,
   merchandise,
@@ -63,6 +60,7 @@ export default function ProjectHeader({
 }: {
   project: ProjectData;
   projectTypeOptions: string[];
+  designFeeStructureOptions: string[];
   canViewClientContact: boolean;
   canViewFinancials: boolean;
   merchandise: MerchandiseFinancials;
@@ -86,23 +84,35 @@ export default function ProjectHeader({
     startDate: project.startDate ? project.startDate.slice(0, 10) : '',
     projectType: project.projectType ?? '',
     leadDesignerName: project.leadDesignerName ?? '',
-    feeStructure: project.feeStructure,
+    designFeeStructure: project.designFeeStructure ?? '',
     feeNotes: project.feeNotes ?? '',
-    defaultMarkupPct: project.defaultMarkupPct,
-    markupMode: project.markupMode,
-    salesTaxRate: project.salesTaxRate,
-    taxBase: project.taxBase,
     invoicePrefix: project.invoicePrefix ?? '',
   });
   const [invoiceColumns, setInvoiceColumns] = useState<string[] | null>(project.defaultInvoiceColumnConfig?.columns ?? null);
   const [clientForm, setClientForm] = useState({
     name: project.client.name,
+    contactName: project.client.contactName ?? '',
     email: project.client.email ?? '',
     phone: project.client.phone ?? '',
     billingAddress: project.client.billingAddress ?? '',
   });
+  const [additionalContacts, setAdditionalContacts] = useState(
+    project.client.contacts.map((c) => ({ name: c.name ?? '', email: c.email ?? '', phone: c.phone ?? '' }))
+  );
   const [savingClient, setSavingClient] = useState(false);
   const [clientError, setClientError] = useState<string | null>(null);
+
+  function addContactRow() {
+    setAdditionalContacts((prev) => [...prev, { name: '', email: '', phone: '' }]);
+  }
+
+  function updateContactRow(index: number, patch: Partial<{ name: string; email: string; phone: string }>) {
+    setAdditionalContacts((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+  }
+
+  function removeContactRow(index: number) {
+    setAdditionalContacts((prev) => prev.filter((_, i) => i !== index));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -138,7 +148,7 @@ export default function ProjectHeader({
     const res = await fetch(`/api/clients/${project.client.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(clientForm),
+      body: JSON.stringify({ ...clientForm, contacts: additionalContacts }),
     });
 
     setSavingClient(false);
@@ -199,21 +209,8 @@ export default function ProjectHeader({
           <dd className="font-medium">{project.leadDesignerName || '—'}</dd>
         </div>
         <div>
-          <dt className="text-brown/50">Fee Structure</dt>
-          <dd className="font-medium">{project.feeStructure.replace('_', ' ')}</dd>
-        </div>
-        <div>
-          <dt className="text-brown/50">Default Markup</dt>
-          <dd className="font-medium">
-            {formatPercent(project.defaultMarkupPct)} ({project.markupMode.toLowerCase()})
-          </dd>
-        </div>
-        <div>
-          <dt className="text-brown/50">Sales Tax</dt>
-          <dd className="font-medium">
-            {formatPercentFromFraction(project.salesTaxRate)} on{' '}
-            {project.taxBase === 'MERCH_PLUS_SHIPPING' ? 'merch + shipping' : 'merch only'}
-          </dd>
+          <dt className="text-brown/50">Design Fee Structure</dt>
+          <dd className="font-medium">{project.designFeeStructure || '—'}</dd>
         </div>
         <div>
           <dt className="text-brown/50">Invoice Prefix</dt>
@@ -235,20 +232,35 @@ export default function ProjectHeader({
               Edit
             </button>
           </div>
-          <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-            <div>
-              <dt className="text-brown/50">Email</dt>
-              <dd className="font-medium">{project.client.email || '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-brown/50">Phone</dt>
-              <dd className="font-medium">{project.client.phone || '—'}</dd>
-            </div>
+          <dl className="mb-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
             <div>
               <dt className="text-brown/50">Billing Address</dt>
               <dd className="font-medium">{project.client.billingAddress || '—'}</dd>
             </div>
           </dl>
+          <table className="min-w-full text-sm">
+            <thead className="text-left text-xs uppercase tracking-[0.24em] text-taupe">
+              <tr>
+                <th className="py-1 pr-4">Name</th>
+                <th className="py-1 pr-4">Email</th>
+                <th className="py-1">Phone</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-taupe/20">
+              <tr>
+                <td className="py-1.5 pr-4 font-medium">{project.client.contactName || '—'}</td>
+                <td className="py-1.5 pr-4">{project.client.email || '—'}</td>
+                <td className="py-1.5">{project.client.phone || '—'}</td>
+              </tr>
+              {project.client.contacts.map((c, i) => (
+                <tr key={i}>
+                  <td className="py-1.5 pr-4 font-medium">{c.name || '—'}</td>
+                  <td className="py-1.5 pr-4">{c.email || '—'}</td>
+                  <td className="py-1.5">{c.phone || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -273,7 +285,23 @@ export default function ProjectHeader({
             </dl>
           </div>
 
-          <DesignFeeSection projectId={project.id} summary={designFee} />
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase tracking-[0.24em] text-taupe">Design Fee</p>
+            <dl className="grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <dt className="text-brown/50">Billed</dt>
+                <dd className="tabular-nums font-medium">{formatMoney(designFee.billed)}</dd>
+              </div>
+              <div>
+                <dt className="text-brown/50">Paid</dt>
+                <dd className="tabular-nums font-medium">{formatMoney(designFee.paid)}</dd>
+              </div>
+              <div>
+                <dt className="text-brown/50">Outstanding</dt>
+                <dd className="tabular-nums font-medium text-brown">{formatMoney(designFee.outstanding)}</dd>
+              </div>
+            </dl>
+          </div>
         </div>
       )}
 
@@ -340,18 +368,19 @@ export default function ProjectHeader({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Fee Structure</label>
-                <select
+                <label className="mb-1 block text-sm font-medium text-brown">Design Fee Structure</label>
+                <input
                   className="input"
-                  value={form.feeStructure}
-                  onChange={(e) => setForm({ ...form, feeStructure: e.target.value })}
-                >
-                  {FEE_STRUCTURES.map((f) => (
-                    <option key={f} value={f}>
-                      {f.replace('_', ' ')}
-                    </option>
+                  list="design-fee-structure-options"
+                  placeholder="e.g. Fixed Fee"
+                  value={form.designFeeStructure}
+                  onChange={(e) => setForm({ ...form, designFeeStructure: e.target.value })}
+                />
+                <datalist id="design-fee-structure-options">
+                  {designFeeStructureOptions.map((f) => (
+                    <option key={f} value={f} />
                   ))}
-                </select>
+                </datalist>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-brown">Invoice Prefix</label>
@@ -361,40 +390,6 @@ export default function ProjectHeader({
                   value={form.invoicePrefix}
                   onChange={(e) => setForm({ ...form, invoicePrefix: e.target.value })}
                 />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Default Markup %</label>
-                <input
-                  type="number"
-                  step="0.001"
-                  className="input"
-                  value={form.defaultMarkupPct}
-                  onChange={(e) => setForm({ ...form, defaultMarkupPct: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Markup Mode</label>
-                <select className="input" value={form.markupMode} onChange={(e) => setForm({ ...form, markupMode: e.target.value })}>
-                  <option value="MARKUP">Markup %</option>
-                  <option value="MARGIN">Margin %</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Sales Tax Rate (e.g. 0.07)</label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  className="input"
-                  value={form.salesTaxRate}
-                  onChange={(e) => setForm({ ...form, salesTaxRate: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Tax Base</label>
-                <select className="input" value={form.taxBase} onChange={(e) => setForm({ ...form, taxBase: e.target.value })}>
-                  <option value="MERCH_ONLY">Merchandise only</option>
-                  <option value="MERCH_PLUS_SHIPPING">Merchandise + shipping</option>
-                </select>
               </div>
               <div className="col-span-2">
                 <label className="mb-1 block text-sm font-medium text-brown">Fee Notes</label>
@@ -462,34 +457,17 @@ export default function ProjectHeader({
       )}
 
       {showClientForm && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <form onSubmit={handleClientSubmit} className="card w-full max-w-md space-y-4 p-6">
+        <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
+          <form onSubmit={handleClientSubmit} className="card w-full max-w-lg space-y-4 p-6">
             <h2 className="text-lg font-medium text-brown">Edit Client Contact</h2>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Name</label>
+              <label className="mb-1 block text-sm font-medium text-brown">Client Name</label>
               <input
                 className="input"
                 required
                 value={clientForm.name}
                 onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Email</label>
-              <input
-                type="email"
-                className="input"
-                value={clientForm.email}
-                onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Phone</label>
-              <input
-                className="input"
-                value={clientForm.phone}
-                onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })}
               />
             </div>
             <div>
@@ -500,6 +478,70 @@ export default function ProjectHeader({
                 value={clientForm.billingAddress}
                 onChange={(e) => setClientForm({ ...clientForm, billingAddress: e.target.value })}
               />
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-brown">Points of Contact</p>
+              <div className="space-y-2 rounded-md border border-taupe/40 p-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    className="input"
+                    placeholder="Name"
+                    value={clientForm.contactName}
+                    onChange={(e) => setClientForm({ ...clientForm, contactName: e.target.value })}
+                  />
+                  <input
+                    type="email"
+                    className="input"
+                    placeholder="Email"
+                    value={clientForm.email}
+                    onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })}
+                  />
+                  <input
+                    className="input"
+                    placeholder="Phone"
+                    value={clientForm.phone}
+                    onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })}
+                  />
+                </div>
+                {additionalContacts.map((c, i) => (
+                  <div key={i} className="grid grid-cols-3 gap-2">
+                    <input
+                      className="input"
+                      placeholder="Name"
+                      value={c.name}
+                      onChange={(e) => updateContactRow(i, { name: e.target.value })}
+                    />
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="email"
+                        className="input"
+                        placeholder="Email"
+                        value={c.email}
+                        onChange={(e) => updateContactRow(i, { email: e.target.value })}
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <input
+                        className="input"
+                        placeholder="Phone"
+                        value={c.phone}
+                        onChange={(e) => updateContactRow(i, { phone: e.target.value })}
+                      />
+                      <button
+                        type="button"
+                        className="text-red-700 hover:text-red-900"
+                        onClick={() => removeContactRow(i)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className="text-sm text-brown hover:text-gold" onClick={addContactRow}>
+                  + Add Contact
+                </button>
+              </div>
             </div>
 
             {clientError && <p className="text-sm text-red-700">{clientError}</p>}

@@ -11,7 +11,7 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
   const session = await getServerSession(authOptions);
   const perms = await resolvePermissions(session);
 
-  const [vendorRaw, offerings, activeProjects] = await Promise.all([
+  const [vendorRaw, offerings, itemTypeOptions, activeProjects] = await Promise.all([
     prisma.vendor.findUnique({
       where: { id: params.id },
       select: {
@@ -35,6 +35,7 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
       },
     }),
     prisma.offering.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
+    prisma.itemTypeOption.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
     prisma.project.findMany({ where: { status: 'ACTIVE' }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
   ]);
 
@@ -54,6 +55,7 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
       <VendorDetailTabs
         vendor={vendor}
         offeringOptions={offerings.map((o) => ({ id: o.id, name: o.name }))}
+        itemTypeOptions={itemTypeOptions.map((t) => ({ id: t.id, category: t.category, name: t.name }))}
         activeProjects={activeProjects}
         canViewCredentials={perms.vendorCredentials}
       />

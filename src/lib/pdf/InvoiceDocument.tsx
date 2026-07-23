@@ -22,10 +22,12 @@ export interface InvoicePdfItem {
   platformFee: string;
   markupPct: string | null;
   markupMode: 'MARKUP' | 'MARGIN' | null;
+  imageUrl: string | null;
 }
 
 export interface InvoicePdfProps {
   invoiceNumber: string;
+  documentLabel: string;
   status: string;
   issuedDate: string | null;
   dueDate: string | null;
@@ -78,7 +80,7 @@ export function InvoiceDocument(props: InvoicePdfProps) {
       projectDefaultMarkupPct: props.project.defaultMarkupPct,
       projectMarkupMode: props.project.markupMode,
     });
-    const row: Record<InvoiceColumnKey, string> = {
+    const row: Record<Exclude<InvoiceColumnKey, 'image'>, string> = {
       tag: item.tag,
       description: item.invoiceDisplayName || item.name,
       qty: String(item.qty),
@@ -86,7 +88,7 @@ export function InvoiceDocument(props: InvoicePdfProps) {
       unitPrice: formatMoney(line.unitPrice),
       extended: formatMoney(line.extended),
     };
-    return { room: item.room || 'Other', row, extended: line.extended };
+    return { room: item.room || 'Other', row, extended: line.extended, imageUrl: item.imageUrl };
   });
 
   const totals = computeInvoiceTotals({
@@ -109,8 +111,9 @@ export function InvoiceDocument(props: InvoicePdfProps) {
     metaValue: { fontSize: 10, marginBottom: 6 },
     roomHeading: { backgroundColor: accent, color: '#ffffff', padding: 4, marginTop: 10, fontWeight: 'bold', fontSize: 9, textTransform: 'uppercase' },
     tableHeader: { flexDirection: 'row', borderBottom: `1pt solid ${primary}`, paddingBottom: 4, marginTop: 4 },
-    tableRow: { flexDirection: 'row', paddingVertical: 4, borderBottom: '0.5pt solid #e0dcd4' },
+    tableRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, borderBottom: '0.5pt solid #e0dcd4' },
     cell: { fontSize: 9 },
+    thumb: { width: 28, height: 28, objectFit: 'cover', borderRadius: 2 },
     totalsBlock: { marginTop: 20, alignSelf: 'flex-end', width: 220 },
     totalsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
     grandTotalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 6, marginTop: 4, borderTop: `1pt solid ${primary}`, fontWeight: 'bold' },
@@ -120,6 +123,7 @@ export function InvoiceDocument(props: InvoicePdfProps) {
 
   const colWidth = (col: InvoiceColumnKey) => {
     if (col === 'description') return 3;
+    if (col === 'image') return 0.6;
     if (col === 'tag') return 1;
     return 1;
   };
@@ -150,7 +154,9 @@ export function InvoiceDocument(props: InvoicePdfProps) {
           </View>
         </View>
 
-        <Text style={styles.pageTitle}>Invoice {props.invoiceNumber}</Text>
+        <Text style={styles.pageTitle}>
+          {props.documentLabel} {props.invoiceNumber}
+        </Text>
 
         <View style={styles.metaBlock}>
           <View>
@@ -183,11 +189,18 @@ export function InvoiceDocument(props: InvoicePdfProps) {
               .filter((p) => p.room === room)
               .map((p, i) => (
                 <View key={i} style={styles.tableRow}>
-                  {columns.map((col) => (
-                    <Text key={col} style={[styles.cell, { flex: colWidth(col) }]}>
-                      {p.row[col]}
-                    </Text>
-                  ))}
+                  {columns.map((col) =>
+                    col === 'image' ? (
+                      <View key={col} style={{ flex: colWidth(col) }}>
+                        {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                        {p.imageUrl && <Image src={p.imageUrl} style={styles.thumb} />}
+                      </View>
+                    ) : (
+                      <Text key={col} style={[styles.cell, { flex: colWidth(col) }]}>
+                        {p.row[col]}
+                      </Text>
+                    )
+                  )}
                 </View>
               ))}
           </View>

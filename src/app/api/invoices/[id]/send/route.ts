@@ -15,16 +15,18 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const perms = await resolvePermissions(session);
-  if (!perms.invoices) {
-    return NextResponse.json({ error: 'You do not have permission to send invoices' }, { status: 403 });
-  }
-
   const invoice = await prisma.invoice.findUnique({
     where: { id: params.id },
-    include: { items: true, project: { include: { client: true } } },
+    include: { items: true, designFeeCharges: true, project: { include: { client: true } } },
   });
   if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const perms = await resolvePermissions(session);
+  const allowed = invoice.type === 'DESIGN_FEE' ? perms.financials : perms.invoices;
+  if (!allowed) {
+    return NextResponse.json({ error: 'You do not have permission to send this invoice' }, { status: 403 });
+  }
+
   if (invoice.status === 'VOID') {
     return NextResponse.json({ error: 'This invoice has been voided and cannot be sent' }, { status: 409 });
   }
@@ -46,14 +48,17 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 
   const settings = await prisma.settings.findUnique({ where: { id: 1 } });
 
-  const extendedPrices = invoice.items.map(
-    (item) =>
-      priceLine({
-        ...item,
-        projectDefaultMarkupPct: invoice.project.defaultMarkupPct,
-        projectMarkupMode: invoice.project.markupMode,
-      }).extended
-  );
+  const extendedPrices =
+    invoice.type === 'DESIGN_FEE'
+      ? invoice.designFeeCharges.map((c) => c.amount)
+      : invoice.items.map(
+          (item) =>
+            priceLine({
+              ...item,
+              projectDefaultMarkupPct: invoice.project.defaultMarkupPct,
+              projectMarkupMode: invoice.project.markupMode,
+            }).extended
+        );
   const totals = computeInvoiceTotals({
     extendedPrices,
     shippingTotal: invoice.shippingTotal,
@@ -69,6 +74,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       clientName: invoice.project.client.name,
       companyName: settings?.companyName ?? 'Design Firm Ops',
       invoiceNumber: invoice.invoiceNumber,
+      documentLabel: invoice.type === 'DESIGN_FEE' ? 'Design Fee Invoice' : 'Invoice',
       grandTotal: formatMoney(totals.grandTotal),
       dueDate: invoice.dueDate ? invoice.dueDate.toLocaleDateString() : null,
       portalUrl: `${appUrl}/portal/invoice/${portalToken}`,

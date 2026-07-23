@@ -4,6 +4,9 @@ import { requireSession } from '@/lib/apiAuth';
 import { itemUpdateSchema } from '@/lib/validation';
 import { resolvePermissions } from '@/lib/permissions';
 import { isItemLocked, lockedItemMessage } from '@/lib/itemLock';
+import { findOrCreateItemType } from '@/lib/itemType';
+import { nextItemTag } from '@/lib/itemTag';
+import { findOrCreateRoom } from '@/lib/room';
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const { session, unauthorized } = await requireSession();
@@ -23,7 +26,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const existing = await prisma.item.findUnique({ where: { id: params.id }, include: { invoice: true } });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const { unlockOverride, vendorId, offeringId, procurementListId, ...rest } = parsed.data;
+  const { unlockOverride, vendorId, itemType, procurementListId, tag, ...rest } = parsed.data;
 
   if (isItemLocked(existing)) {
     if (!unlockOverride) {
@@ -34,13 +37,29 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
   }
 
+  const itemTypeId =
+    itemType !== undefined ? await findOrCreateItemType(rest.category ?? existing.category, itemType) : undefined;
+
+  if (rest.room) await findOrCreateRoom(existing.projectId, rest.room);
+
+  // A blank tag auto-fills the moment an item type is set — matches
+  // the same rule as item creation — but never overwrites a tag
+  // that's already been typed in.
+  const resolvedTag =
+    tag !== undefined
+      ? tag
+      : itemTypeId && !existing.tag
+        ? (await nextItemTag(existing.projectId, itemTypeId)) ?? undefined
+        : undefined;
+
   const item = await prisma.item.update({
     where: { id: params.id },
     data: {
       ...rest,
       ...(vendorId !== undefined ? { vendorId: vendorId || null } : {}),
-      ...(offeringId !== undefined ? { offeringId: offeringId || null } : {}),
+      ...(itemTypeId !== undefined ? { itemTypeId } : {}),
       ...(procurementListId !== undefined ? { procurementListId: procurementListId || null } : {}),
+      ...(resolvedTag !== undefined ? { tag: resolvedTag } : {}),
     },
   });
   return NextResponse.json(item);

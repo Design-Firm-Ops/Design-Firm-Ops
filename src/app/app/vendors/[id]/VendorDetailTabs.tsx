@@ -43,11 +43,13 @@ function PasswordReveal({ vendorId }: { vendorId: string }) {
 export default function VendorDetailTabs({
   vendor,
   offeringOptions,
+  itemTypeOptions,
   activeProjects,
   canViewCredentials,
 }: {
   vendor: VendorRow;
   offeringOptions: { id: string; name: string }[];
+  itemTypeOptions: { id: string; category: string; name: string }[];
   activeProjects: { id: string; name: string }[];
   canViewCredentials: boolean;
 }) {
@@ -193,7 +195,7 @@ export default function VendorDetailTabs({
         <AddItemToProjectModal
           vendorId={vendor.id}
           activeProjects={activeProjects}
-          offeringOptions={offeringOptions}
+          itemTypeOptions={itemTypeOptions}
           onClose={() => setShowAddItem(false)}
           onCreated={() => {
             setShowAddItem(false);

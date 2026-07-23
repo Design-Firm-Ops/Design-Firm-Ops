@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
 import { resolvePermissions } from '@/lib/permissions';
 import { renderInvoicePdf } from '@/lib/pdf/renderInvoicePdf';
@@ -7,9 +8,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
+  const invoice = await prisma.invoice.findUnique({ where: { id: params.id }, select: { type: true } });
+  if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
   const perms = await resolvePermissions(session);
-  if (!perms.invoices) {
-    return NextResponse.json({ error: 'You do not have permission to view invoices' }, { status: 403 });
+  const allowed = invoice.type === 'DESIGN_FEE' ? perms.financials : perms.invoices;
+  if (!allowed) {
+    return NextResponse.json({ error: 'You do not have permission to view this invoice' }, { status: 403 });
   }
 
   const result = await renderInvoicePdf(params.id);

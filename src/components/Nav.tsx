@@ -9,7 +9,7 @@ const links = [
   { href: '/app/projects', label: 'Projects' },
   { href: '/app/business-development', label: 'Business Development' },
   { href: '/app/vendors', label: 'Vendors' },
-  { href: '/app/administration', label: 'Administration' },
+  { href: '/app/administration', label: 'Documents' },
   { href: '/app/settings', label: 'Settings' },
 ];
 

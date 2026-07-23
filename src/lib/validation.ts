@@ -1,11 +1,22 @@
 import { z } from 'zod';
 
+// Additional points of contact beyond the primary name/email/phone on
+// Client itself — the whole array replaces a client's existing rows on
+// save, same "full replace" pattern as folder allow-lists.
+export const clientContactRowSchema = z.object({
+  name: z.string().optional().or(z.literal('')),
+  email: z.string().email().optional().or(z.literal('')),
+  phone: z.string().optional().or(z.literal('')),
+});
+
 export const clientSchema = z.object({
   name: z.string().min(1, 'Name is required'),
+  contactName: z.string().optional().or(z.literal('')),
   email: z.string().email().optional().or(z.literal('')),
   phone: z.string().optional().or(z.literal('')),
   billingAddress: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
+  contacts: z.array(clientContactRowSchema).optional(),
 });
 
 export const vendorSchema = z.object({
@@ -36,7 +47,10 @@ export const projectSchema = z.object({
   startDate: z.string().optional().or(z.literal('')),
   projectType: z.string().optional().or(z.literal('')),
   leadDesignerName: z.string().optional().or(z.literal('')),
-  feeStructure: z.enum(['FLAT_FEE', 'HOURLY', 'COST_PLUS', 'HYBRID']).default('COST_PLUS'),
+  // Free text — resolved to a FeeStructureOption row (creating a new
+  // custom option if it doesn't exist yet). See lib/feeStructure.ts.
+  designFeeStructure: z.string().optional().or(z.literal('')),
+  procurementFeeStructure: z.string().optional().or(z.literal('')),
   feeNotes: z.string().optional().or(z.literal('')),
   defaultMarkupPct: z.coerce.number().min(0).max(1000).default(15),
   markupMode: z.enum(['MARKUP', 'MARGIN']).default('MARKUP'),
@@ -54,22 +68,36 @@ export const projectSchema = z.object({
 
 export const itemSchema = z.object({
   projectId: z.string().min(1),
-  tag: z.string().min(1, 'Tag is required'),
+  // Left blank on creation until an item type is chosen, which
+  // auto-fills it — see lib/itemTag.ts.
+  tag: z.string().optional().or(z.literal('')),
   name: z.string().min(1, 'Name is required'),
   invoiceDisplayName: z.string().optional().or(z.literal('')),
-  category: z
-    .enum(['LIGHTING', 'FURNITURE', 'PLUMBING', 'HARDWARE', 'TEXTILES', 'ART', 'ACCESSORIES', 'APPLIANCES', 'OTHER'])
-    .default('OTHER'),
+  // Free text — matches this project's Procurement list names, see
+  // Item.category comment in schema.prisma.
+  category: z.string().min(1).default('Other Merchandise'),
+  // Free text, resolved to an ItemTypeOption row (creating a new
+  // custom type if it doesn't exist yet) scoped under category — see
+  // lib/itemType.ts.
+  itemType: z.string().optional().or(z.literal('')),
   room: z.string().optional().or(z.literal('')),
   vendorId: z.string().optional().or(z.literal('')),
-  offeringId: z.string().optional().or(z.literal('')),
   procurementListId: z.string().optional().or(z.literal('')),
   qty: z.coerce.number().int().min(1).default(1),
   unitCost: z.coerce.number().min(0),
   platformFee: z.coerce.number().min(0).default(0),
   markupPct: z.coerce.number().min(0).max(1000).nullable().optional(),
   markupMode: z.enum(['MARKUP', 'MARGIN']).nullable().optional(),
-  dimensions: z.string().optional().or(z.literal('')),
+  dimensionHeight: z.coerce.number().min(0).nullable().optional(),
+  dimensionWidth: z.coerce.number().min(0).nullable().optional(),
+  dimensionLength: z.coerce.number().min(0).nullable().optional(),
+  dimensionUnit: z.enum(['IN', 'CM']).default('IN'),
+  weight: z.coerce.number().min(0).nullable().optional(),
+  bulbSpec: z.string().optional().or(z.literal('')),
+  bulbQty: z.coerce.number().int().min(0).nullable().optional(),
+  // Tri-state: null/omitted = not yet reviewed, true = included, false
+  // = confirmed not included (only "false" rows feed the Bulbs summary).
+  bulbIncluded: z.boolean().nullable().optional(),
   finish: z.string().optional().or(z.literal('')),
   link: z.string().optional().or(z.literal('')),
   shippingNotes: z.string().optional().or(z.literal('')),
@@ -110,6 +138,18 @@ export const permissionsSchema = z.object({
   designerCanViewVendorCredentials: z.boolean(),
 });
 
+// A field left out (or set to null) means "inherit the Designer role
+// default" for that one person — see lib/permissions.ts.
+export const userPermissionOverrideSchema = z.object({
+  financials: z.boolean().nullable().optional(),
+  clientContact: z.boolean().nullable().optional(),
+  documentsPresentations: z.boolean().nullable().optional(),
+  contracts: z.boolean().nullable().optional(),
+  invoices: z.boolean().nullable().optional(),
+  procurement: z.boolean().nullable().optional(),
+  vendorCredentials: z.boolean().nullable().optional(),
+});
+
 export const paymentSchema = z.object({
   projectId: z.string().min(1),
   invoiceId: z.string().optional().or(z.literal('')),
@@ -125,7 +165,16 @@ export const paymentUpdateSchema = paymentSchema.partial().omit({ projectId: tru
 
 export const invoiceCreateSchema = z.object({
   projectId: z.string().min(1),
-  itemIds: z.array(z.string()).min(1, 'Select at least one item'),
+  type: z.enum(['PROCUREMENT', 'DESIGN_FEE']).default('PROCUREMENT'),
+  // Exactly one of itemIds/designFeeChargeIds is used, depending on
+  // type — see /api/invoices POST. newDesignFeeCharges (DESIGN_FEE
+  // only) are created as DesignFeeCharge rows and attached in the same
+  // request — this is how "billing" and "invoicing" merge into one step.
+  itemIds: z.array(z.string()).default([]),
+  designFeeChargeIds: z.array(z.string()).default([]),
+  newDesignFeeCharges: z
+    .array(z.object({ description: z.string().min(1), amount: z.coerce.number().positive() }))
+    .default([]),
   shippingTotal: z.coerce.number().min(0).default(0),
   taxRate: z.coerce.number().min(0).max(1).optional(),
   taxBase: z.enum(['MERCH_ONLY', 'MERCH_PLUS_SHIPPING']).optional(),
@@ -225,6 +274,16 @@ export const offeringSchema = z.object({
   name: z.string().min(1, 'Name is required'),
 });
 
+export const feeStructureOptionSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  scope: z.enum(['DESIGN_FEE', 'PROCUREMENT']),
+});
+
+export const itemTypeCreateSchema = z.object({
+  category: z.string().min(1, 'Category is required'),
+  name: z.string().min(1, 'Name is required'),
+});
+
 export const procurementListSchema = z.object({
   projectId: z.string().min(1),
   name: z.string().min(1, 'Name is required'),
@@ -260,5 +319,10 @@ export const fieldValueSchema = z.object({
 
 export const documentFolderSchema = z.object({
   projectId: z.string().min(1),
-  folder: z.string().min(1, 'Folder is required'),
+  name: z.string().min(1, 'Folder name is required'),
+});
+
+export const documentFolderUpdateSchema = z.object({
+  name: z.string().min(1).optional(),
+  order: z.number().int().optional(),
 });

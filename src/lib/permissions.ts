@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 /**
  * Resolved, ready-to-render visibility flags for the current session.
  * ADMIN always sees everything; DESIGNER is gated by the toggles an
- * admin sets on Administration > Permissions (Settings.designerCanView*).
+ * admin sets on Settings > Permissions (Settings.designerCanView*).
  */
 export interface ResolvedPermissions {
   isAdmin: boolean;
@@ -35,15 +35,24 @@ export async function resolvePermissions(session: Session | null): Promise<Resol
     };
   }
 
-  const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+  const [settings, override] = await Promise.all([
+    prisma.settings.findUnique({ where: { id: 1 } }),
+    session?.user?.id
+      ? prisma.userPermissionOverride.findUnique({ where: { userId: session.user.id } })
+      : Promise.resolve(null),
+  ]);
+
+  // A per-user override (set on Settings > Permissions) wins when
+  // present; null on any field falls back to the Designer role default.
   return {
     isAdmin: false,
-    financials: settings?.designerCanViewFinancials ?? false,
-    clientContact: settings?.designerCanViewClientContact ?? true,
-    documentsPresentations: settings?.designerCanViewDocumentsPresentations ?? true,
-    contracts: settings?.designerCanViewContracts ?? true,
-    invoices: settings?.designerCanViewInvoices ?? true,
-    procurement: settings?.designerCanViewProcurement ?? true,
-    vendorCredentials: settings?.designerCanViewVendorCredentials ?? false,
+    financials: override?.financials ?? settings?.designerCanViewFinancials ?? false,
+    clientContact: override?.clientContact ?? settings?.designerCanViewClientContact ?? true,
+    documentsPresentations:
+      override?.documentsPresentations ?? settings?.designerCanViewDocumentsPresentations ?? true,
+    contracts: override?.contracts ?? settings?.designerCanViewContracts ?? true,
+    invoices: override?.invoices ?? settings?.designerCanViewInvoices ?? true,
+    procurement: override?.procurement ?? settings?.designerCanViewProcurement ?? true,
+    vendorCredentials: override?.vendorCredentials ?? settings?.designerCanViewVendorCredentials ?? false,
   };
 }
