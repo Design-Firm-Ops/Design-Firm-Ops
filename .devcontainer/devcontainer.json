@@ -21,7 +21,13 @@
     }
   },
   "remoteEnv": {
-    "NODE_OPTIONS": "--max-old-space-size=4096"
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    // In-container OAuth login fails ("failed to retrieve auth status") because
+    // the browser redirect can't reach the container's local callback. Instead,
+    // run `claude setup-token` on the HOST and export CLAUDE_CODE_OAUTH_TOKEN
+    // there; the container inherits it and Claude Code authenticates with no
+    // interactive login. Empty if unset — harmless.
+    "CLAUDE_CODE_OAUTH_TOKEN": "${localEnv:CLAUDE_CODE_OAUTH_TOKEN}"
   },
   // Fix ~/.claude ownership on every start (self-heals a root-owned named
   // volume), then install deps on first create.

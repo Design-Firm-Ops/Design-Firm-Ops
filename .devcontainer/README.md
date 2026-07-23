@@ -30,6 +30,34 @@ claude --dangerously-skip-permissions
 yolo
 ```
 
+### Authentication
+
+Interactive `claude` login inside the container fails with **"failed to retrieve
+auth status"** — the OAuth browser redirect can't reach the container's local
+callback server (expected for headless containers). Authenticate with a token
+instead:
+
+1. On your **host** machine (where a browser works), run:
+
+   ```bash
+   claude setup-token
+   ```
+
+   Complete the browser login; it prints a long-lived (1-year) token.
+
+2. Export it on the host **before** launching / rebuilding the container:
+
+   ```bash
+   export CLAUDE_CODE_OAUTH_TOKEN=<token>
+   ```
+
+   `devcontainer.json` passes it through via `remoteEnv`, so Claude Code inside
+   the container authenticates with no interactive login.
+
+To make it stick across terminals, add that `export` to your host shell profile
+(`~/.bashrc` / `~/.zshrc`). Alternatively set `ANTHROPIC_API_KEY` on the host the
+same way to use an API key instead of a subscription token.
+
 ## Database
 
 The app container sets `DATABASE_URL` to point at the `db` service
