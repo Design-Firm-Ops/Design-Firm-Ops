@@ -101,3 +101,21 @@ Verification:
 
 ## Branch / PR
 Branch `josephditton/des-35-...` off `main`; PR referencing DES-35 targeting `main`.
+
+## Addendum — database provisioning in `setup.mjs`
+Follow-up on the same branch/PR: rather than only prompting for a `DATABASE_URL`, the
+setup script now **detects a local Postgres and can create the database for you**.
+
+- Detects `psql` on PATH. If absent, prints install guidance and falls back to prompting
+  for a `DATABASE_URL` (unchanged behavior).
+- Prompts for an admin/superuser connection (host, port, role, password — blank allows
+  peer/trust) used only to run the `CREATE`s, then for the new **database name** and a
+  dedicated **app role** + password (password can be auto-generated).
+- Creates a **least-privilege app role** and a database it owns, idempotently
+  (`ALTER ROLE ... PASSWORD` if the role exists, else `CREATE ROLE`; `CREATE DATABASE`
+  only if missing). The app connects as that role, not the superuser. Any failure
+  (auth, permissions, connectivity) falls back to manual `DATABASE_URL` entry.
+- Pure helpers (`buildDatabaseUrl`, `isSafePgIdentifier`) live in `scripts/pg.mjs` and are
+  unit-tested (`scripts/pg.test.ts`); the Vitest `unit` project now also includes
+  `scripts/**/*.test.ts`. Identifiers are validated (letters/digits/underscore) so they're
+  safe to interpolate into DDL; the password is passed as an escaped SQL literal.

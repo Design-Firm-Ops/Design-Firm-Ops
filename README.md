@@ -21,8 +21,9 @@ Next.js application backed by Postgres and Supabase Storage.
 
 - **Node.js 20+** (developed on Node 24; [.nvmrc](.nvmrc) pins 24.18.0 — run `nvm use`)
 - A **Postgres** database — a standalone Postgres you run yourself (local install,
-  Docker, or a hosted provider). Supabase is **not** used for the database; `npm run
-  setup` prompts for its `DATABASE_URL`.
+  Docker, or a hosted provider). Supabase is **not** used for the database. If a local
+  Postgres is installed, `npm run setup` can create a dedicated database + app user for
+  you; otherwise it takes a `DATABASE_URL` you provide.
 - **Docker** — only if you use `npm run setup` to provision a local **Supabase Storage**
   stack (the Supabase CLI runs the services in containers). Not needed if you point at a
   hosted Supabase project for storage.
@@ -44,7 +45,9 @@ npm run setup
 The script walks you through a full first-run setup:
 
 - Verifies your Node version.
-- **Prompts for your `DATABASE_URL`** — a standalone Postgres you run yourself.
+- **Sets up your database** — detects a local Postgres (`psql`) and offers to create a
+  dedicated database + app role (connecting as an admin/superuser to run the `CREATE`s),
+  or prompts for a `DATABASE_URL` if you'd rather use an existing database.
 - **Provisions a local Supabase Storage stack** via the Supabase CLI (`supabase
   start`) and pulls its API URL and keys straight into `.env`. This needs **Docker**
   running; if you'd rather point at a hosted Supabase project, pass `--no-supabase`
