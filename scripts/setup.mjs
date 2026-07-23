@@ -270,9 +270,9 @@ async function setupDatabaseEnv(env) {
   const askUrl = async () =>
     setEnvVar(env, 'DATABASE_URL', await prompt('DATABASE_URL', getEnvVar(env, 'DATABASE_URL')));
 
-  // Non-interactive: keep it side-effect-free, just take the default URL.
-  if (AUTO) return askUrl();
-
+  // In --yes mode this runs non-interactively with the defaults (localhost,
+  // postgres admin, design_firm_ops / dfo_app), attempting creation; any
+  // failure (no psql, auth, permissions) falls back to the default DATABASE_URL.
   const psql = resolvePsql();
   if (!psql) {
     warn('psql not found on PATH — cannot create a database automatically.');
