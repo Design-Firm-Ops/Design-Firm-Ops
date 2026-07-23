@@ -9,16 +9,17 @@
 //
 // What it does:
 //   1. Verifies Node 20+.
-//   2. Builds .env interactively — provisions a local Supabase dev stack
-//      (via the Supabase CLI) and pulls its database URL + API keys in,
-//      generates the secret values, and prompts for the rest.
+//   2. Builds .env interactively — prompts for your standalone Postgres
+//      DATABASE_URL, provisions a local Supabase *Storage* stack (via the
+//      Supabase CLI) and pulls its API URL + keys in, generates the secret
+//      values, and prompts for the rest.
 //   3. Installs dependencies and generates the Prisma client.
 //   4. Applies migrations and (optionally) seeds demo data.
 //
 // Flags:
 //   --yes           Accept defaults for every prompt (non-interactive).
-//   --no-supabase   Don't provision local Supabase; prompt for DB/keys instead.
-//   --skip-db       Skip Supabase provisioning, migrations, and seed.
+//   --no-supabase   Don't provision the local Supabase Storage stack; prompt for its keys instead.
+//   --skip-db       Skip the storage stack, migrations, and seed.
 //   --skip-seed     Run migrations but skip seeding.
 
 import { randomBytes } from 'node:crypto';
@@ -134,13 +135,15 @@ function supabase(args, opts) {
   return exec(cmd[0], [...cmd.slice(1), ...args], opts);
 }
 
-// Provision a local Supabase stack and return its connection details, or
+// Provision a local Supabase Storage stack and return its API URL + keys, or
 // null if provisioning was skipped or failed (caller falls back to prompts).
+// The database is a separate standalone Postgres — we no longer read Supabase's
+// embedded Postgres URL here.
 async function provisionSupabase() {
   if (NO_SUPABASE) return null;
 
   const wanted = await confirm(
-    'Provision a local Supabase dev stack now? (requires Docker to be running)',
+    'Provision a local Supabase Storage stack now? (requires Docker to be running)',
     true
   );
   if (!wanted) return null;
@@ -181,19 +184,18 @@ async function provisionSupabase() {
   }
 
   const apiUrl = data.API_URL ?? data.api_url;
-  const dbUrl = data.DB_URL ?? data.db_url;
   const anonKey = data.ANON_KEY ?? data.anon_key;
   const serviceKey = data.SERVICE_ROLE_KEY ?? data.service_role_key;
-  if (!apiUrl || !dbUrl || !anonKey || !serviceKey) {
+  if (!apiUrl || !anonKey || !serviceKey) {
     warn('Supabase status was missing expected fields. Falling back to manual entry.');
     return null;
   }
 
-  ok('Local Supabase is running.');
+  ok('Local Supabase Storage is running.');
   if (data.STUDIO_URL ?? data.studio_url) {
     console.log(`  Studio: ${data.STUDIO_URL ?? data.studio_url}`);
   }
-  return { apiUrl, dbUrl, anonKey, serviceKey };
+  return { apiUrl, anonKey, serviceKey };
 }
 
 // --- Interactive .env construction ---
@@ -217,21 +219,20 @@ async function setupEnv() {
   // Start from the example so all comments/grouping are preserved.
   let env = readFileSync(examplePath, 'utf8');
 
-  // Supabase: provision locally, or collect the values by hand.
+  // Database: a standalone Postgres you run yourself — always prompt for its URL.
+  step('Database (standalone Postgres — bring your own)');
+  env = setEnvVar(env, 'DATABASE_URL', await prompt('DATABASE_URL', getEnvVar(env, 'DATABASE_URL')));
+
+  // Storage: provision a local Supabase Storage stack, or collect its keys by hand.
   const sb = await provisionSupabase();
   if (sb) {
-    env = setEnvVar(env, 'DATABASE_URL', sb.dbUrl);
-    env = setEnvVar(env, 'DIRECT_URL', sb.dbUrl);
     env = setEnvVar(env, 'NEXT_PUBLIC_SUPABASE_URL', sb.apiUrl);
     env = setEnvVar(env, 'NEXT_PUBLIC_SUPABASE_ANON_KEY', sb.anonKey);
     env = setEnvVar(env, 'SUPABASE_SERVICE_ROLE_KEY', sb.serviceKey);
     env = setEnvVar(env, 'SUPABASE_JWKS_URL', `${sb.apiUrl}/auth/v1/.well-known/jwks.json`);
-    ok('Wrote database URL and Supabase keys from the local stack.');
+    ok('Wrote Supabase Storage keys from the local stack.');
   } else {
-    step('Database & Supabase (enter values, or accept the examples for now)');
-    const dbUrl = await prompt('DATABASE_URL', getEnvVar(env, 'DATABASE_URL'));
-    env = setEnvVar(env, 'DATABASE_URL', dbUrl);
-    env = setEnvVar(env, 'DIRECT_URL', await prompt('DIRECT_URL', dbUrl));
+    step('Supabase Storage (enter keys, or accept the examples for now)');
     const apiUrl = await prompt('NEXT_PUBLIC_SUPABASE_URL', getEnvVar(env, 'NEXT_PUBLIC_SUPABASE_URL'));
     env = setEnvVar(env, 'NEXT_PUBLIC_SUPABASE_URL', apiUrl);
     env = setEnvVar(env, 'NEXT_PUBLIC_SUPABASE_ANON_KEY', await prompt('NEXT_PUBLIC_SUPABASE_ANON_KEY (sb_publishable_...)', getEnvVar(env, 'NEXT_PUBLIC_SUPABASE_ANON_KEY')));
