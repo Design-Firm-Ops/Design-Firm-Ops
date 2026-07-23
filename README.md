@@ -9,7 +9,7 @@ Next.js application backed by Postgres and Supabase Storage.
 
 - **Next.js 14** (App Router) + React 18 + TypeScript
 - **Tailwind CSS** for styling
-- **Prisma** ORM against **Postgres** (hosted on Supabase)
+- **Prisma** ORM against a standalone **Postgres** (Supabase is used **only** for file storage, not the database)
 - **NextAuth** (credentials provider, JWT sessions) for internal auth
 - **Supabase Storage** for documents, resources, and branding (private buckets +
   signed URLs)
@@ -20,15 +20,15 @@ Next.js application backed by Postgres and Supabase Storage.
 ## Prerequisites
 
 - **Node.js 20+** (developed on Node 24; [.nvmrc](.nvmrc) pins 24.18.0 — run `nvm use`)
-- **Docker** — only if you use `npm run setup` to provision a local Supabase
-  stack (the Supabase CLI runs the services in containers). Not needed if you
-  point at a hosted Supabase/Postgres.
-- A **Postgres** database. The easiest paths are `npm run setup`'s local Supabase
-  stack, or a free hosted [Supabase](https://supabase.com) project — either also
-  provides the Storage buckets. A plain local Postgres works too if you don't need
-  file uploads/email.
+- A **Postgres** database — a standalone Postgres you run yourself (local install,
+  Docker, or a hosted provider). Supabase is **not** used for the database. If a local
+  Postgres is installed, `npm run setup` can create a dedicated database + app user for
+  you; otherwise it takes a `DATABASE_URL` you provide.
+- **Docker** — only if you use `npm run setup` to provision a local **Supabase Storage**
+  stack (the Supabase CLI runs the services in containers). Not needed if you point at a
+  hosted Supabase project for storage.
 - Accounts/keys for the external services you plan to exercise:
-  - **Supabase** (Postgres + Storage) — required for documents/logos
+  - **Supabase** (Storage only) — required for documents/logos
   - **Resend** — required only to actually send invoice emails
   - **Anthropic** — optional, for document extraction
 
@@ -45,10 +45,13 @@ npm run setup
 The script walks you through a full first-run setup:
 
 - Verifies your Node version.
-- **Provisions a local Supabase dev stack** via the Supabase CLI (`supabase
-  start`) and pulls its database URL and API keys straight into `.env`. This
-  needs **Docker** running; if you'd rather point at your own Postgres/Supabase,
-  pass `--no-supabase` and it prompts for those values instead.
+- **Sets up your database** — detects a local Postgres (`psql`) and offers to create a
+  dedicated database + app role (connecting as an admin/superuser to run the `CREATE`s),
+  or prompts for a `DATABASE_URL` if you'd rather use an existing database.
+- **Provisions a local Supabase Storage stack** via the Supabase CLI (`supabase
+  start`) and pulls its API URL and keys straight into `.env`. This needs **Docker**
+  running; if you'd rather point at a hosted Supabase project, pass `--no-supabase`
+  and it prompts for those keys instead.
 - **Generates** the secret values (`NEXTAUTH_SECRET`,
   `CREDENTIALS_ENCRYPTION_KEY`, and the seed-account passwords) and **prompts**
   for everything else (app URL, Resend/Anthropic keys, seed emails). Optional
@@ -60,9 +63,9 @@ It's idempotent — safe to re-run. An existing `.env` is backed up (to `.env.ba
 before it's rewritten, and the generated seed-account credentials are printed at
 the end so you can sign in.
 
-Flags: `--yes` (accept all defaults, non-interactive), `--no-supabase` (skip local
-Supabase, prompt for DB/keys), `--skip-db` (skip Supabase + migrations + seed),
-`--skip-seed` (migrate but don't seed).
+Flags: `--yes` (accept all defaults, non-interactive), `--no-supabase` (skip the local
+Supabase Storage stack, prompt for its keys), `--skip-db` (skip the storage stack,
+migrations, and seed), `--skip-seed` (migrate but don't seed).
 
 For the manual, step-by-step version, read on.
 
@@ -86,7 +89,7 @@ Key variables (see [.env.example](.env.example) for the full list):
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` / `DIRECT_URL` | Postgres connection strings. With Supabase, `DATABASE_URL` is the pooled connection and `DIRECT_URL` the direct one (used for migrations). |
+| `DATABASE_URL` | Connection string for your standalone Postgres database. |
 | `NEXTAUTH_URL` | App base URL (e.g. `http://localhost:3000`). |
 | `NEXTAUTH_SECRET` | Long random string. Generate with `openssl rand -base64 32`. |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL. |

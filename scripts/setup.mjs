@@ -9,16 +9,18 @@
 //
 // What it does:
 //   1. Verifies Node 20+.
-//   2. Builds .env interactively — provisions a local Supabase dev stack
-//      (via the Supabase CLI) and pulls its database URL + API keys in,
-//      generates the secret values, and prompts for the rest.
+//   2. Builds .env interactively — sets up the database (detects a local
+//      Postgres and can create a dedicated role + database, or takes a
+//      DATABASE_URL), provisions a local Supabase *Storage* stack (via the
+//      Supabase CLI) and pulls its API URL + keys in, generates the secret
+//      values, and prompts for the rest.
 //   3. Installs dependencies and generates the Prisma client.
 //   4. Applies migrations and (optionally) seeds demo data.
 //
 // Flags:
 //   --yes           Accept defaults for every prompt (non-interactive).
-//   --no-supabase   Don't provision local Supabase; prompt for DB/keys instead.
-//   --skip-db       Skip Supabase provisioning, migrations, and seed.
+//   --no-supabase   Don't provision the local Supabase Storage stack; prompt for its keys instead.
+//   --skip-db       Skip the storage stack, migrations, and seed.
 //   --skip-seed     Run migrations but skip seeding.
 
 import { randomBytes } from 'node:crypto';
@@ -28,6 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
+import { buildDatabaseUrl, isSafePgIdentifier } from './pg.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const argv = new Set(process.argv.slice(2));
@@ -134,13 +137,15 @@ function supabase(args, opts) {
   return exec(cmd[0], [...cmd.slice(1), ...args], opts);
 }
 
-// Provision a local Supabase stack and return its connection details, or
+// Provision a local Supabase Storage stack and return its API URL + keys, or
 // null if provisioning was skipped or failed (caller falls back to prompts).
+// The database is a separate standalone Postgres — we no longer read Supabase's
+// embedded Postgres URL here.
 async function provisionSupabase() {
   if (NO_SUPABASE) return null;
 
   const wanted = await confirm(
-    'Provision a local Supabase dev stack now? (requires Docker to be running)',
+    'Provision a local Supabase Storage stack now? (requires Docker to be running)',
     true
   );
   if (!wanted) return null;
@@ -181,19 +186,131 @@ async function provisionSupabase() {
   }
 
   const apiUrl = data.API_URL ?? data.api_url;
-  const dbUrl = data.DB_URL ?? data.db_url;
   const anonKey = data.ANON_KEY ?? data.anon_key;
   const serviceKey = data.SERVICE_ROLE_KEY ?? data.service_role_key;
-  if (!apiUrl || !dbUrl || !anonKey || !serviceKey) {
+  if (!apiUrl || !anonKey || !serviceKey) {
     warn('Supabase status was missing expected fields. Falling back to manual entry.');
     return null;
   }
 
-  ok('Local Supabase is running.');
+  ok('Local Supabase Storage is running.');
   if (data.STUDIO_URL ?? data.studio_url) {
     console.log(`  Studio: ${data.STUDIO_URL ?? data.studio_url}`);
   }
-  return { apiUrl, dbUrl, anonKey, serviceKey };
+  return { apiUrl, anonKey, serviceKey };
+}
+
+// --- Database provisioning (standalone Postgres) ---
+
+// Locate the psql client on PATH, returning { bin, version } or null.
+function resolvePsql() {
+  const bin = process.platform === 'win32' ? 'psql.exe' : 'psql';
+  const probe = exec(bin, ['--version'], { capture: true, allowFail: true });
+  return probe.ok ? { bin, version: probe.stdout.trim() } : null;
+}
+
+// Create the app login role (if missing) and its database (if missing) over an
+// admin/superuser connection. Idempotent — safe to re-run. Returns true on
+// success, false if anything (auth, permissions, connectivity) failed so the
+// caller can fall back to manual entry. `-w` keeps psql from hanging on a
+// password prompt when auth fails.
+function createRoleAndDatabase(bin, adminUrl, { dbName, appUser, appPassword }) {
+  // Role first — a DO block makes "create if missing" safe. We set the password
+  // whether the role is new or already existed, so it always matches the
+  // DATABASE_URL we write. CREATE DATABASE can't run inside a DO block (or a
+  // transaction), so it's handled separately below.
+  const pw = appPassword.replace(/'/g, "''"); // escape for the SQL string literal
+  const roleSql =
+    `DO $$ BEGIN ` +
+    `IF EXISTS (SELECT FROM pg_roles WHERE rolname = '${appUser}') THEN ` +
+    `ALTER ROLE "${appUser}" WITH LOGIN PASSWORD '${pw}'; ` +
+    `ELSE ` +
+    `CREATE ROLE "${appUser}" LOGIN PASSWORD '${pw}'; ` +
+    `END IF; END $$;`;
+  const role = exec(bin, [adminUrl, '-w', '-v', 'ON_ERROR_STOP=1', '-c', roleSql], {
+    capture: true,
+    allowFail: true,
+  });
+  if (!role.ok) {
+    warn(`Could not connect as admin / create role "${appUser}": ${(role.stderr || '').trim()}`);
+    return false;
+  }
+
+  // Database — check existence (no IF NOT EXISTS for CREATE DATABASE), then create.
+  const exists = exec(
+    bin,
+    [adminUrl, '-w', '-tAc', `SELECT 1 FROM pg_database WHERE datname = '${dbName}'`],
+    { capture: true, allowFail: true }
+  );
+  if (!exists.ok) {
+    warn(`Could not query Postgres: ${(exists.stderr || '').trim()}`);
+    return false;
+  }
+  if (exists.stdout.trim() === '1') {
+    ok(`Database "${dbName}" already exists — reusing it.`);
+    return true;
+  }
+  const createDb = exec(
+    bin,
+    [adminUrl, '-w', '-v', 'ON_ERROR_STOP=1', '-c', `CREATE DATABASE "${dbName}" OWNER "${appUser}"`],
+    { capture: true, allowFail: true }
+  );
+  if (!createDb.ok) {
+    warn(`Could not create database "${dbName}": ${(createDb.stderr || '').trim()}`);
+    return false;
+  }
+  return true;
+}
+
+// Configure DATABASE_URL: detect a local Postgres and offer to create a
+// dedicated app role + database, otherwise fall back to entering a URL by hand.
+async function setupDatabaseEnv(env) {
+  step('Database (standalone Postgres)');
+
+  const askUrl = async () =>
+    setEnvVar(env, 'DATABASE_URL', await prompt('DATABASE_URL', getEnvVar(env, 'DATABASE_URL')));
+
+  // In --yes mode this runs non-interactively with the defaults (localhost,
+  // postgres admin, design_firm_ops / dfo_app), attempting creation; any
+  // failure (no psql, auth, permissions) falls back to the default DATABASE_URL.
+  const psql = resolvePsql();
+  if (!psql) {
+    warn('psql not found on PATH — cannot create a database automatically.');
+    console.log('  Install PostgreSQL (https://www.postgresql.org/download/), or point DATABASE_URL at an existing database.');
+    return askUrl();
+  }
+  ok(`Found ${psql.version}`);
+
+  if (!(await confirm('Create a dedicated Postgres database + app user now?', true))) {
+    return askUrl();
+  }
+
+  // Admin (superuser) connection — used only to run the CREATEs.
+  const host = await prompt('Postgres host', 'localhost');
+  const port = await prompt('Postgres port', '5432');
+  const adminUser = await prompt('Admin role to connect as (needs CREATEDB/CREATEROLE)', 'postgres');
+  const adminPassword = await prompt('Admin password (leave blank for peer/trust auth)', '', { optional: true });
+
+  // The dedicated app role + database the app will actually use.
+  let dbName = await prompt('New database name', 'design_firm_ops');
+  let appUser = await prompt('New app role (login user)', 'dfo_app');
+  while (!isSafePgIdentifier(dbName) || !isSafePgIdentifier(appUser)) {
+    warn('Names must start with a letter/underscore and contain only letters, digits, or underscores.');
+    dbName = await prompt('New database name', 'design_firm_ops');
+    appUser = await prompt('New app role (login user)', 'dfo_app');
+  }
+  const appPassword = (await prompt('App role password (blank to generate)', '', { optional: true })) || genPassword();
+
+  const adminUrl = buildDatabaseUrl({ user: adminUser, password: adminPassword, host, port, database: 'postgres' });
+  if (!createRoleAndDatabase(psql.bin, adminUrl, { dbName, appUser, appPassword })) {
+    warn('Falling back to manual entry.');
+    return askUrl();
+  }
+
+  const appUrl = buildDatabaseUrl({ user: appUser, password: appPassword, host, port, database: dbName });
+  finalNotes.push(`Database: ${appUser} / ${appPassword} @ ${host}:${port}/${dbName}`);
+  ok(`Created database "${dbName}" owned by "${appUser}".`);
+  return setEnvVar(env, 'DATABASE_URL', appUrl);
 }
 
 // --- Interactive .env construction ---
@@ -217,21 +334,20 @@ async function setupEnv() {
   // Start from the example so all comments/grouping are preserved.
   let env = readFileSync(examplePath, 'utf8');
 
-  // Supabase: provision locally, or collect the values by hand.
+  // Database: a standalone Postgres — detect it and offer to create a dedicated
+  // role + database, or fall back to entering a DATABASE_URL by hand.
+  env = await setupDatabaseEnv(env);
+
+  // Storage: provision a local Supabase Storage stack, or collect its keys by hand.
   const sb = await provisionSupabase();
   if (sb) {
-    env = setEnvVar(env, 'DATABASE_URL', sb.dbUrl);
-    env = setEnvVar(env, 'DIRECT_URL', sb.dbUrl);
     env = setEnvVar(env, 'NEXT_PUBLIC_SUPABASE_URL', sb.apiUrl);
     env = setEnvVar(env, 'NEXT_PUBLIC_SUPABASE_ANON_KEY', sb.anonKey);
     env = setEnvVar(env, 'SUPABASE_SERVICE_ROLE_KEY', sb.serviceKey);
     env = setEnvVar(env, 'SUPABASE_JWKS_URL', `${sb.apiUrl}/auth/v1/.well-known/jwks.json`);
-    ok('Wrote database URL and Supabase keys from the local stack.');
+    ok('Wrote Supabase Storage keys from the local stack.');
   } else {
-    step('Database & Supabase (enter values, or accept the examples for now)');
-    const dbUrl = await prompt('DATABASE_URL', getEnvVar(env, 'DATABASE_URL'));
-    env = setEnvVar(env, 'DATABASE_URL', dbUrl);
-    env = setEnvVar(env, 'DIRECT_URL', await prompt('DIRECT_URL', dbUrl));
+    step('Supabase Storage (enter keys, or accept the examples for now)');
     const apiUrl = await prompt('NEXT_PUBLIC_SUPABASE_URL', getEnvVar(env, 'NEXT_PUBLIC_SUPABASE_URL'));
     env = setEnvVar(env, 'NEXT_PUBLIC_SUPABASE_URL', apiUrl);
     env = setEnvVar(env, 'NEXT_PUBLIC_SUPABASE_ANON_KEY', await prompt('NEXT_PUBLIC_SUPABASE_ANON_KEY (sb_publishable_...)', getEnvVar(env, 'NEXT_PUBLIC_SUPABASE_ANON_KEY')));

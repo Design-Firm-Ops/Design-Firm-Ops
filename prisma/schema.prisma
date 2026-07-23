@@ -1,14 +1,13 @@
 // Design Firm Ops — Prisma schema
-// Postgres (Supabase). Money fields always use Decimal, never Float.
+// Postgres. Money fields always use Decimal, never Float.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // ---------- Enums ----------
