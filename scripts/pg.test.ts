@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildDatabaseUrl, isSafePgIdentifier } from './pg.mjs';
+import { buildDatabaseUrl, isSafePgIdentifier, buildRoleSql } from './pg.mjs';
 
 describe('buildDatabaseUrl', () => {
   it('builds a standard connection URL', () => {
@@ -47,5 +47,37 @@ describe('isSafePgIdentifier', () => {
     expect(isSafePgIdentifier('"quoted"')).toBe(false);
     expect(isSafePgIdentifier('')).toBe(false);
     expect(isSafePgIdentifier('a'.repeat(64))).toBe(false); // too long
+  });
+});
+
+describe('buildRoleSql', () => {
+  const sql = buildRoleSql({ appUser: 'dfo_app', appPassword: 'secret' });
+
+  // `prisma migrate dev` creates and drops a temporary shadow database on
+  // every run; without CREATEDB it fails with P3014.
+  it('grants CREATEDB on the create path', () => {
+    expect(sql).toMatch(/CREATE ROLE "dfo_app" LOGIN CREATEDB PASSWORD 'secret'/);
+  });
+
+  it('grants CREATEDB on the already-exists path too', () => {
+    // Re-running setup against a role made before this fix must repair it.
+    expect(sql).toMatch(/ALTER ROLE "dfo_app" WITH LOGIN CREATEDB PASSWORD 'secret'/);
+  });
+
+  it('escapes single quotes in the password', () => {
+    const escaped = buildRoleSql({ appUser: 'dfo_app', appPassword: "it's'a'password" });
+    expect(escaped).toContain("PASSWORD 'it''s''a''password'");
+    expect(escaped).not.toContain("'it's");
+  });
+
+  it('is a single idempotent statement, safe to re-run', () => {
+    expect(sql.startsWith('DO $$')).toBe(true);
+    expect(sql.trimEnd().endsWith('END $$;')).toBe(true);
+    expect(sql).toContain("IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'dfo_app')");
+  });
+
+  it('rejects an unsafe role name rather than interpolating it', () => {
+    expect(() => buildRoleSql({ appUser: 'a"; DROP DATABASE x; --', appPassword: 'p' })).toThrow();
+    expect(() => buildRoleSql({ appUser: '', appPassword: 'p' })).toThrow();
   });
 });

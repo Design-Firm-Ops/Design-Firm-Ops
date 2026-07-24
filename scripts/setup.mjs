@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
-import { buildDatabaseUrl, isSafePgIdentifier } from './pg.mjs';
+import { buildDatabaseUrl, isSafePgIdentifier, buildRoleSql } from './pg.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const argv = new Set(process.argv.slice(2));
@@ -216,24 +216,30 @@ function resolvePsql() {
 // password prompt when auth fails.
 function createRoleAndDatabase(bin, adminUrl, { dbName, appUser, appPassword }) {
   // Role first — a DO block makes "create if missing" safe. We set the password
-  // whether the role is new or already existed, so it always matches the
-  // DATABASE_URL we write. CREATE DATABASE can't run inside a DO block (or a
-  // transaction), so it's handled separately below.
-  const pw = appPassword.replace(/'/g, "''"); // escape for the SQL string literal
-  const roleSql =
-    `DO $$ BEGIN ` +
-    `IF EXISTS (SELECT FROM pg_roles WHERE rolname = '${appUser}') THEN ` +
-    `ALTER ROLE "${appUser}" WITH LOGIN PASSWORD '${pw}'; ` +
-    `ELSE ` +
-    `CREATE ROLE "${appUser}" LOGIN PASSWORD '${pw}'; ` +
-    `END IF; END $$;`;
-  const role = exec(bin, [adminUrl, '-w', '-v', 'ON_ERROR_STOP=1', '-c', roleSql], {
+  // (and CREATEDB, which `prisma migrate dev` needs for its shadow database)
+  // whether the role is new or already existed, so re-running setup repairs a
+  // role an older version of this script created. CREATE DATABASE can't run
+  // inside a DO block (or a transaction), so it's handled separately below.
+  const role = exec(bin, [adminUrl, '-w', '-v', 'ON_ERROR_STOP=1', '-c', buildRoleSql({ appUser, appPassword })], {
     capture: true,
     allowFail: true,
   });
   if (!role.ok) {
     warn(`Could not connect as admin / create role "${appUser}": ${(role.stderr || '').trim()}`);
     return false;
+  }
+
+  // Granting CREATEDB needs a superuser admin connection. If it didn't take,
+  // say so here rather than letting it surface later as an opaque P3014.
+  const canCreateDb = exec(
+    bin,
+    [adminUrl, '-w', '-tAc', `SELECT rolcreatedb FROM pg_roles WHERE rolname = '${appUser}'`],
+    { capture: true, allowFail: true }
+  );
+  if (canCreateDb.ok && canCreateDb.stdout.trim() !== 't') {
+    warn(`Role "${appUser}" does not have CREATEDB — "prisma migrate dev" will fail with P3014.`);
+    console.log(`  Grant it as a superuser:  ALTER ROLE "${appUser}" CREATEDB;`);
+    console.log('  Or, on a managed Postgres, set SHADOW_DATABASE_URL in .env (see .env.example).');
   }
 
   // Database — check existence (no IF NOT EXISTS for CREATE DATABASE), then create.
