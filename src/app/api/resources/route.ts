@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { badRequest } from '@/lib/apiRoute';
-import { getSupabaseServerClient, RESOURCES_BUCKET, ensureResourcesBucket } from '@/lib/supabase';
+import { storage, storagePath } from '@/server/storage';
 
 export async function POST(req: NextRequest) {
   const { session, unauthorized } = await requireSession();
@@ -16,17 +16,9 @@ export async function POST(req: NextRequest) {
     return badRequest('file and folder are required');
   }
 
-  let storagePath: string;
+  const path = storagePath(folder.trim(), file.name);
   try {
-    await ensureResourcesBucket();
-    const supabase = getSupabaseServerClient();
-    const path = `${folder.trim()}/${Date.now()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage
-      .from(RESOURCES_BUCKET)
-      .upload(path, await file.arrayBuffer(), { contentType: file.type });
-    if (uploadError) throw uploadError;
-
-    storagePath = path;
+    await storage.upload('resources', path, await file.arrayBuffer(), { contentType: file.type });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Upload failed';
     return NextResponse.json({ error: `Storage upload failed: ${message}` }, { status: 502 });
@@ -36,7 +28,7 @@ export async function POST(req: NextRequest) {
     data: {
       folder: folder.trim(),
       filename: file.name,
-      storagePath,
+      storagePath: path,
       uploadedById: session!.user.id,
     },
   });

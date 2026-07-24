@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { forbidden, notFound } from '@/lib/apiRoute';
-import { resolvePermissions } from '@/lib/permissions';
+import { resolvePermissions } from '@/server/permissions';
 import { decryptSecret } from '@/lib/crypto';
 
 /** Returns decrypted trade-account credentials — permission-gated, never bundled into the general vendor list/detail response. */

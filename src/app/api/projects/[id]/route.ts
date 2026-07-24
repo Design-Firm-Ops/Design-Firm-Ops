@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { jsonOrNull } from '@/server/json';
+import { requireSession } from '@/server/apiAuth';
 import { notFound, ok, parseBody } from '@/lib/apiRoute';
 import { projectSchema } from '@/lib/validation';
-import { findOrCreateProjectType } from '@/lib/projectType';
-import { findOrCreateFeeStructureOption } from '@/lib/feeStructure';
+import { findOrCreateProjectType } from '@/server/projectType';
+import { findOrCreateFeeStructureOption } from '@/server/feeStructure';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const { unauthorized } = await requireSession();
@@ -49,7 +49,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (procurementFeeStructure !== undefined) {
     data.procurementFeeStructureId = await findOrCreateFeeStructureOption(procurementFeeStructure, 'PROCUREMENT');
   }
-  if (data.defaultInvoiceColumnConfig === null) data.defaultInvoiceColumnConfig = Prisma.JsonNull;
+  if (data.defaultInvoiceColumnConfig === null) data.defaultInvoiceColumnConfig = jsonOrNull(null);
 
   const project = await prisma.project.update({
     where: { id: params.id },

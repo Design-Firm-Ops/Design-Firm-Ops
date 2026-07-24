@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { nextOrder } from '@/lib/order';
+import { nextOrder } from '@/server/order';
 
 /** A stand-in for a Prisma model delegate exposing just `aggregate`. */
 function delegate(maxOrder: number | null) {

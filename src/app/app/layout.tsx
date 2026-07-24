@@ -1,6 +1,6 @@
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
-import { authOptions } from '@/lib/auth';
+import { authOptions } from '@/server/auth';
 import Nav from '@/components/Nav';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {

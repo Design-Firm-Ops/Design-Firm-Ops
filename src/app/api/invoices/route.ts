@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { badRequest, forbidden, notFound, parseBody } from '@/lib/apiRoute';
 import { invoiceCreateSchema } from '@/lib/validation';
-import { nextInvoiceNumber } from '@/lib/invoiceNumber';
-import { resolvePermissions } from '@/lib/permissions';
+import { nextInvoiceNumber } from '@/server/invoiceNumber';
+import { resolvePermissions } from '@/server/permissions';
 
 export async function POST(req: NextRequest) {
   const { session, unauthorized } = await requireSession();

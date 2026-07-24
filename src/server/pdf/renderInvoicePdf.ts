@@ -1,9 +1,9 @@
 import React from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
-import { prisma } from '@/lib/prisma';
-import { createSignedDocumentUrl } from '@/lib/supabase';
+import { prisma } from '@/server/prisma';
+import { storage } from '@/server/storage';
 import { resolveColumnConfig, InvoiceColumnKey } from '@/lib/invoiceColumns';
-import { InvoiceDocument } from './InvoiceDocument';
+import { InvoiceDocument } from '@/lib/pdf/InvoiceDocument';
 
 /** Fetches everything an invoice PDF needs and renders it to a Buffer. */
 export async function renderInvoicePdf(invoiceId: string): Promise<{ buffer: Buffer; invoiceNumber: string } | null> {
@@ -54,7 +54,7 @@ export async function renderInvoicePdf(invoiceId: string): Promise<{ buffer: Buf
             platformFee: String(item.platformFee),
             markupPct: item.markupPct === null ? null : String(item.markupPct),
             markupMode: item.markupMode,
-            imageUrl: item.imageStoragePath ? await createSignedDocumentUrl(item.imageStoragePath) : null,
+            imageUrl: item.imageStoragePath ? await storage.createSignedUrl('documents', item.imageStoragePath) : null,
           }))
         );
 

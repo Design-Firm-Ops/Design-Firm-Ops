@@ -1,23 +1,11 @@
-import { prisma } from '@/lib/prisma';
+import { getBusinessDevelopmentData } from '@/server/queries/leads';
 import BusinessDevTabs from './BusinessDevTabs';
 import ReferralPartnersManager from './ReferralPartnersManager';
 
 export const dynamic = 'force-dynamic';
 
 export default async function BusinessDevelopmentPage() {
-  const [boards, stages, leads, referralPartners, projectTypes] = await Promise.all([
-    prisma.leadBoard.findMany({ orderBy: { order: 'asc' } }),
-    prisma.pipelineStage.findMany({ orderBy: { order: 'asc' } }),
-    prisma.lead.findMany({
-      include: { projectType: true, referralPartner: true },
-      orderBy: { sortOrder: 'asc' },
-    }),
-    prisma.referralPartner.findMany({
-      include: { _count: { select: { leads: true } } },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.projectType.findMany({ orderBy: { name: 'asc' }, select: { name: true } }),
-  ]);
+  const { boards, stages, leads, referralPartners, projectTypes } = await getBusinessDevelopmentData();
 
   const leadRows = leads.map((l) => ({
     id: l.id,

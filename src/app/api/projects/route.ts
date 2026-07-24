@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { jsonOrNull } from '@/server/json';
+import { requireSession } from '@/server/apiAuth';
 import { badRequest, parseBody } from '@/lib/apiRoute';
 import { projectSchema } from '@/lib/validation';
-import { findOrCreateProjectType } from '@/lib/projectType';
-import { findOrCreateFeeStructureOption } from '@/lib/feeStructure';
+import { findOrCreateProjectType } from '@/server/projectType';
+import { findOrCreateFeeStructureOption } from '@/server/feeStructure';
 import { DEFAULT_PROCUREMENT_LISTS, DEFAULT_DOCUMENT_FOLDERS } from '@/lib/procurement';
 
 export async function GET() {
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       designFeeStructureId,
       procurementFeeStructureId,
       startDate: startDate ? new Date(startDate) : null,
-      defaultInvoiceColumnConfig: defaultInvoiceColumnConfig === null ? Prisma.JsonNull : defaultInvoiceColumnConfig,
+      defaultInvoiceColumnConfig: jsonOrNull(defaultInvoiceColumnConfig),
     },
   });
 

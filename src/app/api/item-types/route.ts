@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { forbidden, parseBody } from '@/lib/apiRoute';
-import { resolvePermissions } from '@/lib/permissions';
+import { resolvePermissions } from '@/server/permissions';
 import { itemTypeCreateSchema } from '@/lib/validation';
-import { findOrCreateItemType } from '@/lib/itemType';
+import { findOrCreateItemType } from '@/server/itemType';
 
 /** Explicitly adds a new item type under a category — same find-or-create as setting one inline on an item. */
 export async function POST(req: NextRequest) {

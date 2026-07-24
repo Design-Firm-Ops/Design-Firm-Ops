@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { conflict, forbidden, notFound, ok, parseBody } from '@/lib/apiRoute';
 import { itemUpdateSchema } from '@/lib/validation';
-import { resolvePermissions } from '@/lib/permissions';
+import { resolvePermissions } from '@/server/permissions';
 import { isItemLocked, lockedItemMessage } from '@/lib/itemLock';
-import { findOrCreateItemType } from '@/lib/itemType';
-import { nextItemTag } from '@/lib/itemTag';
-import { findOrCreateRoom } from '@/lib/room';
+import { findOrCreateItemType } from '@/server/itemType';
+import { nextItemTag } from '@/server/itemTag';
+import { findOrCreateRoom } from '@/server/room';
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const { session, unauthorized } = await requireSession();

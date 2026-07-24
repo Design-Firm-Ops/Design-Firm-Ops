@@ -1,8 +1,8 @@
 import type { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { conflict, forbidden, notFound, ok } from '@/lib/apiRoute';
-import { resolvePermissions } from '@/lib/permissions';
+import { resolvePermissions } from '@/server/permissions';
 import { isItemLocked, lockedChargeMessage } from '@/lib/itemLock';
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {

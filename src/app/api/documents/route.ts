@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { badRequest, forbidden } from '@/lib/apiRoute';
-import { getSupabaseServerClient, DOCUMENTS_BUCKET, ensureDocumentsBucket } from '@/lib/supabase';
-import { resolvePermissions } from '@/lib/permissions';
-
-const DOCUMENT_TYPES = ['PRESENTATION', 'VENDOR_INVOICE', 'CONTRACT', 'OTHER'] as const;
+import { storage, storagePath } from '@/server/storage';
+import { isDocumentType } from '@/lib/domain';
+import { resolvePermissions } from '@/server/permissions';
 
 export async function POST(req: NextRequest) {
   const { session, unauthorized } = await requireSession();
@@ -21,7 +20,7 @@ export async function POST(req: NextRequest) {
   if (!(file instanceof File) || typeof projectId !== 'string' || typeof type !== 'string') {
     return badRequest('file, projectId and type are required');
   }
-  if (!DOCUMENT_TYPES.includes(type as (typeof DOCUMENT_TYPES)[number])) {
+  if (!isDocumentType(type)) {
     return badRequest('Invalid document type');
   }
 
@@ -36,17 +35,9 @@ export async function POST(req: NextRequest) {
     return forbidden('You do not have permission to upload here');
   }
 
-  let storagePath: string;
+  const path = storagePath(projectId, file.name);
   try {
-    await ensureDocumentsBucket();
-    const supabase = getSupabaseServerClient();
-    const path = `${projectId}/${Date.now()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage
-      .from(DOCUMENTS_BUCKET)
-      .upload(path, await file.arrayBuffer(), { contentType: file.type });
-    if (uploadError) throw uploadError;
-
-    storagePath = path;
+    await storage.upload('documents', path, await file.arrayBuffer(), { contentType: file.type });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Upload failed';
     return NextResponse.json({ error: `Storage upload failed: ${message}` }, { status: 502 });
@@ -55,9 +46,9 @@ export async function POST(req: NextRequest) {
   const document = await prisma.document.create({
     data: {
       projectId,
-      type: type as (typeof DOCUMENT_TYPES)[number],
+      type,
       filename: file.name,
-      storagePath,
+      storagePath: path,
       folder: typeof folder === 'string' && folder ? folder : null,
       itemId: typeof itemId === 'string' && itemId ? itemId : null,
     },

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { conflict, forbidden, notFound, ok, parseBody } from '@/lib/apiRoute';
-import { resolvePermissions } from '@/lib/permissions';
+import { resolvePermissions } from '@/server/permissions';
 import { paymentUpdateSchema } from '@/lib/validation';
-import { recalculateInvoiceStatus } from '@/lib/invoiceStatus';
+import { recalculateInvoiceStatus } from '@/server/invoiceStatus';
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const { session, unauthorized } = await requireSession();

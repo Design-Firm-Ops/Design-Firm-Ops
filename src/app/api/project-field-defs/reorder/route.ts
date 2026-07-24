@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireAdmin } from '@/server/apiAuth';
 import { applyOrder, ok, parseBody } from '@/lib/apiRoute';
 import { reorderSchema } from '@/lib/validation';
 

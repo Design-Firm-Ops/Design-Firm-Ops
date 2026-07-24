@@ -1,14 +1,10 @@
-import { prisma } from '@/lib/prisma';
+import { getNewProjectFormOptions } from '@/server/queries/projects';
 import NewProjectForm from './NewProjectForm';
 
 export const dynamic = 'force-dynamic';
 
 export default async function NewProjectPage() {
-  const [clients, projectTypes, feeStructureOptions] = await Promise.all([
-    prisma.client.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
-    prisma.projectType.findMany({ orderBy: { name: 'asc' }, select: { name: true } }),
-    prisma.feeStructureOption.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
-  ]);
+  const { clients, projectTypes, feeStructureOptions } = await getNewProjectFormOptions();
 
   return (
     <div>

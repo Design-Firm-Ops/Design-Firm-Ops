@@ -1,4 +1,49 @@
 {
   "extends": "next/core-web-vitals",
-  "ignorePatterns": ["node_modules", ".next", "src/generated"]
+  "ignorePatterns": ["node_modules", ".next", "src/generated"],
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "@prisma/client",
+            "message": "Persistence belongs in src/server/. Import a query/repository from '@/server/...' instead, or add one there. See plans/DES-33_PLAN.md."
+          },
+          {
+            "name": "@supabase/supabase-js",
+            "message": "Use the FileStorage port: import { storage } from '@/server/storage'. Only the Supabase adapter may import the SDK."
+          }
+        ],
+        "patterns": [
+          {
+            "group": ["@/server/prisma", "**/server/prisma"],
+            "message": "Persistence belongs in src/server/. Import a query/repository from '@/server/...' instead, or add one there. See plans/DES-33_PLAN.md."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["src/server/**"],
+      "rules": { "no-restricted-imports": "off" }
+    },
+    {
+      "files": ["src/app/api/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@supabase/supabase-js",
+                "message": "Use the FileStorage port: import { storage } from '@/server/storage'."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

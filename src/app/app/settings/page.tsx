@@ -1,6 +1,6 @@
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { authOptions } from '@/server/auth';
+import { getSettings, listDesigners, listPermissionOverrides, listUsers } from '@/server/queries/settings';
 import { isAdmin } from '@/lib/permissions';
 import SettingsForm from './SettingsForm';
 import PermissionsManager from './PermissionsManager';
@@ -12,22 +12,15 @@ export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
   const admin = isAdmin(session);
 
-  const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+  const settings = await getSettings();
 
   let usersSection = null;
   let permissionsSection = null;
   if (admin) {
     const [allUsers, designers, overrides] = await Promise.all([
-      prisma.user.findMany({
-        select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
-        orderBy: { createdAt: 'asc' },
-      }),
-      prisma.user.findMany({
-        where: { role: 'DESIGNER' },
-        select: { id: true, name: true, email: true },
-        orderBy: { name: 'asc' },
-      }),
-      prisma.userPermissionOverride.findMany(),
+      listUsers(),
+      listDesigners(),
+      listPermissionOverrides(),
     ]);
 
     usersSection = (
