@@ -93,3 +93,29 @@ describe('apiSend', () => {
     expect(result.status).toBe(409);
   });
 });
+
+describe('apiError — remaining shapes', () => {
+  it('ignores a whitespace-only error string and uses the fallback', () => {
+    // A blank message is worse than the caller's fallback, not better.
+    expect(apiError(res({ error: '   ' }), 'Could not save.')).resolves.toBe('Could not save.');
+  });
+
+  it('handles a flatten payload that omits one of the two keys', async () => {
+    expect(await apiError(res({ error: { fieldErrors: { name: ['Required'] } } }), 'F')).toBe('name: Required');
+    expect(await apiError(res({ error: { formErrors: ['Nope'] } }), 'F')).toBe('Nope');
+  });
+
+  it('skips fields whose message list is empty or undefined', async () => {
+    const message = await apiError(
+      res({ error: { formErrors: [], fieldErrors: { name: [], email: undefined, phone: ['Bad'] } } }),
+      'F'
+    );
+    expect(message).toBe('phone: Bad');
+  });
+
+  it('falls back for a non-object, non-string error value', async () => {
+    expect(await apiError(res({ error: 42 }), 'Fallback.')).toBe('Fallback.');
+    expect(await apiError(res({ error: null }), 'Fallback.')).toBe('Fallback.');
+    expect(await apiError(res(null), 'Fallback.')).toBe('Fallback.');
+  });
+});

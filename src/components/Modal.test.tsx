@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, userEvent } from '@/test';
+import { render, screen, userEvent, fireEvent } from '@/test';
 import Modal from './Modal';
 
 describe('Modal', () => {
@@ -103,5 +103,47 @@ describe('Modal', () => {
       </Modal>
     );
     expect(document.body.style.overflow).not.toBe('hidden');
+  });
+});
+
+describe('Modal — remaining paths', () => {
+  it('does not close when a drag starts inside the panel and ends on the backdrop', async () => {
+    const onClose = vi.fn();
+    render(
+      <Modal onClose={onClose}>
+        <input aria-label="field" />
+      </Modal>
+    );
+
+    // mousedown on the panel, mouseup on the overlay — a text selection drag.
+    const overlay = screen.getByRole('dialog').parentElement!;
+    fireEvent.mouseDown(screen.getByLabelText('field'));
+    fireEvent.mouseUp(overlay);
+    fireEvent.click(overlay);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('adds the scrollable classes only when asked', () => {
+    const { rerender } = render(<Modal><p>x</p></Modal>);
+    expect(screen.getByRole('dialog').parentElement!.className).not.toContain('overflow-y-auto');
+
+    rerender(<Modal scrollable><p>x</p></Modal>);
+    expect(screen.getByRole('dialog').parentElement!.className).toContain('overflow-y-auto');
+  });
+
+  it('ignores keys other than Escape', async () => {
+    const onClose = vi.fn();
+    render(<Modal onClose={onClose}><p>x</p></Modal>);
+    await userEvent.keyboard('{Enter}{Tab}a');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('links the panel to a caller-supplied label for screen readers', () => {
+    render(
+      <Modal labelledBy="the-heading">
+        <h2 id="the-heading">Delete vendor?</h2>
+      </Modal>
+    );
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-labelledby', 'the-heading');
   });
 });
