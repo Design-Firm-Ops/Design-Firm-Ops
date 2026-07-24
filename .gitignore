@@ -11,6 +11,8 @@
 # env
 .env
 .env*.local
+# `npm run setup` backs up an existing .env here — same secrets, so never commit it.
+.env.bak
 
 # misc
 .DS_Store

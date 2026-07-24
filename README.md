@@ -90,6 +90,7 @@ Key variables (see [.env.example](.env.example) for the full list):
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | Connection string for your standalone Postgres database. |
+| `SHADOW_DATABASE_URL` | Optional. Only needed when the `DATABASE_URL` role can't create databases — see [Migrations and the shadow database](#migrations-and-the-shadow-database). |
 | `NEXTAUTH_URL` | App base URL (e.g. `http://localhost:3000`). |
 | `NEXTAUTH_SECRET` | Long random string. Generate with `openssl rand -base64 32`. |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL. |
@@ -111,6 +112,38 @@ npm run prisma:migrate
 
 `prisma:migrate` runs `prisma migrate dev`, which applies the migrations in
 [prisma/migrations/](prisma/migrations/) to your database.
+
+#### Migrations and the shadow database
+
+`prisma migrate dev` creates and drops a temporary **shadow database** on every
+run to detect drift between your migrations and the schema. That means the role
+in `DATABASE_URL` needs the `CREATEDB` attribute. If it doesn't have it, you get:
+
+```
+Error: P3014
+Prisma Migrate could not create the shadow database.
+Original error: ERROR: permission denied to create database
+```
+
+`npm run setup` grants `CREATEDB` when it creates the app role, and re-running
+it repairs a role that predates that. To fix an existing database by hand,
+connect as a superuser (e.g. `postgres`) and grant it:
+
+```bash
+psql "postgresql://postgres@localhost:5432/postgres" -c 'ALTER ROLE "dfo_app" CREATEDB;'
+```
+
+On a managed Postgres (Supabase, Neon, RDS) where `CREATEDB` isn't grantable,
+create a second empty database and point `SHADOW_DATABASE_URL` at it instead:
+
+```bash
+SHADOW_DATABASE_URL="postgresql://user:pass@host:5432/design_firm_ops_shadow"
+```
+
+Leave `SHADOW_DATABASE_URL` blank if you don't need it — Prisma then falls back
+to creating the shadow database itself. Note that this only affects
+`prisma migrate dev`; `prisma migrate deploy` (what you run in production) never
+uses a shadow database.
 
 ### 4. Seed data (recommended)
 

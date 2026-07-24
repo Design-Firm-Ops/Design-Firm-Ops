@@ -8,6 +8,12 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Optional. `prisma migrate dev` needs a scratch "shadow database" to detect
+  // drift; by default it creates one itself, which requires CREATEDB on the
+  // connecting role. Where that can't be granted (most managed Postgres), point
+  // this at a second database you created by hand. Leaving SHADOW_DATABASE_URL
+  // unset or empty falls back to the default behaviour. See .env.example.
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 // ---------- Enums ----------
