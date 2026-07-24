@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { forbidden, notFound, ok } from '@/lib/apiRoute';
 import { getSupabaseServerClient, DOCUMENTS_BUCKET } from '@/lib/supabase';
 import { resolvePermissions } from '@/lib/permissions';
 
@@ -9,7 +10,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   if (unauthorized) return unauthorized;
 
   const document = await prisma.document.findUnique({ where: { id: params.id } });
-  if (!document) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!document) return notFound();
 
   const perms = await resolvePermissions(session);
   const allowed = document.itemId
@@ -18,7 +19,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       ? perms.contracts
       : perms.documentsPresentations;
   if (!allowed) {
-    return NextResponse.json({ error: 'You do not have permission to delete this' }, { status: 403 });
+    return forbidden('You do not have permission to delete this');
   }
 
   try {
@@ -31,5 +32,5 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   }
 
   await prisma.document.delete({ where: { id: params.id } });
-  return NextResponse.json({ ok: true });
+  return ok();
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { badRequest } from '@/lib/apiRoute';
 import { getSupabaseServerClient, DOCUMENTS_BUCKET, ensureDocumentsBucket, createSignedDocumentUrl } from '@/lib/supabase';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const form = await req.formData();
   const file = form.get('file');
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: 'file is required' }, { status: 400 });
+    return badRequest('file is required');
   }
 
   let storagePath: string;

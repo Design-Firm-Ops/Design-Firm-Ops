@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { conflict, forbidden, notFound, ok, parseBody } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/lib/permissions';
 import { paymentUpdateSchema } from '@/lib/validation';
 import { recalculateInvoiceStatus } from '@/lib/invoiceStatus';
@@ -10,28 +11,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (unauthorized) return unauthorized;
 
   const existing = await prisma.payment.findUnique({ where: { id: params.id } });
-  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!existing) return notFound();
 
   const perms = await resolvePermissions(session);
   const allowed = existing.category === 'DESIGN_FEE' ? perms.financials : perms.invoices;
   if (!allowed) {
-    return NextResponse.json({ error: 'You do not have permission to edit this payment' }, { status: 403 });
+    return forbidden('You do not have permission to edit this payment');
   }
 
-  const body = await req.json();
-  const parsed = paymentUpdateSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, paymentUpdateSchema);
+  if (response) return response;
 
-  const { invoiceId, date, ...rest } = parsed.data;
+  const { invoiceId, date, ...rest } = data;
   const nextInvoiceId = invoiceId !== undefined ? invoiceId || null : existing.invoiceId;
 
   if (nextInvoiceId) {
     const invoice = await prisma.invoice.findUnique({ where: { id: nextInvoiceId }, select: { status: true } });
-    if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
+    if (!invoice) return notFound('Invoice not found');
     if (invoice.status === 'VOID') {
-      return NextResponse.json({ error: 'This invoice has been voided — payments cannot be recorded against it' }, { status: 409 });
+      return conflict('This invoice has been voided — payments cannot be recorded against it');
     }
   }
 
@@ -56,12 +54,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   if (unauthorized) return unauthorized;
 
   const payment = await prisma.payment.findUnique({ where: { id: params.id } });
-  if (!payment) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!payment) return notFound();
 
   const perms = await resolvePermissions(session);
   const allowed = payment.category === 'DESIGN_FEE' ? perms.financials : perms.invoices;
   if (!allowed) {
-    return NextResponse.json({ error: 'You do not have permission to delete this payment' }, { status: 403 });
+    return forbidden('You do not have permission to delete this payment');
   }
 
   await prisma.payment.delete({ where: { id: params.id } });
@@ -70,5 +68,5 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     await recalculateInvoiceStatus(payment.invoiceId);
   }
 
-  return NextResponse.json({ ok: true });
+  return ok();
 }

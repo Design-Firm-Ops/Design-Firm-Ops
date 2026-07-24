@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { apiError, apiSend } from '@/lib/apiClient';
+import { formatDate } from '@/lib/format';
 
 export interface DocumentRow {
   id: string;
@@ -62,8 +64,7 @@ export default function DocumentsTab({
     e.target.value = '';
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ?? 'Upload failed.');
+      setError(await apiError(res, 'Upload failed.'));
       return;
     }
 
@@ -73,7 +74,7 @@ export default function DocumentsTab({
   async function confirmDelete() {
     if (!pendingDelete) return;
     setDeleting(true);
-    await fetch(`/api/documents/${pendingDelete.id}`, { method: 'DELETE' });
+    await apiSend(`/api/documents/${pendingDelete.id}`, 'DELETE');
     setDeleting(false);
     setPendingDelete(null);
     router.refresh();
@@ -123,7 +124,7 @@ export default function DocumentsTab({
                   )}
                 </td>
                 <td className="px-4 py-3 text-brown/70">{TYPE_LABELS[doc.type]}</td>
-                <td className="px-4 py-3 text-brown/70">{new Date(doc.uploadedAt).toLocaleDateString()}</td>
+                <td className="px-4 py-3 text-brown/70">{formatDate(doc.uploadedAt)}</td>
                 <td className="px-4 py-3 text-right">
                   <button className="text-sm text-red-700 hover:text-red-900" onClick={() => setPendingDelete(doc)}>
                     Delete

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { forbidden, parseBody } from '@/lib/apiRoute';
 import { vendorSchema } from '@/lib/validation';
 import { resolvePermissions } from '@/lib/permissions';
 import { encryptSecret } from '@/lib/crypto';
@@ -58,19 +59,16 @@ export async function POST(req: NextRequest) {
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const body = await req.json();
-  const parsed = vendorSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, vendorSchema);
+  if (response) return response;
 
-  const { tradeAccountPassword, offerings, ...rest } = parsed.data;
+  const { tradeAccountPassword, offerings, ...rest } = data;
 
   const hasCredentialInput = !!(tradeAccountPassword || rest.tradeAccountUsername || rest.tradeAccountNotes);
   if (hasCredentialInput) {
     const perms = await resolvePermissions(session);
     if (!perms.vendorCredentials) {
-      return NextResponse.json({ error: 'You do not have permission to set trade account credentials' }, { status: 403 });
+      return forbidden('You do not have permission to set trade account credentials');
     }
   }
 

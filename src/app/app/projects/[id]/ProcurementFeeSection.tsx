@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatPercent, formatPercentFromFraction } from '@/lib/money';
+import { apiError, apiSend } from '@/lib/apiClient';
 
 export interface ProcurementFeeData {
   procurementFeeStructure: string | null;
@@ -40,20 +41,15 @@ export default function ProcurementFeeSection({
     setError(null);
 
     const { salesTaxRatePct, ...rest } = form;
-    const res = await fetch(`/api/projects/${projectId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const res = await apiSend(`/api/projects/${projectId}`, 'PATCH', {
         ...rest,
         salesTaxRate: salesTaxRatePct ? Number(salesTaxRatePct) / 100 : 0,
-      }),
-    });
+      });
 
     setSaving(false);
 
     if (!res.ok) {
-      const resData = await res.json().catch(() => null);
-      setError(resData?.error ? JSON.stringify(resData.error) : 'Something went wrong.');
+      setError(await apiError(res, 'Something went wrong.'));
       return;
     }
 

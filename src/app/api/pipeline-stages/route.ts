@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextOrder } from '@/lib/order';
 import { requireSession } from '@/lib/apiAuth';
+import { parseBody } from '@/lib/apiRoute';
 import { pipelineStageSchema } from '@/lib/validation';
 
 export async function GET(req: NextRequest) {
@@ -19,18 +21,11 @@ export async function POST(req: NextRequest) {
   const { unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const body = await req.json();
-  const parsed = pipelineStageSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, pipelineStageSchema);
+  if (response) return response;
 
-  const maxOrder = await prisma.pipelineStage.aggregate({
-    where: { boardId: parsed.data.boardId },
-    _max: { order: true },
-  });
   const stage = await prisma.pipelineStage.create({
-    data: { name: parsed.data.name, boardId: parsed.data.boardId, order: (maxOrder._max.order ?? 0) + 1 },
+    data: { name: data.name, boardId: data.boardId, order: await nextOrder(prisma.pipelineStage, { boardId: data.boardId }) },
   });
   return NextResponse.json(stage, { status: 201 });
 }

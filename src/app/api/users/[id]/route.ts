@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/apiAuth';
+import { conflict, parseBody } from '@/lib/apiRoute';
 import { userUpdateSchema } from '@/lib/validation';
 
 const USER_SELECT = {
@@ -17,14 +18,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { unauthorized } = await requireAdmin();
   if (unauthorized) return unauthorized;
 
-  const body = await req.json();
-  const parsed = userUpdateSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, userUpdateSchema);
+  if (response) return response;
 
   const demotingOrDeactivating =
-    (parsed.data.role && parsed.data.role !== 'ADMIN') || parsed.data.active === false;
+    (data.role && data.role !== 'ADMIN') || data.active === false;
 
   if (demotingOrDeactivating) {
     const target = await prisma.user.findUnique({ where: { id: params.id } });
@@ -33,12 +31,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         where: { role: 'ADMIN', active: true, id: { not: params.id } },
       });
       if (otherActiveAdmins === 0) {
-        return NextResponse.json({ error: 'At least one active administrator is required' }, { status: 409 });
+        return conflict('At least one active administrator is required');
       }
     }
   }
 
-  const { password, ...rest } = parsed.data;
+  const { password, ...rest } = data;
   const user = await prisma.user.update({
     where: { id: params.id },
     data: {

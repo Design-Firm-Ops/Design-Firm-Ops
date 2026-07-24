@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { conflict, forbidden, notFound, parseBody } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/lib/permissions';
 import { invoiceUpdateSchema } from '@/lib/validation';
 
@@ -10,7 +11,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   if (unauthorized) return unauthorized;
 
   const invoice = await prisma.invoice.findUnique({ where: { id: params.id }, include: { items: true } });
-  if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!invoice) return notFound();
   return NextResponse.json(invoice);
 }
 
@@ -19,25 +20,22 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (unauthorized) return unauthorized;
 
   const existing = await prisma.invoice.findUnique({ where: { id: params.id } });
-  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!existing) return notFound();
 
   const perms = await resolvePermissions(session);
   const allowed = existing.type === 'DESIGN_FEE' ? perms.financials : perms.invoices;
   if (!allowed) {
-    return NextResponse.json({ error: 'You do not have permission to edit this invoice' }, { status: 403 });
+    return forbidden('You do not have permission to edit this invoice');
   }
 
   if (existing.status === 'VOID') {
-    return NextResponse.json({ error: 'This invoice has been voided and can no longer be edited' }, { status: 409 });
+    return conflict('This invoice has been voided and can no longer be edited');
   }
 
-  const body = await req.json();
-  const parsed = invoiceUpdateSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, invoiceUpdateSchema);
+  if (response) return response;
 
-  const { dueDate, columnConfig, ...rest } = parsed.data;
+  const { dueDate, columnConfig, ...rest } = data;
 
   const invoice = await prisma.invoice.update({
     where: { id: params.id },

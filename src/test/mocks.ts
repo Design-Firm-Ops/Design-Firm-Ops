@@ -27,11 +27,8 @@ export interface RouterMock {
 }
 
 /**
- * A spy object shaped like next/navigation's router. Use it inside a
- * `vi.mock('next/navigation', ...)` factory, then assert on `router.push`:
- *
- *   const router = createRouterMock();
- *   vi.mock('next/navigation', () => ({ useRouter: () => router }));
+ * A spy object shaped like next/navigation's router. Prefer
+ * `mockNextNavigation()` below, which wires this up for you.
  */
 export function createRouterMock(): RouterMock {
   return {
@@ -42,6 +39,54 @@ export function createRouterMock(): RouterMock {
     refresh: vi.fn(),
     prefetch: vi.fn(),
   };
+}
+
+interface NavState {
+  pathname: string;
+  searchParams: string;
+  params: Record<string, string>;
+}
+
+let navState: NavState = { pathname: '/app', searchParams: '', params: {} };
+let navRouter = createRouterMock();
+
+/**
+ * A complete `next/navigation` module mock. Pass it straight to `vi.mock` —
+ * because it reads its state lazily, it is safe inside the hoisted factory,
+ * which a test-file `const` is not:
+ *
+ *   vi.mock('next/navigation', () => nextNavigationMock);
+ *
+ *   const router = mockNextNavigation({ pathname: '/app/vendors' });
+ *   expect(router.push).toHaveBeenCalledWith('/app/projects');
+ *
+ * Mock the *whole* module rather than only the hook a component calls
+ * directly: a component that renders a child using a different hook (Nav
+ * renders NavSearch, which calls useRouter) throws at render on a partial
+ * mock — which is exactly how the Nav tests came to be broken.
+ */
+export const nextNavigationMock = {
+  useRouter: () => navRouter,
+  usePathname: () => navState.pathname,
+  useSearchParams: () => new URLSearchParams(navState.searchParams),
+  useParams: () => navState.params,
+  redirect: vi.fn(),
+  notFound: vi.fn(),
+};
+
+/**
+ * Points `nextNavigationMock` at a route and hands back a fresh router spy.
+ * Call it in `beforeEach` (or at the top of a test) so spies don't leak
+ * between cases.
+ */
+export function mockNextNavigation({
+  pathname = '/app',
+  searchParams = '',
+  params = {},
+}: Partial<NavState> = {}): RouterMock {
+  navState = { pathname, searchParams, params };
+  navRouter = createRouterMock();
+  return navRouter;
 }
 
 type FetchBody = unknown;

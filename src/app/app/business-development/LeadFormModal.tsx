@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import LeadDocumentsSection from './LeadDocumentsSection';
+import AttachedDocuments from '@/components/AttachedDocuments';
 import type { LeadRow, StageRow } from './LeadsBoard';
+import { apiError, apiSend } from '@/lib/apiClient';
+import Modal from '@/components/Modal';
 
 const NEW_PARTNER_VALUE = '__new__';
 
@@ -66,17 +68,12 @@ export default function LeadFormModal({
     setCreatingPartner(true);
     setPartnerError(null);
 
-    const res = await fetch('/api/referral-partners', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newPartner),
-    });
+    const res = await apiSend('/api/referral-partners', 'POST', newPartner);
 
     setCreatingPartner(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setPartnerError(data?.error ? JSON.stringify(data.error) : 'Could not create partner.');
+      setPartnerError(await apiError(res, 'Could not create partner.'));
       return;
     }
 
@@ -92,17 +89,12 @@ export default function LeadFormModal({
     setSaving(true);
     setError(null);
 
-    const res = await fetch(lead ? `/api/leads/${lead.id}` : '/api/leads', {
-      method: lead ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
+    const res = await apiSend(lead ? `/api/leads/${lead.id}` : '/api/leads', lead ? 'PATCH' : 'POST', form);
 
     setSaving(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ? JSON.stringify(data.error) : 'Something went wrong.');
+      setError(await apiError(res, 'Something went wrong.'));
       return;
     }
 
@@ -112,14 +104,14 @@ export default function LeadFormModal({
   async function confirmDelete() {
     if (!lead) return;
     setDeleting(true);
-    await fetch(`/api/leads/${lead.id}`, { method: 'DELETE' });
+    await apiSend(`/api/leads/${lead.id}`, 'DELETE');
     setDeleting(false);
     onSaved();
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
-      <form onSubmit={handleSubmit} className="card w-full max-w-lg space-y-4 p-6">
+    <>
+      <Modal width="lg" scrollable onSubmit={handleSubmit} className="space-y-4">
         <h2 className="text-lg font-medium text-brown">{lead ? 'Edit Lead' : 'New Lead'}</h2>
 
         <div>
@@ -334,7 +326,13 @@ export default function LeadFormModal({
           <textarea className="input" rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
         </div>
 
-        {lead && <LeadDocumentsSection leadId={lead.id} />}
+        {lead && (
+          <AttachedDocuments
+            listUrl={`/api/leads/${lead.id}/documents`}
+            deleteUrl={(docId) => `/api/leads/${lead.id}/documents/${docId}`}
+            emptyMessage="No documents saved to this lead yet."
+          />
+        )}
 
         {error && <p className="text-sm text-red-700">{error}</p>}
 
@@ -355,8 +353,7 @@ export default function LeadFormModal({
             </button>
           </div>
         </div>
-      </form>
-
+      </Modal>
       <ConfirmDialog
         open={pendingDelete}
         title="Delete lead?"
@@ -365,6 +362,6 @@ export default function LeadFormModal({
         onConfirm={confirmDelete}
         onCancel={() => setPendingDelete(false)}
       />
-    </div>
+    </>
   );
 }

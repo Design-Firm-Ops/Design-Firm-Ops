@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { badRequest, parseBody } from '@/lib/apiRoute';
 import { projectSchema } from '@/lib/validation';
 import { findOrCreateProjectType } from '@/lib/projectType';
 import { findOrCreateFeeStructureOption } from '@/lib/feeStructure';
@@ -22,11 +23,8 @@ export async function POST(req: NextRequest) {
   const { unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const body = await req.json();
-  const parsed = projectSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, projectSchema);
+  if (response) return response;
 
   const {
     startDate,
@@ -40,7 +38,7 @@ export async function POST(req: NextRequest) {
     newClientAddress,
     defaultInvoiceColumnConfig,
     ...rest
-  } = parsed.data;
+  } = data;
 
   let resolvedClientId = clientId;
   if (!resolvedClientId && newClientName?.trim()) {
@@ -55,7 +53,7 @@ export async function POST(req: NextRequest) {
     resolvedClientId = client.id;
   }
   if (!resolvedClientId) {
-    return NextResponse.json({ error: 'A client is required — pick one or fill in the new client fields.' }, { status: 400 });
+    return badRequest('A client is required — pick one or fill in the new client fields.');
   }
 
   const projectTypeId = await findOrCreateProjectType(projectType);

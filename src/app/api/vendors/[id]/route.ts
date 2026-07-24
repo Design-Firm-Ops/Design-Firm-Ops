@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { forbidden, ok, parseBody } from '@/lib/apiRoute';
 import { vendorSchema } from '@/lib/validation';
 import { resolvePermissions } from '@/lib/permissions';
 import { encryptSecret } from '@/lib/crypto';
@@ -44,19 +45,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const body = await req.json();
-  const parsed = vendorSchema.partial().safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, vendorSchema.partial());
+  if (response) return response;
 
-  const { tradeAccountPassword, offerings, ...rest } = parsed.data;
+  const { tradeAccountPassword, offerings, ...rest } = data;
 
   const hasCredentialInput =
     tradeAccountPassword !== undefined || rest.tradeAccountUsername !== undefined || rest.tradeAccountNotes !== undefined;
   const perms = await resolvePermissions(session);
   if (hasCredentialInput && !perms.vendorCredentials) {
-    return NextResponse.json({ error: 'You do not have permission to change trade account credentials' }, { status: 403 });
+    return forbidden('You do not have permission to change trade account credentials');
   }
 
   const vendor = await prisma.vendor.update({
@@ -84,5 +82,5 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   }
 
   await prisma.vendor.delete({ where: { id: params.id } });
-  return NextResponse.json({ ok: true });
+  return ok();
 }

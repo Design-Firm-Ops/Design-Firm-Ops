@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { FieldDefRow } from './ProjectCustomFields';
+import { apiError, apiSend } from '@/lib/apiClient';
 
 const FIELD_TYPES = ['TEXT', 'NUMBER', 'DATE', 'CURRENCY', 'RICH_TEXT'];
 
@@ -23,15 +24,10 @@ export default function ProjectFieldsManager({
     if (!newField.label.trim()) return;
     setSaving(true);
     setError(null);
-    const res = await fetch('/api/project-field-defs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newField),
-    });
+    const res = await apiSend('/api/project-field-defs', 'POST', newField);
     setSaving(false);
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ? JSON.stringify(data.error) : 'Could not add field.');
+      setError(await apiError(res, 'Could not add field.'));
       return;
     }
     const created = await res.json();
@@ -43,26 +39,18 @@ export default function ProjectFieldsManager({
   async function handleRenameField(id: string, label: string) {
     if (!label.trim()) return;
     onChange(fieldDefs.map((d) => (d.id === id ? { ...d, label } : d)));
-    await fetch(`/api/project-field-defs/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label }),
-    });
+    await apiSend(`/api/project-field-defs/${id}`, 'PATCH', { label });
   }
 
   async function handleDeleteField(id: string) {
     onChange(fieldDefs.filter((d) => d.id !== id));
-    await fetch(`/api/project-field-defs/${id}`, { method: 'DELETE' });
+    await apiSend(`/api/project-field-defs/${id}`, 'DELETE');
   }
 
   async function handleToggleVisibility(field: FieldDefRow) {
     const visibleToDesigner = !field.visibleToDesigner;
     onChange(fieldDefs.map((d) => (d.id === field.id ? { ...d, visibleToDesigner } : d)));
-    await fetch(`/api/project-field-defs/${field.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visibleToDesigner }),
-    });
+    await apiSend(`/api/project-field-defs/${field.id}`, 'PATCH', { visibleToDesigner });
   }
 
   function handleDrop(targetId: string) {
@@ -78,11 +66,7 @@ export default function ProjectFieldsManager({
     onChange(reordered);
     setDraggingId(null);
 
-    fetch('/api/project-field-defs/reorder', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order: reordered.map((d) => d.id) }),
-    });
+    apiSend('/api/project-field-defs/reorder', 'PATCH', { order: reordered.map((d) => d.id) });
   }
 
   return (

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { forbidden, parseBody } from '@/lib/apiRoute';
 import { itemSchema } from '@/lib/validation';
 import { resolvePermissions } from '@/lib/permissions';
 import { findOrCreateItemType } from '@/lib/itemType';
@@ -13,27 +14,24 @@ export async function POST(req: NextRequest) {
 
   const perms = await resolvePermissions(session);
   if (!perms.procurement) {
-    return NextResponse.json({ error: 'You do not have permission to edit procurement' }, { status: 403 });
+    return forbidden('You do not have permission to edit procurement');
   }
 
-  const body = await req.json();
-  const parsed = itemSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, itemSchema);
+  if (response) return response;
 
-  const { vendorId, itemType, procurementListId, tag, ...rest } = parsed.data;
+  const { vendorId, itemType, procurementListId, tag, ...rest } = data;
 
-  const itemTypeId = await findOrCreateItemType(parsed.data.category, itemType);
-  if (rest.room) await findOrCreateRoom(parsed.data.projectId, rest.room);
+  const itemTypeId = await findOrCreateItemType(data.category, itemType);
+  if (rest.room) await findOrCreateRoom(data.projectId, rest.room);
 
   // A blank tag auto-fills from the item type's tag prefix — "TA-1"
   // for the first Table on this project, etc. A manually-typed tag is
   // always left as-is.
-  const resolvedTag = tag?.trim() || (itemTypeId ? await nextItemTag(parsed.data.projectId, itemTypeId) : null) || '';
+  const resolvedTag = tag?.trim() || (itemTypeId ? await nextItemTag(data.projectId, itemTypeId) : null) || '';
 
   const maxSort = await prisma.item.aggregate({
-    where: { projectId: parsed.data.projectId },
+    where: { projectId: data.projectId },
     _max: { sortOrder: true },
   });
 

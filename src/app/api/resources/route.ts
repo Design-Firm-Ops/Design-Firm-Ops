@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { badRequest } from '@/lib/apiRoute';
 import { getSupabaseServerClient, RESOURCES_BUCKET, ensureResourcesBucket } from '@/lib/supabase';
 
 export async function POST(req: NextRequest) {
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
   const folder = form.get('folder');
 
   if (!(file instanceof File) || typeof folder !== 'string' || !folder.trim()) {
-    return NextResponse.json({ error: 'file and folder are required' }, { status: 400 });
+    return badRequest('file and folder are required');
   }
 
   let storagePath: string;

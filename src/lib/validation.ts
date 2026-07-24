@@ -1,88 +1,117 @@
 import { z } from 'zod';
 
+// ---------- Shared field builders ----------
+//
+// Forms post every field, so an untouched optional input arrives as "" rather
+// than absent. These builders capture that convention once instead of
+// repeating `.optional().or(z.literal(''))` on ~60 fields.
+
+/** An optional free-text field: a value, "", or absent. */
+export const optionalText = () => z.string().optional().or(z.literal(''));
+
+/** Like `optionalText`, but a non-empty value must be a valid email address. */
+export const optionalEmail = () => z.string().email().optional().or(z.literal(''));
+
+/** A required name-ish field, with the message the form shows. */
+export const requiredName = (message = 'Name is required') => z.string().min(1, message);
+
+/** A numeric field that treats blank input as "not set" rather than 0. */
+export const nullableNumber = (min = 0) =>
+  z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? null : v),
+    z.coerce.number().min(min).nullable()
+  );
+
+/** `nullableNumber` for whole numbers (quantities, square footage). */
+export const nullableInt = (min = 0) =>
+  z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? null : v),
+    z.coerce.number().int().min(min).nullable()
+  );
+
 // Additional points of contact beyond the primary name/email/phone on
 // Client itself — the whole array replaces a client's existing rows on
 // save, same "full replace" pattern as folder allow-lists.
 export const clientContactRowSchema = z.object({
-  name: z.string().optional().or(z.literal('')),
-  email: z.string().email().optional().or(z.literal('')),
-  phone: z.string().optional().or(z.literal('')),
+  name: optionalText(),
+  email: optionalEmail(),
+  phone: optionalText(),
 });
 
 export const clientSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  contactName: z.string().optional().or(z.literal('')),
-  email: z.string().email().optional().or(z.literal('')),
-  phone: z.string().optional().or(z.literal('')),
-  billingAddress: z.string().optional().or(z.literal('')),
-  notes: z.string().optional().or(z.literal('')),
+  name: requiredName(),
+  contactName: optionalText(),
+  email: optionalEmail(),
+  phone: optionalText(),
+  billingAddress: optionalText(),
+  notes: optionalText(),
   contacts: z.array(clientContactRowSchema).optional(),
 });
 
 export const vendorSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  website: z.string().optional().or(z.literal('')),
-  repName: z.string().optional().or(z.literal('')),
-  repEmail: z.string().email().optional().or(z.literal('')),
-  repPhone: z.string().optional().or(z.literal('')),
-  showroomName: z.string().optional().or(z.literal('')),
-  showroomAddress: z.string().optional().or(z.literal('')),
+  name: requiredName(),
+  website: optionalText(),
+  repName: optionalText(),
+  repEmail: optionalEmail(),
+  repPhone: optionalText(),
+  showroomName: optionalText(),
+  showroomAddress: optionalText(),
   accountType: z.enum(['TRADE', 'RETAIL', 'BOTH']).nullable().optional(),
   productType: z.enum(['STOCK', 'CUSTOM', 'BOTH']).nullable().optional(),
   priceRange: z.enum(['LOW', 'MID', 'HIGH']).nullable().optional(),
   // IDs of user-customizable Offering rows — no longer a fixed enum.
   offerings: z.array(z.string()).default([]),
-  notes: z.string().optional().or(z.literal('')),
-  accountNumber: z.string().optional().or(z.literal('')),
-  tradeAccountUsername: z.string().optional().or(z.literal('')),
-  tradeAccountPassword: z.string().optional().or(z.literal('')), // plaintext in transit only — encrypted before storage
-  tradeAccountNotes: z.string().optional().or(z.literal('')),
+  notes: optionalText(),
+  accountNumber: optionalText(),
+  tradeAccountUsername: optionalText(),
+  tradeAccountPassword: optionalText(), // plaintext in transit only — encrypted before storage
+  tradeAccountNotes: optionalText(),
 });
 
 export const projectSchema = z.object({
-  clientId: z.string().optional().or(z.literal('')),
-  name: z.string().min(1, 'Name is required'),
-  projectAddress: z.string().optional().or(z.literal('')),
+  clientId: optionalText(),
+  name: requiredName(),
+  projectAddress: optionalText(),
   status: z.enum(['LEAD', 'ACTIVE', 'ON_HOLD', 'COMPLETE']).default('LEAD'),
-  startDate: z.string().optional().or(z.literal('')),
-  projectType: z.string().optional().or(z.literal('')),
-  leadDesignerName: z.string().optional().or(z.literal('')),
+  startDate: optionalText(),
+  projectType: optionalText(),
+  leadDesignerName: optionalText(),
   // Free text — resolved to a FeeStructureOption row (creating a new
   // custom option if it doesn't exist yet). See lib/feeStructure.ts.
-  designFeeStructure: z.string().optional().or(z.literal('')),
-  procurementFeeStructure: z.string().optional().or(z.literal('')),
-  feeNotes: z.string().optional().or(z.literal('')),
+  designFeeStructure: optionalText(),
+  procurementFeeStructure: optionalText(),
+  feeNotes: optionalText(),
   defaultMarkupPct: z.coerce.number().min(0).max(1000).default(15),
   markupMode: z.enum(['MARKUP', 'MARGIN']).default('MARKUP'),
   salesTaxRate: z.coerce.number().min(0).max(1).default(0),
   taxBase: z.enum(['MERCH_ONLY', 'MERCH_PLUS_SHIPPING']).default('MERCH_ONLY'),
-  invoicePrefix: z.string().optional().or(z.literal('')),
+  invoicePrefix: optionalText(),
   // Columns new invoices on this project start with — see lib/invoiceColumns.ts.
   defaultInvoiceColumnConfig: z.object({ columns: z.array(z.string()) }).nullable().optional(),
   // Only present when creating a project with a brand-new client inline.
-  newClientName: z.string().optional().or(z.literal('')),
-  newClientEmail: z.string().optional().or(z.literal('')),
-  newClientPhone: z.string().optional().or(z.literal('')),
-  newClientAddress: z.string().optional().or(z.literal('')),
+  newClientName: optionalText(),
+  newClientEmail: optionalText(),
+  newClientPhone: optionalText(),
+  newClientAddress: optionalText(),
 });
 
 export const itemSchema = z.object({
   projectId: z.string().min(1),
   // Left blank on creation until an item type is chosen, which
   // auto-fills it — see lib/itemTag.ts.
-  tag: z.string().optional().or(z.literal('')),
-  name: z.string().min(1, 'Name is required'),
-  invoiceDisplayName: z.string().optional().or(z.literal('')),
+  tag: optionalText(),
+  name: requiredName(),
+  invoiceDisplayName: optionalText(),
   // Free text — matches this project's Procurement list names, see
   // Item.category comment in schema.prisma.
   category: z.string().min(1).default('Other Merchandise'),
   // Free text, resolved to an ItemTypeOption row (creating a new
   // custom type if it doesn't exist yet) scoped under category — see
   // lib/itemType.ts.
-  itemType: z.string().optional().or(z.literal('')),
-  room: z.string().optional().or(z.literal('')),
-  vendorId: z.string().optional().or(z.literal('')),
-  procurementListId: z.string().optional().or(z.literal('')),
+  itemType: optionalText(),
+  room: optionalText(),
+  vendorId: optionalText(),
+  procurementListId: optionalText(),
   qty: z.coerce.number().int().min(1).default(1),
   unitCost: z.coerce.number().min(0),
   platformFee: z.coerce.number().min(0).default(0),
@@ -93,14 +122,14 @@ export const itemSchema = z.object({
   dimensionLength: z.coerce.number().min(0).nullable().optional(),
   dimensionUnit: z.enum(['IN', 'CM']).default('IN'),
   weight: z.coerce.number().min(0).nullable().optional(),
-  bulbSpec: z.string().optional().or(z.literal('')),
+  bulbSpec: optionalText(),
   bulbQty: z.coerce.number().int().min(0).nullable().optional(),
   // Tri-state: null/omitted = not yet reviewed, true = included, false
   // = confirmed not included (only "false" rows feed the Bulbs summary).
   bulbIncluded: z.boolean().nullable().optional(),
-  finish: z.string().optional().or(z.literal('')),
-  link: z.string().optional().or(z.literal('')),
-  shippingNotes: z.string().optional().or(z.literal('')),
+  finish: optionalText(),
+  link: optionalText(),
+  shippingNotes: optionalText(),
   status: z.enum(['PROPOSED', 'APPROVED', 'INVOICED', 'ORDERED', 'RECEIVED', 'DELIVERED']).default('PROPOSED'),
 });
 
@@ -116,14 +145,14 @@ const hexColor = z
   .or(z.literal(''));
 
 export const settingsSchema = z.object({
-  companyName: z.string().min(1, 'Company name is required'),
-  companyAddress: z.string().optional().or(z.literal('')),
-  owner1Name: z.string().optional().or(z.literal('')),
-  owner1Contact: z.string().optional().or(z.literal('')),
-  owner2Name: z.string().optional().or(z.literal('')),
-  owner2Contact: z.string().optional().or(z.literal('')),
-  paymentInstructions: z.string().optional().or(z.literal('')),
-  logoUrl: z.string().optional().or(z.literal('')),
+  companyName: requiredName('Company name is required'),
+  companyAddress: optionalText(),
+  owner1Name: optionalText(),
+  owner1Contact: optionalText(),
+  owner2Name: optionalText(),
+  owner2Contact: optionalText(),
+  paymentInstructions: optionalText(),
+  logoUrl: optionalText(),
   invoicePrimaryColor: hexColor,
   invoiceAccentColor: hexColor,
 });
@@ -152,13 +181,13 @@ export const userPermissionOverrideSchema = z.object({
 
 export const paymentSchema = z.object({
   projectId: z.string().min(1),
-  invoiceId: z.string().optional().or(z.literal('')),
+  invoiceId: optionalText(),
   category: z.enum(['MERCHANDISE', 'DESIGN_FEE']).default('MERCHANDISE'),
   amount: z.coerce.number().positive('Amount must be greater than 0'),
-  date: z.string().optional().or(z.literal('')),
+  date: optionalText(),
   method: z.enum(['ACH', 'WIRE', 'CHECK', 'CREDIT_CARD', 'OTHER']).default('OTHER'),
-  reference: z.string().optional().or(z.literal('')),
-  notes: z.string().optional().or(z.literal('')),
+  reference: optionalText(),
+  notes: optionalText(),
 });
 
 export const paymentUpdateSchema = paymentSchema.partial().omit({ projectId: true });
@@ -178,31 +207,31 @@ export const invoiceCreateSchema = z.object({
   shippingTotal: z.coerce.number().min(0).default(0),
   taxRate: z.coerce.number().min(0).max(1).optional(),
   taxBase: z.enum(['MERCH_ONLY', 'MERCH_PLUS_SHIPPING']).optional(),
-  dueDate: z.string().optional().or(z.literal('')),
-  notes: z.string().optional().or(z.literal('')),
+  dueDate: optionalText(),
+  notes: optionalText(),
 });
 
 export const invoiceUpdateSchema = z.object({
   columnConfig: z.object({ columns: z.array(z.string()) }).nullable().optional(),
-  dueDate: z.string().optional().or(z.literal('')),
-  notes: z.string().optional().or(z.literal('')),
+  dueDate: optionalText(),
+  notes: optionalText(),
 });
 
 export const designFeeChargeSchema = z.object({
   projectId: z.string().min(1),
-  description: z.string().min(1, 'Description is required'),
+  description: requiredName('Description is required'),
   amount: z.coerce.number().positive('Amount must be greater than 0'),
-  date: z.string().optional().or(z.literal('')),
+  date: optionalText(),
 });
 
 // ---------- Business Development ----------
 
 export const leadBoardSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
+  name: requiredName(),
 });
 
 export const pipelineStageSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
+  name: requiredName(),
   boardId: z.string().min(1),
 });
 
@@ -211,34 +240,28 @@ export const pipelineStageUpdateSchema = z.object({
 });
 
 export const referralPartnerSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  businessName: z.string().optional().or(z.literal('')),
-  contactEmail: z.string().email().optional().or(z.literal('')),
-  contactPhone: z.string().optional().or(z.literal('')),
-  notes: z.string().optional().or(z.literal('')),
+  name: requiredName(),
+  businessName: optionalText(),
+  contactEmail: optionalEmail(),
+  contactPhone: optionalText(),
+  notes: optionalText(),
 });
 
 export const leadSchema = z.object({
-  clientName: z.string().min(1, 'Client name is required'),
-  projectType: z.string().optional().or(z.literal('')),
-  referralSource: z.string().optional().or(z.literal('')),
-  referralPartnerId: z.string().optional().or(z.literal('')),
-  contactEmail: z.string().email().optional().or(z.literal('')),
-  contactPhone: z.string().optional().or(z.literal('')),
-  address: z.string().optional().or(z.literal('')),
-  notes: z.string().optional().or(z.literal('')),
+  clientName: requiredName('Client name is required'),
+  projectType: optionalText(),
+  referralSource: optionalText(),
+  referralPartnerId: optionalText(),
+  contactEmail: optionalEmail(),
+  contactPhone: optionalText(),
+  address: optionalText(),
+  notes: optionalText(),
   pipelineStageId: z.string().min(1),
-  squareFootage: z.preprocess(
-    (v) => (v === '' || v === null || v === undefined ? null : v),
-    z.coerce.number().int().min(0).nullable()
-  ),
-  estimatedBudget: z.preprocess(
-    (v) => (v === '' || v === null || v === undefined ? null : v),
-    z.coerce.number().min(0).nullable()
-  ),
-  timeline: z.string().optional().or(z.literal('')),
-  builderName: z.string().optional().or(z.literal('')),
-  architectName: z.string().optional().or(z.literal('')),
+  squareFootage: nullableInt(),
+  estimatedBudget: nullableNumber(),
+  timeline: optionalText(),
+  builderName: optionalText(),
+  architectName: optionalText(),
 });
 
 export const leadUpdateSchema = leadSchema.partial();
@@ -251,7 +274,7 @@ export const leadMoveSchema = z.object({
 // ---------- Administration ----------
 
 export const userCreateSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
+  name: requiredName(),
   email: z.string().email('A valid email is required'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   role: z.enum(['ADMIN', 'DESIGNER']).default('DESIGNER'),
@@ -271,22 +294,22 @@ export const resourceFolderPermissionSchema = z.object({
 // ---------- Customizable taxonomies ----------
 
 export const offeringSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
+  name: requiredName(),
 });
 
 export const feeStructureOptionSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
+  name: requiredName(),
   scope: z.enum(['DESIGN_FEE', 'PROCUREMENT']),
 });
 
 export const itemTypeCreateSchema = z.object({
-  category: z.string().min(1, 'Category is required'),
-  name: z.string().min(1, 'Name is required'),
+  category: requiredName('Category is required'),
+  name: requiredName(),
 });
 
 export const procurementListSchema = z.object({
   projectId: z.string().min(1),
-  name: z.string().min(1, 'Name is required'),
+  name: requiredName(),
 });
 
 export const procurementListUpdateSchema = z.object({
@@ -295,7 +318,7 @@ export const procurementListUpdateSchema = z.object({
 });
 
 const fieldDefBaseSchema = z.object({
-  label: z.string().min(1, 'Label is required'),
+  label: requiredName('Label is required'),
   fieldType: z.enum(['TEXT', 'NUMBER', 'DATE', 'CURRENCY', 'RICH_TEXT']).default('TEXT'),
   visibleToDesigner: z.boolean().default(true),
 });
@@ -315,11 +338,17 @@ export const fieldValueSchema = z.object({
   value: z.string().nullable().optional(),
 });
 
+// The body every drag-to-reorder endpoint takes: the full list of ids in
+// their new order. See `applyOrder` in lib/apiRoute.ts.
+export const reorderSchema = z.object({
+  order: z.array(z.string()).min(1),
+});
+
 // ---------- Documents ----------
 
 export const documentFolderSchema = z.object({
   projectId: z.string().min(1),
-  name: z.string().min(1, 'Folder name is required'),
+  name: requiredName('Folder name is required'),
 });
 
 export const documentFolderUpdateSchema = z.object({

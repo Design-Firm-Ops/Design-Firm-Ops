@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiSend } from '@/lib/apiClient';
 
 interface UserOption {
   id: string;
@@ -35,11 +36,7 @@ export default function FolderPermissionsEditor({
   async function handleSave() {
     setSaving(true);
     setMessage(null);
-    const res = await fetch('/api/resource-folders', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: folderName, allowedUserIds: Array.from(selected) }),
-    });
+    const res = await apiSend('/api/resource-folders', 'PUT', { name: folderName, allowedUserIds: Array.from(selected) });
     setSaving(false);
     if (res.ok) {
       setMessage('Saved.');

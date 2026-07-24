@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import FolderIcon from './FolderIcon';
 import FolderView, { ResourceRow } from './FolderView';
 import FolderPermissionsEditor from './FolderPermissionsEditor';
+import { apiError } from '@/lib/apiClient';
+import Modal from '@/components/Modal';
 
 type View = 'rows' | 'icons';
 
@@ -110,8 +112,7 @@ export default function AdminBrowser({
     setCreatingFolder(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setNewFolderError(data?.error ?? 'Could not create folder.');
+      setNewFolderError(await apiError(res, 'Could not create folder.'));
       return;
     }
 
@@ -194,7 +195,7 @@ export default function AdminBrowser({
       </div>
 
       {visibleTiles.length === 0 && (
-        <p className="py-8 text-center text-brown/50">Nothing matches "{query}".</p>
+        <p className="py-8 text-center text-brown/50">Nothing matches &ldquo;{query}&rdquo;.</p>
       )}
 
       {view === 'rows' ? (
@@ -230,33 +231,31 @@ export default function AdminBrowser({
       )}
 
       {showNewFolder && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <form onSubmit={handleCreateFolder} className="card w-full max-w-sm space-y-4 p-6">
-            <h2 className="text-lg font-medium text-brown">New Folder</h2>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Folder Name</label>
-              <input
-                className="input"
-                required
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">First File</label>
-              <input ref={newFolderFileRef} type="file" className="input" required />
-            </div>
-            {newFolderError && <p className="text-sm text-red-700">{newFolderError}</p>}
-            <div className="flex justify-end gap-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowNewFolder(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary" disabled={creatingFolder}>
-                {creatingFolder ? 'Creating…' : 'Create'}
-              </button>
-            </div>
-          </form>
-        </div>
+        <Modal width="sm" onSubmit={handleCreateFolder} className="space-y-4">
+          <h2 className="text-lg font-medium text-brown">New Folder</h2>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Folder Name</label>
+            <input
+              className="input"
+              required
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">First File</label>
+            <input ref={newFolderFileRef} type="file" className="input" required />
+          </div>
+          {newFolderError && <p className="text-sm text-red-700">{newFolderError}</p>}
+          <div className="flex justify-end gap-3">
+            <button type="button" className="btn-secondary" onClick={() => setShowNewFolder(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={creatingFolder}>
+              {creatingFolder ? 'Creating…' : 'Create'}
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );

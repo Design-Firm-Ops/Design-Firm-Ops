@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { apiError, apiSend } from '@/lib/apiClient';
+import Modal from '@/components/Modal';
 
 export interface OfferingRow {
   id: string;
@@ -22,11 +24,7 @@ export default function OfferingManager({ offerings, onClose }: { offerings: Off
     const name = names[offering.id]?.trim();
     if (!name || name === offering.name) return;
     setSaving(offering.id);
-    await fetch(`/api/offerings/${offering.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    });
+    await apiSend(`/api/offerings/${offering.id}`, 'PATCH', { name });
     setSaving(null);
     router.refresh();
   }
@@ -37,16 +35,11 @@ export default function OfferingManager({ offerings, onClose }: { offerings: Off
     setSaving('new');
     setError(null);
 
-    const res = await fetch('/api/offerings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName.trim() }),
-    });
+    const res = await apiSend('/api/offerings', 'POST', { name: newName.trim() });
     setSaving(null);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ? JSON.stringify(data.error) : 'Could not add category.');
+      setError(await apiError(res, 'Could not add category.'));
       return;
     }
 
@@ -57,18 +50,18 @@ export default function OfferingManager({ offerings, onClose }: { offerings: Off
   async function confirmDelete() {
     if (!pendingDelete) return;
     setDeleting(true);
-    await fetch(`/api/offerings/${pendingDelete.id}`, { method: 'DELETE' });
+    await apiSend(`/api/offerings/${pendingDelete.id}`, 'DELETE');
     setDeleting(false);
     setPendingDelete(null);
     router.refresh();
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-      <div className="card w-full max-w-md space-y-4 p-6">
+    <>
+      <Modal width="md" className="space-y-4">
         <h2 className="text-lg font-medium text-brown">Manage Offering Categories</h2>
         <p className="text-xs text-brown/50">
-          Shared between Vendors and line items — rename or remove categories as your firm's vocabulary changes.
+          Shared between Vendors and line items — rename or remove categories as your firm&rsquo;s vocabulary changes.
         </p>
 
         <div className="space-y-2">
@@ -112,8 +105,7 @@ export default function OfferingManager({ offerings, onClose }: { offerings: Off
             Done
           </button>
         </div>
-      </div>
-
+      </Modal>
       <ConfirmDialog
         open={!!pendingDelete}
         title="Delete category?"
@@ -122,6 +114,6 @@ export default function OfferingManager({ offerings, onClose }: { offerings: Off
         onConfirm={confirmDelete}
         onCancel={() => setPendingDelete(null)}
       />
-    </div>
+    </>
   );
 }

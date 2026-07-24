@@ -1,25 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/apiAuth';
-
-const reorderSchema = z.object({
-  order: z.array(z.string()).min(1),
-});
+import { applyOrder, ok, parseBody } from '@/lib/apiRoute';
+import { reorderSchema } from '@/lib/validation';
 
 export async function PATCH(req: NextRequest) {
   const { unauthorized } = await requireAdmin();
   if (unauthorized) return unauthorized;
 
-  const body = await req.json();
-  const parsed = reorderSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, reorderSchema);
+  if (response) return response;
 
-  await Promise.all(
-    parsed.data.order.map((id, index) => prisma.projectFieldDef.update({ where: { id }, data: { order: index } }))
-  );
-
-  return NextResponse.json({ ok: true });
+  await applyOrder(prisma.projectFieldDef, data.order);
+  return ok();
 }

@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, userEvent, createRouterMock, mockFetch } from '@/test';
+import { render, screen, waitFor, userEvent, mockNextNavigation, nextNavigationMock, mockFetch, type RouterMock } from '@/test';
 import NavSearch from './NavSearch';
 
-const router = createRouterMock();
-vi.mock('next/navigation', () => ({ useRouter: () => router }));
+vi.mock('next/navigation', () => nextNavigationMock);
 
+let router: RouterMock;
 beforeEach(() => {
-  router.push.mockClear();
+  router = mockNextNavigation();
 });
 
 describe('NavSearch', () => {

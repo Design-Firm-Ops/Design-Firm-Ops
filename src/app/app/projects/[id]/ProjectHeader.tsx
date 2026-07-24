@@ -8,6 +8,9 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import ProjectCustomFields, { FieldDefRow, FieldValueRow } from './ProjectCustomFields';
 import ProjectFieldsManager from './ProjectFieldsManager';
 import { COLUMN_LABELS, COLUMN_PRESETS, INVOICE_COLUMNS, InvoiceColumnKey, resolveColumnConfig } from '@/lib/invoiceColumns';
+import { apiError, apiSend } from '@/lib/apiClient';
+import { formatDate } from '@/lib/format';
+import Modal from '@/components/Modal';
 
 export interface ProjectData {
   id: string;
@@ -119,20 +122,15 @@ export default function ProjectHeader({
     setSaving(true);
     setError(null);
 
-    const res = await fetch(`/api/projects/${project.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const res = await apiSend(`/api/projects/${project.id}`, 'PATCH', {
         ...form,
         defaultInvoiceColumnConfig: invoiceColumns ? { columns: invoiceColumns } : null,
-      }),
-    });
+      });
 
     setSaving(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ? JSON.stringify(data.error) : 'Something went wrong.');
+      setError(await apiError(res, 'Something went wrong.'));
       return;
     }
 
@@ -145,17 +143,12 @@ export default function ProjectHeader({
     setSavingClient(true);
     setClientError(null);
 
-    const res = await fetch(`/api/clients/${project.client.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...clientForm, contacts: additionalContacts }),
-    });
+    const res = await apiSend(`/api/clients/${project.client.id}`, 'PATCH', { ...clientForm, contacts: additionalContacts });
 
     setSavingClient(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setClientError(data?.error ? JSON.stringify(data.error) : 'Something went wrong.');
+      setClientError(await apiError(res, 'Something went wrong.'));
       return;
     }
 
@@ -165,7 +158,7 @@ export default function ProjectHeader({
 
   async function confirmDelete() {
     setDeleting(true);
-    const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' });
+    const res = await apiSend(`/api/projects/${project.id}`, 'DELETE');
     setDeleting(false);
     if (res.ok) {
       router.push('/app/projects');
@@ -198,7 +191,7 @@ export default function ProjectHeader({
         </div>
         <div>
           <dt className="text-brown/50">Start Date</dt>
-          <dd className="font-medium">{project.startDate ? new Date(project.startDate).toLocaleDateString() : '—'}</dd>
+          <dd className="font-medium">{formatDate(project.startDate)}</dd>
         </div>
         <div>
           <dt className="text-brown/50">Project Type</dt>
@@ -308,254 +301,250 @@ export default function ProjectHeader({
       <ProjectCustomFields projectId={project.id} fieldDefs={fieldDefs} fieldValues={fieldValues} isAdmin={isAdmin} />
 
       {showForm && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
-          <form onSubmit={handleSubmit} className="card w-full max-w-2xl space-y-4 p-6">
-            <h2 className="text-lg font-medium text-brown">Edit Project</h2>
+        <Modal width="2xl" scrollable onSubmit={handleSubmit} className="space-y-4">
+          <h2 className="text-lg font-medium text-brown">Edit Project</h2>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="mb-1 block text-sm font-medium text-brown">Name</label>
-                <input className="input" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              </div>
-              <div className="col-span-2">
-                <label className="mb-1 block text-sm font-medium text-brown">Project Address</label>
-                <input
-                  className="input"
-                  value={form.projectAddress}
-                  onChange={(e) => setForm({ ...form, projectAddress: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Status</label>
-                <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {s.replace('_', ' ')}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Start Date</label>
-                <input
-                  type="date"
-                  className="input"
-                  value={form.startDate}
-                  onChange={(e) => setForm({ ...form, startDate: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Project Type</label>
-                <input
-                  className="input"
-                  list="project-type-options"
-                  placeholder="e.g. Full Remodel"
-                  value={form.projectType}
-                  onChange={(e) => setForm({ ...form, projectType: e.target.value })}
-                />
-                <datalist id="project-type-options">
-                  {projectTypeOptions.map((t) => (
-                    <option key={t} value={t} />
-                  ))}
-                </datalist>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Lead Designer</label>
-                <input
-                  className="input"
-                  value={form.leadDesignerName}
-                  onChange={(e) => setForm({ ...form, leadDesignerName: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Design Fee Structure</label>
-                <input
-                  className="input"
-                  list="design-fee-structure-options"
-                  placeholder="e.g. Fixed Fee"
-                  value={form.designFeeStructure}
-                  onChange={(e) => setForm({ ...form, designFeeStructure: e.target.value })}
-                />
-                <datalist id="design-fee-structure-options">
-                  {designFeeStructureOptions.map((f) => (
-                    <option key={f} value={f} />
-                  ))}
-                </datalist>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-brown">Invoice Prefix</label>
-                <input
-                  className="input"
-                  placeholder="e.g. 2506"
-                  value={form.invoicePrefix}
-                  onChange={(e) => setForm({ ...form, invoicePrefix: e.target.value })}
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="mb-1 block text-sm font-medium text-brown">Fee Notes</label>
-                <textarea
-                  className="input"
-                  rows={2}
-                  value={form.feeNotes}
-                  onChange={(e) => setForm({ ...form, feeNotes: e.target.value })}
-                />
-              </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="mb-1 block text-sm font-medium text-brown">Name</label>
+              <input className="input" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
-
-            <div className="rounded-md border border-taupe/40 p-4">
-              <p className="mb-1 text-sm font-medium text-brown">Default invoice columns shown to client</p>
-              <p className="mb-3 text-xs text-brown/50">
-                New invoices inherit this unless a column selection is set on the invoice itself.
-              </p>
-              <div className="mb-3 flex flex-wrap gap-2">
-                {Object.entries(COLUMN_PRESETS).map(([key, preset]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className="rounded-full border border-taupe/50 px-3 py-1 text-xs text-brown hover:border-gold"
-                    onClick={() => setInvoiceColumns(preset.config.columns)}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-3">
-                {INVOICE_COLUMNS.map((col) => {
-                  const resolved = resolveColumnConfig(invoiceColumns ? { columns: invoiceColumns } : null);
-                  return (
-                    <label key={col} className="flex items-center gap-1.5 text-sm text-brown">
-                      <input
-                        type="checkbox"
-                        checked={resolved.columns.includes(col)}
-                        onChange={(e) => {
-                          const base = invoiceColumns ?? resolved.columns;
-                          const next = e.target.checked ? [...base, col] : base.filter((c) => c !== col);
-                          setInvoiceColumns(INVOICE_COLUMNS.filter((c) => (next as InvoiceColumnKey[]).includes(c)));
-                        }}
-                      />
-                      {COLUMN_LABELS[col]}
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            {isAdmin && <ProjectFieldsManager fieldDefs={fieldDefs} onChange={setFieldDefs} />}
-
-            {error && <p className="text-sm text-red-700">{error}</p>}
-
-            <div className="flex justify-end gap-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary" disabled={saving}>
-                {saving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {showClientForm && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
-          <form onSubmit={handleClientSubmit} className="card w-full max-w-lg space-y-4 p-6">
-            <h2 className="text-lg font-medium text-brown">Edit Client Contact</h2>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Client Name</label>
+            <div className="col-span-2">
+              <label className="mb-1 block text-sm font-medium text-brown">Project Address</label>
               <input
                 className="input"
-                required
-                value={clientForm.name}
-                onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
+                value={form.projectAddress}
+                onChange={(e) => setForm({ ...form, projectAddress: e.target.value })}
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Billing Address</label>
+              <label className="mb-1 block text-sm font-medium text-brown">Status</label>
+              <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s.replace('_', ' ')}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brown">Start Date</label>
+              <input
+                type="date"
+                className="input"
+                value={form.startDate}
+                onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brown">Project Type</label>
+              <input
+                className="input"
+                list="project-type-options"
+                placeholder="e.g. Full Remodel"
+                value={form.projectType}
+                onChange={(e) => setForm({ ...form, projectType: e.target.value })}
+              />
+              <datalist id="project-type-options">
+                {projectTypeOptions.map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brown">Lead Designer</label>
+              <input
+                className="input"
+                value={form.leadDesignerName}
+                onChange={(e) => setForm({ ...form, leadDesignerName: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brown">Design Fee Structure</label>
+              <input
+                className="input"
+                list="design-fee-structure-options"
+                placeholder="e.g. Fixed Fee"
+                value={form.designFeeStructure}
+                onChange={(e) => setForm({ ...form, designFeeStructure: e.target.value })}
+              />
+              <datalist id="design-fee-structure-options">
+                {designFeeStructureOptions.map((f) => (
+                  <option key={f} value={f} />
+                ))}
+              </datalist>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brown">Invoice Prefix</label>
+              <input
+                className="input"
+                placeholder="e.g. 2506"
+                value={form.invoicePrefix}
+                onChange={(e) => setForm({ ...form, invoicePrefix: e.target.value })}
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="mb-1 block text-sm font-medium text-brown">Fee Notes</label>
               <textarea
                 className="input"
                 rows={2}
-                value={clientForm.billingAddress}
-                onChange={(e) => setClientForm({ ...clientForm, billingAddress: e.target.value })}
+                value={form.feeNotes}
+                onChange={(e) => setForm({ ...form, feeNotes: e.target.value })}
               />
             </div>
+          </div>
 
-            <div>
-              <p className="mb-2 text-sm font-medium text-brown">Points of Contact</p>
-              <div className="space-y-2 rounded-md border border-taupe/40 p-3">
-                <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-md border border-taupe/40 p-4">
+            <p className="mb-1 text-sm font-medium text-brown">Default invoice columns shown to client</p>
+            <p className="mb-3 text-xs text-brown/50">
+              New invoices inherit this unless a column selection is set on the invoice itself.
+            </p>
+            <div className="mb-3 flex flex-wrap gap-2">
+              {Object.entries(COLUMN_PRESETS).map(([key, preset]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className="rounded-full border border-taupe/50 px-3 py-1 text-xs text-brown hover:border-gold"
+                  onClick={() => setInvoiceColumns(preset.config.columns)}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {INVOICE_COLUMNS.map((col) => {
+                const resolved = resolveColumnConfig(invoiceColumns ? { columns: invoiceColumns } : null);
+                return (
+                  <label key={col} className="flex items-center gap-1.5 text-sm text-brown">
+                    <input
+                      type="checkbox"
+                      checked={resolved.columns.includes(col)}
+                      onChange={(e) => {
+                        const base = invoiceColumns ?? resolved.columns;
+                        const next = e.target.checked ? [...base, col] : base.filter((c) => c !== col);
+                        setInvoiceColumns(INVOICE_COLUMNS.filter((c) => (next as InvoiceColumnKey[]).includes(c)));
+                      }}
+                    />
+                    {COLUMN_LABELS[col]}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {isAdmin && <ProjectFieldsManager fieldDefs={fieldDefs} onChange={setFieldDefs} />}
+
+          {error && <p className="text-sm text-red-700">{error}</p>}
+
+          <div className="flex justify-end gap-3">
+            <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showClientForm && (
+        <Modal width="lg" scrollable onSubmit={handleClientSubmit} className="space-y-4">
+          <h2 className="text-lg font-medium text-brown">Edit Client Contact</h2>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Client Name</label>
+            <input
+              className="input"
+              required
+              value={clientForm.name}
+              onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Billing Address</label>
+            <textarea
+              className="input"
+              rows={2}
+              value={clientForm.billingAddress}
+              onChange={(e) => setClientForm({ ...clientForm, billingAddress: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium text-brown">Points of Contact</p>
+            <div className="space-y-2 rounded-md border border-taupe/40 p-3">
+              <div className="grid grid-cols-3 gap-2">
+                <input
+                  className="input"
+                  placeholder="Name"
+                  value={clientForm.contactName}
+                  onChange={(e) => setClientForm({ ...clientForm, contactName: e.target.value })}
+                />
+                <input
+                  type="email"
+                  className="input"
+                  placeholder="Email"
+                  value={clientForm.email}
+                  onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })}
+                />
+                <input
+                  className="input"
+                  placeholder="Phone"
+                  value={clientForm.phone}
+                  onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })}
+                />
+              </div>
+              {additionalContacts.map((c, i) => (
+                <div key={i} className="grid grid-cols-3 gap-2">
                   <input
                     className="input"
                     placeholder="Name"
-                    value={clientForm.contactName}
-                    onChange={(e) => setClientForm({ ...clientForm, contactName: e.target.value })}
+                    value={c.name}
+                    onChange={(e) => updateContactRow(i, { name: e.target.value })}
                   />
-                  <input
-                    type="email"
-                    className="input"
-                    placeholder="Email"
-                    value={clientForm.email}
-                    onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })}
-                  />
-                  <input
-                    className="input"
-                    placeholder="Phone"
-                    value={clientForm.phone}
-                    onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })}
-                  />
-                </div>
-                {additionalContacts.map((c, i) => (
-                  <div key={i} className="grid grid-cols-3 gap-2">
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="email"
+                      className="input"
+                      placeholder="Email"
+                      value={c.email}
+                      onChange={(e) => updateContactRow(i, { email: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
                     <input
                       className="input"
-                      placeholder="Name"
-                      value={c.name}
-                      onChange={(e) => updateContactRow(i, { name: e.target.value })}
+                      placeholder="Phone"
+                      value={c.phone}
+                      onChange={(e) => updateContactRow(i, { phone: e.target.value })}
                     />
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="email"
-                        className="input"
-                        placeholder="Email"
-                        value={c.email}
-                        onChange={(e) => updateContactRow(i, { email: e.target.value })}
-                      />
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <input
-                        className="input"
-                        placeholder="Phone"
-                        value={c.phone}
-                        onChange={(e) => updateContactRow(i, { phone: e.target.value })}
-                      />
-                      <button
-                        type="button"
-                        className="text-red-700 hover:text-red-900"
-                        onClick={() => removeContactRow(i)}
-                      >
-                        ✕
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      className="text-red-700 hover:text-red-900"
+                      onClick={() => removeContactRow(i)}
+                    >
+                      ✕
+                    </button>
                   </div>
-                ))}
-                <button type="button" className="text-sm text-brown hover:text-gold" onClick={addContactRow}>
-                  + Add Contact
-                </button>
-              </div>
-            </div>
-
-            {clientError && <p className="text-sm text-red-700">{clientError}</p>}
-
-            <div className="flex justify-end gap-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowClientForm(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary" disabled={savingClient}>
-                {savingClient ? 'Saving…' : 'Save'}
+                </div>
+              ))}
+              <button type="button" className="text-sm text-brown hover:text-gold" onClick={addContactRow}>
+                + Add Contact
               </button>
             </div>
-          </form>
-        </div>
+          </div>
+
+          {clientError && <p className="text-sm text-red-700">{clientError}</p>}
+
+          <div className="flex justify-end gap-3">
+            <button type="button" className="btn-secondary" onClick={() => setShowClientForm(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={savingClient}>
+              {savingClient ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </Modal>
       )}
 
       <ConfirmDialog

@@ -6,7 +6,7 @@ import { createSignedDocumentUrl } from '@/lib/supabase';
 import { resolvePermissions, isAdmin as checkIsAdmin } from '@/lib/permissions';
 import { summarizeProjectFinancials, summarizeDesignFee } from '@/lib/financials';
 import ProjectHeader from './ProjectHeader';
-import ProjectTabs, { ProjectTab } from './ProjectTabs';
+import Tabs, { type Tab } from '@/components/Tabs';
 import ProcurementTabs from './ProcurementTabs';
 import { ItemRow } from './ItemsTable';
 import InvoicesTab, { InvoiceRow } from './InvoicesTab';
@@ -222,7 +222,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     procurementLists.push({ id: 'unassigned', name: 'Unassigned', items: unassignedItems });
   }
 
-  const tabs: ProjectTab[] = [];
+  const tabs: Tab[] = [];
   if (perms.documentsPresentations) {
     tabs.push({
       key: 'documents',
@@ -366,7 +366,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         isAdmin={admin}
       />
 
-      <ProjectTabs tabs={tabs} />
+      <Tabs tabs={tabs} />
     </div>
   );
 }

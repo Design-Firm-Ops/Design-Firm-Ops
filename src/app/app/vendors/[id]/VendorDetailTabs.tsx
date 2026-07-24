@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Tabs from '@/components/Tabs';
 import VendorFormModal, { VendorRow } from '../VendorFormModal';
 import VendorItemsPanel from '../VendorItemsPanel';
 import AddItemToProjectModal from './AddItemToProjectModal';
@@ -54,38 +55,15 @@ export default function VendorDetailTabs({
   canViewCredentials: boolean;
 }) {
   const router = useRouter();
-  const [active, setActive] = useState<'info' | 'items'>('info');
   const [showEdit, setShowEdit] = useState(false);
   const [showAddItem, setShowAddItem] = useState(false);
   const [itemsRefreshKey, setItemsRefreshKey] = useState(0);
 
-  return (
-    <div>
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex gap-1 border-b border-taupe/40">
-          <button
-            onClick={() => setActive('info')}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              active === 'info' ? 'border-b-2 border-gold text-brown' : 'text-brown/50 hover:text-brown'
-            }`}
-          >
-            Contact & Showroom
-          </button>
-          <button
-            onClick={() => setActive('items')}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              active === 'items' ? 'border-b-2 border-gold text-brown' : 'text-brown/50 hover:text-brown'
-            }`}
-          >
-            Linked Items
-          </button>
-        </div>
-        <Link href="/app/vendors" className="text-sm text-brown/50 hover:text-brown">
-          ← All Vendors
-        </Link>
-      </div>
-
-      {active === 'info' && (
+  const tabs = [
+    {
+      key: 'info',
+      label: 'Contact & Showroom',
+      content: (
         <div className="card space-y-6 p-6">
           <div className="flex justify-end">
             <button className="btn-secondary" onClick={() => setShowEdit(true)}>
@@ -163,9 +141,12 @@ export default function VendorDetailTabs({
             </div>
           )}
         </div>
-      )}
-
-      {active === 'items' && (
+      ),
+    },
+    {
+      key: 'items',
+      label: 'Linked Items',
+      content: (
         <div>
           <div className="mb-4 flex justify-end">
             <button className="btn-primary" onClick={() => setShowAddItem(true)}>
@@ -176,7 +157,20 @@ export default function VendorDetailTabs({
             <VendorItemsPanel vendorId={vendor.id} />
           </div>
         </div>
-      )}
+      ),
+    },
+  ];
+
+  return (
+    <div>
+      <Tabs
+        tabs={tabs}
+        action={
+          <Link href="/app/vendors" className="text-sm text-brown/50 hover:text-brown">
+            ← All Vendors
+          </Link>
+        }
+      />
 
       {showEdit && (
         <VendorFormModal

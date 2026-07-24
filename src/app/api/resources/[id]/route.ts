@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { notFound, ok } from '@/lib/apiRoute';
 import { getSupabaseServerClient, RESOURCES_BUCKET } from '@/lib/supabase';
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -8,7 +9,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   if (unauthorized) return unauthorized;
 
   const resource = await prisma.resource.findUnique({ where: { id: params.id } });
-  if (!resource) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!resource) return notFound();
 
   try {
     const supabase = getSupabaseServerClient();
@@ -18,5 +19,5 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   }
 
   await prisma.resource.delete({ where: { id: params.id } });
-  return NextResponse.json({ ok: true });
+  return ok();
 }

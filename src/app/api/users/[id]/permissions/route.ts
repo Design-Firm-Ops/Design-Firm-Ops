@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/apiAuth';
+import { notFound, parseBody } from '@/lib/apiRoute';
 import { userPermissionOverrideSchema } from '@/lib/validation';
 
 /**
@@ -12,19 +13,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const { unauthorized } = await requireAdmin();
   if (unauthorized) return unauthorized;
 
-  const body = await req.json();
-  const parsed = userPermissionOverrideSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, userPermissionOverrideSchema);
+  if (response) return response;
 
   const user = await prisma.user.findUnique({ where: { id: params.id } });
-  if (!user) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!user) return notFound();
 
   const override = await prisma.userPermissionOverride.upsert({
     where: { userId: params.id },
-    create: { userId: params.id, ...parsed.data },
-    update: parsed.data,
+    create: { userId: params.id, ...data },
+    update: data,
   });
 
   return NextResponse.json(override);

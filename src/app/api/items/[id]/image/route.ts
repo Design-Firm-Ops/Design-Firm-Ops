@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { badRequest, forbidden, ok } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/lib/permissions';
 import { getSupabaseServerClient, DOCUMENTS_BUCKET, ensureDocumentsBucket, createSignedDocumentUrl } from '@/lib/supabase';
 
@@ -10,13 +11,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const perms = await resolvePermissions(session);
   if (!perms.procurement) {
-    return NextResponse.json({ error: 'You do not have permission to edit procurement' }, { status: 403 });
+    return forbidden('You do not have permission to edit procurement');
   }
 
   const form = await req.formData();
   const file = form.get('file');
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: 'file is required' }, { status: 400 });
+    return badRequest('file is required');
   }
 
   const existing = await prisma.item.findUnique({ where: { id: params.id }, select: { imageStoragePath: true } });
@@ -51,7 +52,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
   const perms = await resolvePermissions(session);
   if (!perms.procurement) {
-    return NextResponse.json({ error: 'You do not have permission to edit procurement' }, { status: 403 });
+    return forbidden('You do not have permission to edit procurement');
   }
 
   const existing = await prisma.item.findUnique({ where: { id: params.id }, select: { imageStoragePath: true } });
@@ -65,5 +66,5 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   }
 
   await prisma.item.update({ where: { id: params.id }, data: { imageStoragePath: null } });
-  return NextResponse.json({ ok: true });
+  return ok();
 }

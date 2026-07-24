@@ -7,6 +7,9 @@ import { formatMoney } from '@/lib/money';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Tooltip from '@/components/Tooltip';
 import VoidedInvoicesDropdown from './VoidedInvoicesDropdown';
+import { apiError, apiSend } from '@/lib/apiClient';
+import { formatDate } from '@/lib/format';
+import Modal from '@/components/Modal';
 
 export interface DesignFeeChargeRow {
   id: string;
@@ -124,25 +127,17 @@ export default function DesignFeeSection({
     setSaving(true);
     setError(null);
 
-    const res = await fetch('/api/design-fee-charges', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId, ...chargeForm }),
-    });
+    const res = await apiSend('/api/design-fee-charges', 'POST', { projectId, ...chargeForm });
 
     if (!res.ok) {
       setSaving(false);
-      const data = await res.json().catch(() => null);
-      setError(data?.error ?? 'Failed to bill the design fee.');
+      setError(await apiError(res, 'Failed to bill the design fee.'));
       return;
     }
     const charge = await res.json();
 
     if (alsoInvoice) {
-      const invRes = await fetch('/api/invoices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const invRes = await apiSend('/api/invoices', 'POST', {
           projectId,
           type: 'DESIGN_FEE',
           designFeeChargeIds: [charge.id],
@@ -150,13 +145,11 @@ export default function DesignFeeSection({
           taxRate: chargeInvoiceFields.taxRatePct ? Number(chargeInvoiceFields.taxRatePct) / 100 : 0,
           taxBase: chargeInvoiceFields.taxBase,
           shippingTotal: chargeInvoiceFields.reimbursable || 0,
-        }),
-      });
+        });
       setSaving(false);
 
       if (!invRes.ok) {
-        const data = await invRes.json().catch(() => null);
-        setError(data?.error ?? 'The charge was billed, but the invoice could not be created.');
+        setError(await apiError(invRes, 'The charge was billed, but the invoice could not be created.'));
         return;
       }
     } else {
@@ -173,12 +166,11 @@ export default function DesignFeeSection({
   async function handleDeleteCharge() {
     if (!pendingDeleteCharge) return;
     setDeletingCharge(true);
-    const res = await fetch(`/api/design-fee-charges/${pendingDeleteCharge.id}`, { method: 'DELETE' });
+    const res = await apiSend(`/api/design-fee-charges/${pendingDeleteCharge.id}`, 'DELETE');
     setDeletingCharge(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ?? 'Could not delete charge.');
+      setError(await apiError(res, 'Could not delete charge.'));
       setPendingDeleteCharge(null);
       return;
     }
@@ -195,10 +187,7 @@ export default function DesignFeeSection({
       .filter((l) => l.description.trim() && l.amount)
       .map((l) => ({ description: l.description.trim(), amount: l.amount }));
 
-    const res = await fetch('/api/invoices', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const res = await apiSend('/api/invoices', 'POST', {
         projectId,
         type: 'DESIGN_FEE',
         designFeeChargeIds: Array.from(selectedChargeIds),
@@ -208,14 +197,12 @@ export default function DesignFeeSection({
         taxBase: invoiceFields.taxBase,
         shippingTotal: invoiceFields.reimbursable || 0,
         notes: invoiceFields.notes,
-      }),
-    });
+      });
 
     setCreatingInvoice(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setInvoiceError(data?.error ?? 'Failed to create invoice.');
+      setInvoiceError(await apiError(res, 'Failed to create invoice.'));
       return;
     }
 
@@ -235,8 +222,7 @@ export default function DesignFeeSection({
     setSendingId(null);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setActionError(data?.error ?? 'Could not send invoice.');
+      setActionError(await apiError(res, 'Could not send invoice.'));
       return;
     }
 
@@ -253,8 +239,7 @@ export default function DesignFeeSection({
     setVoiding(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setActionError(data?.error ?? 'Could not void invoice.');
+      setActionError(await apiError(res, 'Could not void invoice.'));
       setPendingVoid(null);
       return;
     }
@@ -298,7 +283,7 @@ export default function DesignFeeSection({
               const locked = !!charge.invoiceId;
               return (
                 <tr key={charge.id} className={locked ? 'bg-taupe/5' : ''}>
-                  <td className="px-3 py-2">{new Date(charge.date).toLocaleDateString()}</td>
+                  <td className="px-3 py-2">{formatDate(charge.date)}</td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-1.5">
                       {charge.invoiceId && (
@@ -406,176 +391,53 @@ export default function DesignFeeSection({
       </div>
 
       {showCharge && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
-          <form onSubmit={handleAddCharge} className="card w-full max-w-md space-y-4 p-6">
-            <h2 className="text-lg font-medium text-brown">Bill Design Fee</h2>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Description</label>
-              <input
-                className="input"
-                required
-                placeholder="e.g. Design fee — phase 1"
-                value={chargeForm.description}
-                onChange={(e) => setChargeForm({ ...chargeForm, description: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Amount</label>
-              <input
-                type="number"
-                step="0.01"
-                required
-                className="input"
-                value={chargeForm.amount}
-                onChange={(e) => setChargeForm({ ...chargeForm, amount: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Date</label>
-              <input
-                type="date"
-                className="input"
-                value={chargeForm.date}
-                onChange={(e) => setChargeForm({ ...chargeForm, date: e.target.value })}
-              />
-            </div>
+        <Modal width="md" scrollable onSubmit={handleAddCharge} className="space-y-4">
+          <h2 className="text-lg font-medium text-brown">Bill Design Fee</h2>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Description</label>
+            <input
+              className="input"
+              required
+              placeholder="e.g. Design fee — phase 1"
+              value={chargeForm.description}
+              onChange={(e) => setChargeForm({ ...chargeForm, description: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Amount</label>
+            <input
+              type="number"
+              step="0.01"
+              required
+              className="input"
+              value={chargeForm.amount}
+              onChange={(e) => setChargeForm({ ...chargeForm, amount: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Date</label>
+            <input
+              type="date"
+              className="input"
+              value={chargeForm.date}
+              onChange={(e) => setChargeForm({ ...chargeForm, date: e.target.value })}
+            />
+          </div>
 
-            <label className="flex items-center gap-2 text-sm text-brown">
-              <input type="checkbox" checked={alsoInvoice} onChange={(e) => setAlsoInvoice(e.target.checked)} />
-              Also create an invoice for this now
-            </label>
+          <label className="flex items-center gap-2 text-sm text-brown">
+            <input type="checkbox" checked={alsoInvoice} onChange={(e) => setAlsoInvoice(e.target.checked)} />
+            Also create an invoice for this now
+          </label>
 
-            {alsoInvoice && (
-              <div className="grid grid-cols-2 gap-4 rounded-md border border-taupe/40 p-4">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-brown">Due Date</label>
-                  <input
-                    type="date"
-                    className="input"
-                    value={chargeInvoiceFields.dueDate}
-                    onChange={(e) => setChargeInvoiceFields({ ...chargeInvoiceFields, dueDate: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-brown">Sales Tax Rate (%)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="input"
-                    value={chargeInvoiceFields.taxRatePct}
-                    onChange={(e) => setChargeInvoiceFields({ ...chargeInvoiceFields, taxRatePct: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-brown">Reimbursable Expenses</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="input"
-                    value={chargeInvoiceFields.reimbursable}
-                    onChange={(e) => setChargeInvoiceFields({ ...chargeInvoiceFields, reimbursable: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-brown">Tax Base</label>
-                  <select
-                    className="input"
-                    value={chargeInvoiceFields.taxBase}
-                    onChange={(e) => setChargeInvoiceFields({ ...chargeInvoiceFields, taxBase: e.target.value })}
-                  >
-                    <option value="MERCH_ONLY">Fee only</option>
-                    <option value="MERCH_PLUS_SHIPPING">Fee + reimbursable expenses</option>
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {error && <p className="text-sm text-red-700">{error}</p>}
-            <div className="flex justify-end gap-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowCharge(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary" disabled={saving}>
-                {saving ? 'Saving…' : alsoInvoice ? 'Bill and Create Invoice' : 'Save'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {showInvoiceForm && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-8">
-          <form onSubmit={handleCreateInvoice} className="card w-full max-w-lg space-y-4 p-6">
-            <h2 className="text-lg font-medium text-brown">Create Design Fee Invoice</h2>
-
-            {uninvoicedCharges.length > 0 && (
-              <div>
-                <p className="mb-2 text-sm font-medium text-brown">Select existing charges</p>
-                <div className="max-h-40 overflow-y-auto rounded-md border border-taupe/40">
-                  <table className="min-w-full text-sm">
-                    <tbody className="divide-y divide-taupe/20">
-                      {uninvoicedCharges.map((charge) => (
-                        <tr key={charge.id}>
-                          <td className="px-3 py-2">
-                            <input
-                              type="checkbox"
-                              checked={selectedChargeIds.has(charge.id)}
-                              onChange={() => toggleCharge(charge.id)}
-                            />
-                          </td>
-                          <td className="px-3 py-2">{charge.description}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{formatMoney(charge.amount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-sm font-medium text-brown">Custom line items</p>
-                <button type="button" className="text-sm text-brown hover:text-gold" onClick={addCustomLine}>
-                  + Add Line
-                </button>
-              </div>
-              {customLines.length > 0 && (
-                <div className="space-y-2">
-                  {customLines.map((line, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <input
-                        className="input flex-1"
-                        placeholder="Description"
-                        value={line.description}
-                        onChange={(e) => updateCustomLine(i, { description: e.target.value })}
-                      />
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="input w-32"
-                        placeholder="Amount"
-                        value={line.amount}
-                        onChange={(e) => updateCustomLine(i, { amount: e.target.value })}
-                      />
-                      <button type="button" className="text-red-700 hover:text-red-900" onClick={() => removeCustomLine(i)}>
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <p className="mt-1 text-xs text-brown/50">Custom lines are billed to the design fee automatically when this invoice is created.</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+          {alsoInvoice && (
+            <div className="grid grid-cols-2 gap-4 rounded-md border border-taupe/40 p-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-brown">Due Date</label>
                 <input
                   type="date"
                   className="input"
-                  value={invoiceFields.dueDate}
-                  onChange={(e) => setInvoiceFields({ ...invoiceFields, dueDate: e.target.value })}
+                  value={chargeInvoiceFields.dueDate}
+                  onChange={(e) => setChargeInvoiceFields({ ...chargeInvoiceFields, dueDate: e.target.value })}
                 />
               </div>
               <div>
@@ -584,8 +446,8 @@ export default function DesignFeeSection({
                   type="number"
                   step="0.01"
                   className="input"
-                  value={invoiceFields.taxRatePct}
-                  onChange={(e) => setInvoiceFields({ ...invoiceFields, taxRatePct: e.target.value })}
+                  value={chargeInvoiceFields.taxRatePct}
+                  onChange={(e) => setChargeInvoiceFields({ ...chargeInvoiceFields, taxRatePct: e.target.value })}
                 />
               </div>
               <div>
@@ -594,47 +456,166 @@ export default function DesignFeeSection({
                   type="number"
                   step="0.01"
                   className="input"
-                  value={invoiceFields.reimbursable}
-                  onChange={(e) => setInvoiceFields({ ...invoiceFields, reimbursable: e.target.value })}
+                  value={chargeInvoiceFields.reimbursable}
+                  onChange={(e) => setChargeInvoiceFields({ ...chargeInvoiceFields, reimbursable: e.target.value })}
                 />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-brown">Tax Base</label>
                 <select
                   className="input"
-                  value={invoiceFields.taxBase}
-                  onChange={(e) => setInvoiceFields({ ...invoiceFields, taxBase: e.target.value })}
+                  value={chargeInvoiceFields.taxBase}
+                  onChange={(e) => setChargeInvoiceFields({ ...chargeInvoiceFields, taxBase: e.target.value })}
                 >
                   <option value="MERCH_ONLY">Fee only</option>
                   <option value="MERCH_PLUS_SHIPPING">Fee + reimbursable expenses</option>
                 </select>
               </div>
             </div>
+          )}
 
+          {error && <p className="text-sm text-red-700">{error}</p>}
+          <div className="flex justify-end gap-3">
+            <button type="button" className="btn-secondary" onClick={() => setShowCharge(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? 'Saving…' : alsoInvoice ? 'Bill and Create Invoice' : 'Save'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {showInvoiceForm && (
+        <Modal width="lg" scrollable onSubmit={handleCreateInvoice} className="space-y-4">
+          <h2 className="text-lg font-medium text-brown">Create Design Fee Invoice</h2>
+
+          {uninvoicedCharges.length > 0 && (
             <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Notes</label>
-              <textarea
+              <p className="mb-2 text-sm font-medium text-brown">Select existing charges</p>
+              <div className="max-h-40 overflow-y-auto rounded-md border border-taupe/40">
+                <table className="min-w-full text-sm">
+                  <tbody className="divide-y divide-taupe/20">
+                    {uninvoicedCharges.map((charge) => (
+                      <tr key={charge.id}>
+                        <td className="px-3 py-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedChargeIds.has(charge.id)}
+                            onChange={() => toggleCharge(charge.id)}
+                          />
+                        </td>
+                        <td className="px-3 py-2">{charge.description}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatMoney(charge.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-medium text-brown">Custom line items</p>
+              <button type="button" className="text-sm text-brown hover:text-gold" onClick={addCustomLine}>
+                + Add Line
+              </button>
+            </div>
+            {customLines.length > 0 && (
+              <div className="space-y-2">
+                {customLines.map((line, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      className="input flex-1"
+                      placeholder="Description"
+                      value={line.description}
+                      onChange={(e) => updateCustomLine(i, { description: e.target.value })}
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="input w-32"
+                      placeholder="Amount"
+                      value={line.amount}
+                      onChange={(e) => updateCustomLine(i, { amount: e.target.value })}
+                    />
+                    <button type="button" className="text-red-700 hover:text-red-900" onClick={() => removeCustomLine(i)}>
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="mt-1 text-xs text-brown/50">Custom lines are billed to the design fee automatically when this invoice is created.</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brown">Due Date</label>
+              <input
+                type="date"
                 className="input"
-                rows={2}
-                value={invoiceFields.notes}
-                onChange={(e) => setInvoiceFields({ ...invoiceFields, notes: e.target.value })}
+                value={invoiceFields.dueDate}
+                onChange={(e) => setInvoiceFields({ ...invoiceFields, dueDate: e.target.value })}
               />
             </div>
-
-            {invoiceError && <p className="text-sm text-red-700">{invoiceError}</p>}
-
-            <div className="flex justify-end gap-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowInvoiceForm(false)}>
-                Cancel
-              </button>
-              <Tooltip reason={!canSubmitInvoice ? 'Select a charge or add a custom line first' : undefined}>
-                <button type="submit" className="btn-primary" disabled={creatingInvoice || !canSubmitInvoice}>
-                  {creatingInvoice ? 'Creating…' : 'Create Invoice'}
-                </button>
-              </Tooltip>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brown">Sales Tax Rate (%)</label>
+              <input
+                type="number"
+                step="0.01"
+                className="input"
+                value={invoiceFields.taxRatePct}
+                onChange={(e) => setInvoiceFields({ ...invoiceFields, taxRatePct: e.target.value })}
+              />
             </div>
-          </form>
-        </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brown">Reimbursable Expenses</label>
+              <input
+                type="number"
+                step="0.01"
+                className="input"
+                value={invoiceFields.reimbursable}
+                onChange={(e) => setInvoiceFields({ ...invoiceFields, reimbursable: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brown">Tax Base</label>
+              <select
+                className="input"
+                value={invoiceFields.taxBase}
+                onChange={(e) => setInvoiceFields({ ...invoiceFields, taxBase: e.target.value })}
+              >
+                <option value="MERCH_ONLY">Fee only</option>
+                <option value="MERCH_PLUS_SHIPPING">Fee + reimbursable expenses</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Notes</label>
+            <textarea
+              className="input"
+              rows={2}
+              value={invoiceFields.notes}
+              onChange={(e) => setInvoiceFields({ ...invoiceFields, notes: e.target.value })}
+            />
+          </div>
+
+          {invoiceError && <p className="text-sm text-red-700">{invoiceError}</p>}
+
+          <div className="flex justify-end gap-3">
+            <button type="button" className="btn-secondary" onClick={() => setShowInvoiceForm(false)}>
+              Cancel
+            </button>
+            <Tooltip reason={!canSubmitInvoice ? 'Select a charge or add a custom line first' : undefined}>
+              <button type="submit" className="btn-primary" disabled={creatingInvoice || !canSubmitInvoice}>
+                {creatingInvoice ? 'Creating…' : 'Create Invoice'}
+              </button>
+            </Tooltip>
+          </div>
+        </Modal>
       )}
 
       <ConfirmDialog

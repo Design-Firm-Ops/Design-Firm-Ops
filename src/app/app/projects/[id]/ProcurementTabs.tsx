@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import ItemsTable, { ItemRow } from './ItemsTable';
 import { ItemFieldDefRow } from './ItemDetailModal';
 import ProcurementFeeSection, { ProcurementFeeData } from './ProcurementFeeSection';
+import { apiError, apiSend } from '@/lib/apiClient';
 
 export interface ProcurementListData {
   id: string;
@@ -56,16 +57,11 @@ export default function ProcurementTabs({
     setCreating(true);
     setError(null);
 
-    const res = await fetch('/api/procurement-lists', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId, name: newListName.trim() }),
-    });
+    const res = await apiSend('/api/procurement-lists', 'POST', { projectId, name: newListName.trim() });
     setCreating(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ?? 'Could not create list.');
+      setError(await apiError(res, 'Could not create list.'));
       return;
     }
 
@@ -81,20 +77,15 @@ export default function ProcurementTabs({
       setRenamingId(null);
       return;
     }
-    await fetch(`/api/procurement-lists/${listId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: renameValue.trim() }),
-    });
+    await apiSend(`/api/procurement-lists/${listId}`, 'PATCH', { name: renameValue.trim() });
     setRenamingId(null);
     router.refresh();
   }
 
   async function handleDeleteList(listId: string) {
-    const res = await fetch(`/api/procurement-lists/${listId}`, { method: 'DELETE' });
+    const res = await apiSend(`/api/procurement-lists/${listId}`, 'DELETE');
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ?? 'Could not delete list.');
+      setError(await apiError(res, 'Could not delete list.'));
       return;
     }
     setActive(lists.find((l) => l.id !== listId)?.id ?? '');

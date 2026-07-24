@@ -2,8 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatMoney } from '@/lib/money';
+import { formatMoney, sumMoney } from '@/lib/money';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { apiError, apiSend } from '@/lib/apiClient';
+import { formatDate } from '@/lib/format';
+import Modal from '@/components/Modal';
 
 export interface PaymentRow {
   id: string;
@@ -50,17 +53,12 @@ export default function PaymentsTab({
     setSaving(true);
     setError(null);
 
-    const res = await fetch('/api/payments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, projectId, category }),
-    });
+    const res = await apiSend('/api/payments', 'POST', { ...form, projectId, category });
 
     setSaving(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ? JSON.stringify(data.error) : 'Something went wrong.');
+      setError(await apiError(res, 'Something went wrong.'));
       return;
     }
 
@@ -71,13 +69,13 @@ export default function PaymentsTab({
   async function confirmDelete() {
     if (!pendingDelete) return;
     setDeleting(true);
-    await fetch(`/api/payments/${pendingDelete.id}`, { method: 'DELETE' });
+    await apiSend(`/api/payments/${pendingDelete.id}`, 'DELETE');
     setDeleting(false);
     setPendingDelete(null);
     router.refresh();
   }
 
-  const total = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const total = sumMoney(payments.map((p) => p.amount));
 
   return (
     <div>
@@ -106,7 +104,7 @@ export default function PaymentsTab({
           <tbody className="divide-y divide-taupe/20">
             {payments.map((p) => (
               <tr key={p.id} className="hover:bg-taupe/5">
-                <td className="px-4 py-3">{new Date(p.date).toLocaleDateString()}</td>
+                <td className="px-4 py-3">{formatDate(p.date)}</td>
                 <td className="px-4 py-3 tabular-nums font-medium">{formatMoney(p.amount)}</td>
                 <td className="px-4 py-3">{p.method}</td>
                 <td className="px-4 py-3">{p.reference || '—'}</td>
@@ -132,81 +130,79 @@ export default function PaymentsTab({
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <form onSubmit={handleSubmit} className="card w-full max-w-md space-y-4 p-6">
-            <h2 className="text-lg font-medium text-brown">Log Payment</h2>
+        <Modal width="md" onSubmit={handleSubmit} className="space-y-4">
+          <h2 className="text-lg font-medium text-brown">Log Payment</h2>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Amount</label>
-              <input
-                type="number"
-                step="0.01"
-                required
-                className="input"
-                value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Date</label>
-              <input
-                type="date"
-                className="input"
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Method</label>
-              <select className="input" value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}>
-                {METHODS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Invoice (optional)</label>
-              <select
-                className="input"
-                value={form.invoiceId}
-                onChange={(e) => setForm({ ...form, invoiceId: e.target.value })}
-              >
-                <option value="">—</option>
-                {invoiceOptions.map((inv) => (
-                  <option key={inv.id} value={inv.id}>
-                    {inv.invoiceNumber}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Reference</label>
-              <input
-                className="input"
-                placeholder="check #, transfer id, etc."
-                value={form.reference}
-                onChange={(e) => setForm({ ...form, reference: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Notes</label>
-              <textarea className="input" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-            </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Amount</label>
+            <input
+              type="number"
+              step="0.01"
+              required
+              className="input"
+              value={form.amount}
+              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Date</label>
+            <input
+              type="date"
+              className="input"
+              value={form.date}
+              onChange={(e) => setForm({ ...form, date: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Method</label>
+            <select className="input" value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })}>
+              {METHODS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Invoice (optional)</label>
+            <select
+              className="input"
+              value={form.invoiceId}
+              onChange={(e) => setForm({ ...form, invoiceId: e.target.value })}
+            >
+              <option value="">—</option>
+              {invoiceOptions.map((inv) => (
+                <option key={inv.id} value={inv.id}>
+                  {inv.invoiceNumber}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Reference</label>
+            <input
+              className="input"
+              placeholder="check #, transfer id, etc."
+              value={form.reference}
+              onChange={(e) => setForm({ ...form, reference: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Notes</label>
+            <textarea className="input" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          </div>
 
-            {error && <p className="text-sm text-red-700">{error}</p>}
+          {error && <p className="text-sm text-red-700">{error}</p>}
 
-            <div className="flex justify-end gap-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary" disabled={saving}>
-                {saving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </form>
-        </div>
+          <div className="flex justify-end gap-3">
+            <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </Modal>
       )}
 
       <ConfirmDialog

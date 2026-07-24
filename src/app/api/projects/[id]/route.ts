@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { notFound, ok, parseBody } from '@/lib/apiRoute';
 import { projectSchema } from '@/lib/validation';
 import { findOrCreateProjectType } from '@/lib/projectType';
 import { findOrCreateFeeStructureOption } from '@/lib/feeStructure';
@@ -14,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     where: { id: params.id },
     include: { client: true },
   });
-  if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!project) return notFound();
   return NextResponse.json(project);
 }
 
@@ -22,11 +23,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const body = await req.json();
-  const parsed = projectSchema.partial().safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data: payload, response } = await parseBody(req, projectSchema.partial());
+  if (response) return response;
 
   const {
     startDate,
@@ -39,7 +37,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     newClientAddress,
     clientId,
     ...rest
-  } = parsed.data;
+  } = payload;
 
   const data: Record<string, unknown> = { ...rest };
   if (clientId) data.clientId = clientId;
@@ -65,5 +63,5 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   if (unauthorized) return unauthorized;
 
   await prisma.project.delete({ where: { id: params.id } });
-  return NextResponse.json({ ok: true });
+  return ok();
 }
