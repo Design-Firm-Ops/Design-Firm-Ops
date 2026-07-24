@@ -1,6 +1,6 @@
-import { prisma } from '@/lib/prisma';
-import { nextOrder } from '@/lib/order';
-import type { FeeStructureScope } from '@prisma/client';
+import { prisma } from '@/server/prisma';
+import { nextOrder } from '@/server/order';
+import type { FeeStructureScope } from '@/lib/domain';
 
 /** Finds a FeeStructureOption by (scope, name) or creates it — the list grows as users type new values. */
 export async function findOrCreateFeeStructureOption(

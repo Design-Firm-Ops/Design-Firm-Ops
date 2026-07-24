@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
-import { createSignedDocumentUrl } from '@/lib/supabase';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
+import { storage } from '@/server/storage';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const { unauthorized } = await requireSession();
@@ -13,7 +13,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       id: d.id,
       filename: d.filename,
       type: d.type,
-      url: await createSignedDocumentUrl(d.storagePath),
+      url: await storage.createSignedUrl('documents', d.storagePath),
       uploadedAt: d.uploadedAt.toISOString(),
     }))
   );

@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/server/prisma';
 
 /** Finds a ProjectType by name or creates it — the list grows as users type new values. */
 export async function findOrCreateProjectType(name: string | undefined | null): Promise<string | null> {

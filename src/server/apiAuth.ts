@@ -1,6 +1,6 @@
 import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
-import { authOptions } from '@/lib/auth';
+import { authOptions } from '@/server/auth';
 
 /** Returns the session, or an unauthorized NextResponse to short-circuit the route. */
 export async function requireSession() {

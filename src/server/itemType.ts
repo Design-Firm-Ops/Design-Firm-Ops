@@ -1,5 +1,5 @@
-import { prisma } from '@/lib/prisma';
-import { nextOrder } from '@/lib/order';
+import { prisma } from '@/server/prisma';
+import { nextOrder } from '@/server/order';
 
 /**
  * Finds an ItemTypeOption by (category, name) or creates it — the list

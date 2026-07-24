@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { forbidden, parseBody } from '@/lib/apiRoute';
 import { designFeeChargeSchema } from '@/lib/validation';
-import { resolvePermissions } from '@/lib/permissions';
+import { resolvePermissions } from '@/server/permissions';
 
 export async function POST(req: NextRequest) {
   const { session, unauthorized } = await requireSession();

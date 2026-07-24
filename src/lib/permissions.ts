@@ -1,5 +1,9 @@
 import type { Session } from 'next-auth';
-import { prisma } from '@/lib/prisma';
+
+// The authorization *policy* — how a role, the firm-wide settings, and any
+// per-user override combine into what someone can see. Deliberately pure: it
+// takes data and returns flags, so it can be reasoned about and tested without
+// a database. Loading those inputs is `@/server/permissions`.
 
 /**
  * Resolved, ready-to-render visibility flags for the current session.
@@ -17,42 +21,77 @@ export interface ResolvedPermissions {
   vendorCredentials: boolean;
 }
 
+/** The firm-wide Designer-role defaults, as stored on Settings. */
+export interface PermissionSettings {
+  designerCanViewFinancials: boolean;
+  designerCanViewClientContact: boolean;
+  designerCanViewDocumentsPresentations: boolean;
+  designerCanViewContracts: boolean;
+  designerCanViewInvoices: boolean;
+  designerCanViewProcurement: boolean;
+  designerCanViewVendorCredentials: boolean;
+}
+
+/** A per-user override. A field that is null/absent means "inherit the role default". */
+export type PermissionOverride = Partial<Record<keyof Omit<ResolvedPermissions, 'isAdmin'>, boolean | null>>;
+
+export const ADMIN_PERMISSIONS: ResolvedPermissions = {
+  isAdmin: true,
+  financials: true,
+  clientContact: true,
+  documentsPresentations: true,
+  contracts: true,
+  invoices: true,
+  procurement: true,
+  vendorCredentials: true,
+};
+
+// What a designer sees when the firm has never touched Settings > Permissions.
+// Money and vendor logins are the two things hidden by default.
+const DESIGNER_FALLBACK = {
+  financials: false,
+  clientContact: true,
+  documentsPresentations: true,
+  contracts: true,
+  invoices: true,
+  procurement: true,
+  vendorCredentials: false,
+} as const;
+
 export function isAdmin(session: Session | null): boolean {
   return session?.user?.role === 'ADMIN';
 }
 
-export async function resolvePermissions(session: Session | null): Promise<ResolvedPermissions> {
-  if (isAdmin(session)) {
-    return {
-      isAdmin: true,
-      financials: true,
-      clientContact: true,
-      documentsPresentations: true,
-      contracts: true,
-      invoices: true,
-      procurement: true,
-      vendorCredentials: true,
-    };
-  }
+/**
+ * Combines role, firm settings, and any per-user override into final flags.
+ * Precedence per field: user override → firm setting → built-in default.
+ * A null override field means "inherit", not "deny".
+ */
+export function resolvePermissionFlags({
+  isAdmin: admin,
+  settings,
+  override,
+}: {
+  isAdmin: boolean;
+  settings: PermissionSettings | null;
+  override: PermissionOverride | null;
+}): ResolvedPermissions {
+  if (admin) return { ...ADMIN_PERMISSIONS };
 
-  const [settings, override] = await Promise.all([
-    prisma.settings.findUnique({ where: { id: 1 } }),
-    session?.user?.id
-      ? prisma.userPermissionOverride.findUnique({ where: { userId: session.user.id } })
-      : Promise.resolve(null),
-  ]);
-
-  // A per-user override (set on Settings > Permissions) wins when
-  // present; null on any field falls back to the Designer role default.
   return {
     isAdmin: false,
-    financials: override?.financials ?? settings?.designerCanViewFinancials ?? false,
-    clientContact: override?.clientContact ?? settings?.designerCanViewClientContact ?? true,
+    financials: override?.financials ?? settings?.designerCanViewFinancials ?? DESIGNER_FALLBACK.financials,
+    clientContact: override?.clientContact ?? settings?.designerCanViewClientContact ?? DESIGNER_FALLBACK.clientContact,
     documentsPresentations:
-      override?.documentsPresentations ?? settings?.designerCanViewDocumentsPresentations ?? true,
-    contracts: override?.contracts ?? settings?.designerCanViewContracts ?? true,
-    invoices: override?.invoices ?? settings?.designerCanViewInvoices ?? true,
-    procurement: override?.procurement ?? settings?.designerCanViewProcurement ?? true,
-    vendorCredentials: override?.vendorCredentials ?? settings?.designerCanViewVendorCredentials ?? false,
+      override?.documentsPresentations ??
+      settings?.designerCanViewDocumentsPresentations ??
+      DESIGNER_FALLBACK.documentsPresentations,
+    contracts: override?.contracts ?? settings?.designerCanViewContracts ?? DESIGNER_FALLBACK.contracts,
+    invoices: override?.invoices ?? settings?.designerCanViewInvoices ?? DESIGNER_FALLBACK.invoices,
+    procurement: override?.procurement ?? settings?.designerCanViewProcurement ?? DESIGNER_FALLBACK.procurement,
+    vendorCredentials:
+      override?.vendorCredentials ??
+      settings?.designerCanViewVendorCredentials ??
+      DESIGNER_FALLBACK.vendorCredentials,
   };
 }

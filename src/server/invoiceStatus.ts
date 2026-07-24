@@ -1,5 +1,5 @@
 import Decimal from 'decimal.js';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/server/prisma';
 import { toCents } from '@/lib/pricing';
 import { invoiceTotals } from '@/lib/financials';
 

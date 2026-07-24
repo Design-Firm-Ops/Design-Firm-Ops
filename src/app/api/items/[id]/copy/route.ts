@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { forbidden, notFound, parseBody } from '@/lib/apiRoute';
-import { resolvePermissions } from '@/lib/permissions';
+import { resolvePermissions } from '@/server/permissions';
 
 const copySchema = z.object({
   procurementListId: z.string().min(1),

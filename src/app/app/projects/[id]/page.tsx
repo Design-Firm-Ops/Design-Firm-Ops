@@ -1,9 +1,9 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { createSignedDocumentUrl } from '@/lib/supabase';
-import { resolvePermissions, isAdmin as checkIsAdmin } from '@/lib/permissions';
+import { authOptions } from '@/server/auth';
+import { getProjectDetail, getProjectDetailOptions } from '@/server/queries/projects';
+import { storage } from '@/server/storage';
+import { resolvePermissions, isAdmin as checkIsAdmin } from '@/server/permissions';
 import { summarizeProjectFinancials, summarizeDesignFee } from '@/lib/financials';
 import ProjectHeader from './ProjectHeader';
 import Tabs, { type Tab } from '@/components/Tabs';
@@ -84,38 +84,12 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   const perms = await resolvePermissions(session);
   const admin = checkIsAdmin(session);
 
-  const project = await prisma.project.findUnique({
-    where: { id: params.id },
-    include: {
-      client: { include: { contacts: { orderBy: { order: 'asc' } } } },
-      projectType: true,
-      designFeeStructure: true,
-      procurementFeeStructure: true,
-      items: {
-        orderBy: { sortOrder: 'asc' },
-        include: { fieldValues: true, invoice: { select: { invoiceNumber: true } }, itemType: { select: { name: true } } },
-      },
-      procurementLists: { orderBy: { order: 'asc' } },
-      rooms: { orderBy: { order: 'asc' } },
-      documentFolders: { orderBy: { order: 'asc' } },
-      documents: { orderBy: { uploadedAt: 'desc' } },
-      invoices: { include: { items: true, designFeeCharges: true }, orderBy: { createdAt: 'desc' } },
-      payments: { orderBy: { date: 'desc' } },
-      designFeeCharges: { include: { invoice: { select: { invoiceNumber: true } } }, orderBy: { date: 'desc' } },
-      fieldValues: true,
-    },
-  });
+  const project = await getProjectDetail(params.id);
 
   if (!project) notFound();
 
-  const [vendors, projectTypes, feeStructureOptions, itemTypeOptions, itemFieldDefs, projectFieldDefs] = await Promise.all([
-    prisma.vendor.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
-    prisma.projectType.findMany({ orderBy: { name: 'asc' }, select: { name: true } }),
-    prisma.feeStructureOption.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
-    prisma.itemTypeOption.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
-    prisma.itemFieldDef.findMany({ orderBy: { order: 'asc' } }),
-    prisma.projectFieldDef.findMany({ orderBy: { order: 'asc' } }),
-  ]);
+  const { vendors, projectTypes, feeStructureOptions, itemTypeOptions, itemFieldDefs, projectFieldDefs } =
+    await getProjectDetailOptions();
 
   const designFeeStructureOptions = feeStructureOptions.filter((f) => f.scope === 'DESIGN_FEE').map((f) => f.name);
   const procurementFeeStructureOptions = feeStructureOptions.filter((f) => f.scope === 'PROCUREMENT').map((f) => f.name);
@@ -124,7 +98,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     project.items.map(async (item) => ({
       ...serializeInvoiceItem(item),
       procurementListId: item.procurementListId,
-      imageUrl: item.imageStoragePath ? await createSignedDocumentUrl(item.imageStoragePath) : null,
+      imageUrl: item.imageStoragePath ? await storage.createSignedUrl('documents', item.imageStoragePath) : null,
       fieldValues: item.fieldValues.map((v) => ({ fieldDefId: v.fieldDefId, value: v.value })),
     }))
   );
@@ -180,7 +154,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         type: d.type,
         filename: d.filename,
         folder: d.folder,
-        url: await createSignedDocumentUrl(d.storagePath),
+        url: await storage.createSignedUrl('documents', d.storagePath),
         uploadedAt: d.uploadedAt.toISOString(),
       }))
   );

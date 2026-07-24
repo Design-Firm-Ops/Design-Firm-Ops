@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/server/prisma';
 
 /**
  * Auto-generates the next tag for a given item type within one project

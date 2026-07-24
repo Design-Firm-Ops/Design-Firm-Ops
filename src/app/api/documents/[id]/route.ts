@@ -1,9 +1,9 @@
 import type { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { forbidden, notFound, ok } from '@/lib/apiRoute';
-import { getSupabaseServerClient, DOCUMENTS_BUCKET } from '@/lib/supabase';
-import { resolvePermissions } from '@/lib/permissions';
+import { removeQuietly } from '@/server/storage';
+import { resolvePermissions } from '@/server/permissions';
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const { session, unauthorized } = await requireSession();
@@ -22,14 +22,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     return forbidden('You do not have permission to delete this');
   }
 
-  try {
-    const supabase = getSupabaseServerClient();
-    await supabase.storage.from(DOCUMENTS_BUCKET).remove([document.storagePath]);
-  } catch {
-    // The DB record is the source of truth for the app; a storage
-    // object that fails to delete (e.g. Supabase unreachable) is an
-    // orphan to clean up later, not a reason to block the user.
-  }
+  await removeQuietly('documents', document.storagePath);
 
   await prisma.document.delete({ where: { id: params.id } });
   return ok();

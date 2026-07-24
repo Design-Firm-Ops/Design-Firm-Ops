@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { badRequest } from '@/lib/apiRoute';
-import { getSupabaseServerClient, LOGO_BUCKET, ensureLogoBucket } from '@/lib/supabase';
+import { storage, storagePath } from '@/server/storage';
 
 export async function POST(req: NextRequest) {
   const { unauthorized } = await requireSession();
@@ -16,16 +16,12 @@ export async function POST(req: NextRequest) {
 
   let logoUrl: string;
   try {
-    await ensureLogoBucket();
-    const supabase = getSupabaseServerClient();
-    const path = `logo-${Date.now()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage
-      .from(LOGO_BUCKET)
-      .upload(path, await file.arrayBuffer(), { contentType: file.type, upsert: true });
-    if (uploadError) throw uploadError;
-
-    const { data } = supabase.storage.from(LOGO_BUCKET).getPublicUrl(path);
-    logoUrl = data.publicUrl;
+    const path = storagePath('', `logo-${file.name}`);
+    await storage.upload('branding', path, await file.arrayBuffer(), {
+      contentType: file.type,
+      replace: true,
+    });
+    logoUrl = storage.getPublicUrl('branding', path);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Upload failed';
     return NextResponse.json({ error: `Storage upload failed: ${message}` }, { status: 502 });

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { conflict, forbidden, notFound } from '@/lib/apiRoute';
-import { resolvePermissions } from '@/lib/permissions';
+import { resolvePermissions } from '@/server/permissions';
 
 /**
  * Voids an invoice: status -> VOID, its items (or, for a Design Fee

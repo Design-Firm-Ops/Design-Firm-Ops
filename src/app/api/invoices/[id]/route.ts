@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { jsonOrNull } from '@/server/json';
+import { requireSession } from '@/server/apiAuth';
 import { conflict, forbidden, notFound, parseBody } from '@/lib/apiRoute';
-import { resolvePermissions } from '@/lib/permissions';
+import { resolvePermissions } from '@/server/permissions';
 import { invoiceUpdateSchema } from '@/lib/validation';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -42,7 +42,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     data: {
       ...rest,
       ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
-      ...(columnConfig !== undefined ? { columnConfig: columnConfig === null ? Prisma.JsonNull : columnConfig } : {}),
+      ...(columnConfig !== undefined ? { columnConfig: jsonOrNull(columnConfig) } : {}),
     },
   });
   return NextResponse.json(invoice);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { nextOrder } from '@/lib/order';
-import { requireAdmin, requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { nextOrder } from '@/server/order';
+import { requireAdmin, requireSession } from '@/server/apiAuth';
 import { parseBody } from '@/lib/apiRoute';
 import { itemFieldDefSchema } from '@/lib/validation';
 

@@ -1,5 +1,5 @@
-import { prisma } from '@/lib/prisma';
-import type { InvoiceType } from '@prisma/client';
+import { prisma } from '@/server/prisma';
+import type { InvoiceType } from '@/lib/domain';
 
 /**
  * Generates the next invoice number for a project: "<prefix>-001",

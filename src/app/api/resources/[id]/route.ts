@@ -1,8 +1,8 @@
 import type { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { notFound, ok } from '@/lib/apiRoute';
-import { getSupabaseServerClient, RESOURCES_BUCKET } from '@/lib/supabase';
+import { removeQuietly } from '@/server/storage';
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const { unauthorized } = await requireSession();
@@ -11,12 +11,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   const resource = await prisma.resource.findUnique({ where: { id: params.id } });
   if (!resource) return notFound();
 
-  try {
-    const supabase = getSupabaseServerClient();
-    await supabase.storage.from(RESOURCES_BUCKET).remove([resource.storagePath]);
-  } catch {
-    // Orphaned storage object is cleaned up later — not a reason to block deletion.
-  }
+  await removeQuietly('resources', resource.storagePath);
 
   await prisma.resource.delete({ where: { id: params.id } });
   return ok();

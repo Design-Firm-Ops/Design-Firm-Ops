@@ -1,5 +1,5 @@
-import { prisma } from '@/lib/prisma';
-import { nextOrder } from '@/lib/order';
+import { prisma } from '@/server/prisma';
+import { nextOrder } from '@/server/order';
 
 /**
  * Registers a room name as a suggestion for this project if it isn't

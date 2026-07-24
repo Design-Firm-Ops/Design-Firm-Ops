@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireAdmin } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireAdmin } from '@/server/apiAuth';
 import { ok, parseBody } from '@/lib/apiRoute';
 import { itemFieldDefUpdateSchema } from '@/lib/validation';
 

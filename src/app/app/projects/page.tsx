@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { prisma } from '@/lib/prisma';
+import { listProjects } from '@/server/queries/projects';
+import { isProjectStatus } from '@/lib/domain';
 import StatusFilter from './StatusFilter';
 import { formatDate } from '@/lib/format';
 
@@ -19,11 +20,7 @@ export default async function ProjectsPage({
 }) {
   const status = searchParams.status ?? 'ACTIVE';
 
-  const projects = await prisma.project.findMany({
-    where: status === 'ALL' ? {} : { status: status as 'LEAD' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETE' },
-    include: { client: true },
-    orderBy: { createdAt: 'desc' },
-  });
+  const projects = await listProjects(isProjectStatus(status) ? status : 'ALL');
 
   return (
     <div>

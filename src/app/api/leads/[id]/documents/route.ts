@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { badRequest } from '@/lib/apiRoute';
-import { getSupabaseServerClient, DOCUMENTS_BUCKET, ensureDocumentsBucket, createSignedDocumentUrl } from '@/lib/supabase';
+import { storage, storagePath } from '@/server/storage';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const { unauthorized } = await requireSession();
@@ -13,7 +13,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     documents.map(async (d) => ({
       id: d.id,
       filename: d.filename,
-      url: await createSignedDocumentUrl(d.storagePath),
+      url: await storage.createSignedUrl('documents', d.storagePath),
       uploadedAt: d.uploadedAt.toISOString(),
     }))
   );
@@ -30,24 +30,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return badRequest('file is required');
   }
 
-  let storagePath: string;
+  const path = storagePath(`leads/${params.id}`, file.name);
   try {
-    await ensureDocumentsBucket();
-    const supabase = getSupabaseServerClient();
-    const path = `leads/${params.id}/${Date.now()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage
-      .from(DOCUMENTS_BUCKET)
-      .upload(path, await file.arrayBuffer(), { contentType: file.type });
-    if (uploadError) throw uploadError;
-
-    storagePath = path;
+    await storage.upload('documents', path, await file.arrayBuffer(), { contentType: file.type });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Upload failed';
     return NextResponse.json({ error: `Storage upload failed: ${message}` }, { status: 502 });
   }
 
   const document = await prisma.document.create({
-    data: { leadId: params.id, type: 'OTHER', filename: file.name, storagePath },
+    data: { leadId: params.id, type: 'OTHER', filename: file.name, storagePath: path },
   });
 
   return NextResponse.json(document, { status: 201 });

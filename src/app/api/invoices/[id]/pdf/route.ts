@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireSession } from '@/lib/apiAuth';
+import { prisma } from '@/server/prisma';
+import { requireSession } from '@/server/apiAuth';
 import { forbidden, notFound } from '@/lib/apiRoute';
-import { resolvePermissions } from '@/lib/permissions';
-import { renderInvoicePdf } from '@/lib/pdf/renderInvoicePdf';
+import { resolvePermissions } from '@/server/permissions';
+import { renderInvoicePdf } from '@/server/pdf/renderInvoicePdf';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const { session, unauthorized } = await requireSession();
