@@ -2,10 +2,12 @@ import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { badRequest, conflict, forbidden, notFound } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/lib/permissions';
 import { renderInvoicePdf } from '@/lib/pdf/renderInvoicePdf';
-import { computeInvoiceTotals, priceLine } from '@/lib/pricing';
+import { invoiceTotals } from '@/lib/financials';
 import { formatMoney } from '@/lib/money';
+import { formatDate } from '@/lib/format';
 import { sendInvoiceEmail } from '@/lib/email';
 
 const DEFAULT_PRIMARY = '#4A3728';
@@ -19,19 +21,19 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     where: { id: params.id },
     include: { items: true, designFeeCharges: true, project: { include: { client: true } } },
   });
-  if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!invoice) return notFound();
 
   const perms = await resolvePermissions(session);
   const allowed = invoice.type === 'DESIGN_FEE' ? perms.financials : perms.invoices;
   if (!allowed) {
-    return NextResponse.json({ error: 'You do not have permission to send this invoice' }, { status: 403 });
+    return forbidden('You do not have permission to send this invoice');
   }
 
   if (invoice.status === 'VOID') {
-    return NextResponse.json({ error: 'This invoice has been voided and cannot be sent' }, { status: 409 });
+    return conflict('This invoice has been voided and cannot be sent');
   }
   if (!invoice.project.client.email) {
-    return NextResponse.json({ error: 'This client has no email on file — add one before sending' }, { status: 400 });
+    return badRequest('This client has no email on file — add one before sending');
   }
 
   const portalToken = invoice.portalToken ?? crypto.randomBytes(24).toString('hex');
@@ -48,23 +50,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 
   const settings = await prisma.settings.findUnique({ where: { id: 1 } });
 
-  const extendedPrices =
-    invoice.type === 'DESIGN_FEE'
-      ? invoice.designFeeCharges.map((c) => c.amount)
-      : invoice.items.map(
-          (item) =>
-            priceLine({
-              ...item,
-              projectDefaultMarkupPct: invoice.project.defaultMarkupPct,
-              projectMarkupMode: invoice.project.markupMode,
-            }).extended
-        );
-  const totals = computeInvoiceTotals({
-    extendedPrices,
-    shippingTotal: invoice.shippingTotal,
-    taxRate: invoice.taxRate,
-    taxBase: invoice.taxBase,
-  });
+  const totals = invoiceTotals(invoice, invoice.project);
 
   const appUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
 
@@ -76,7 +62,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       invoiceNumber: invoice.invoiceNumber,
       documentLabel: invoice.type === 'DESIGN_FEE' ? 'Design Fee Invoice' : 'Invoice',
       grandTotal: formatMoney(totals.grandTotal),
-      dueDate: invoice.dueDate ? invoice.dueDate.toLocaleDateString() : null,
+      dueDate: invoice.dueDate ? formatDate(invoice.dueDate) : null,
       portalUrl: `${appUrl}/portal/invoice/${portalToken}`,
       primaryColor: settings?.invoicePrimaryColor || DEFAULT_PRIMARY,
       accentColor: settings?.invoiceAccentColor || DEFAULT_ACCENT,

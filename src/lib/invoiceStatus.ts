@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js';
 import { prisma } from '@/lib/prisma';
-import { computeInvoiceTotals, priceLine, toCents } from '@/lib/pricing';
+import { toCents } from '@/lib/pricing';
+import { invoiceTotals } from '@/lib/financials';
 
 /**
  * Recomputes and persists an invoice's status from its current line
@@ -26,23 +27,7 @@ export async function recalculateInvoiceStatus(invoiceId: string): Promise<void>
   const paymentCategory = invoice.type === 'DESIGN_FEE' ? 'DESIGN_FEE' : 'MERCHANDISE';
   const payments = invoice.payments.filter((p) => p.category === paymentCategory);
 
-  const extendedPrices =
-    invoice.type === 'DESIGN_FEE'
-      ? invoice.designFeeCharges.map((c) => c.amount)
-      : invoice.items.map(
-          (item) =>
-            priceLine({
-              ...item,
-              projectDefaultMarkupPct: invoice.project.defaultMarkupPct,
-              projectMarkupMode: invoice.project.markupMode,
-            }).extended
-        );
-  const totals = computeInvoiceTotals({
-    extendedPrices,
-    shippingTotal: invoice.shippingTotal,
-    taxRate: invoice.taxRate,
-    taxBase: invoice.taxBase,
-  });
+  const totals = invoiceTotals(invoice, invoice.project);
 
   const paid = toCents(payments.reduce((sum, p) => sum.plus(p.amount), new Decimal(0)));
 

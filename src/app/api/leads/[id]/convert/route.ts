@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { conflict, notFound } from '@/lib/apiRoute';
 import { DEFAULT_PROCUREMENT_LISTS } from '@/lib/procurement';
 
 /**
@@ -13,9 +14,9 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   if (unauthorized) return unauthorized;
 
   const lead = await prisma.lead.findUnique({ where: { id: params.id } });
-  if (!lead) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!lead) return notFound();
   if (lead.convertedProjectId) {
-    return NextResponse.json({ error: 'This lead has already been converted' }, { status: 409 });
+    return conflict('This lead has already been converted');
   }
 
   const client = await prisma.client.create({

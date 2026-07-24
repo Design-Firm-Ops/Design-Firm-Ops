@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { forbidden, notFound, parseBody } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/lib/permissions';
 
 const copySchema = z.object({
@@ -15,24 +16,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const perms = await resolvePermissions(session);
   if (!perms.procurement) {
-    return NextResponse.json({ error: 'You do not have permission to edit procurement' }, { status: 403 });
+    return forbidden('You do not have permission to edit procurement');
   }
 
-  const body = await req.json();
-  const parsed = copySchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, copySchema);
+  if (response) return response;
 
   const source = await prisma.item.findUnique({ where: { id: params.id }, include: { fieldValues: true } });
-  if (!source) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!source) return notFound();
 
   const maxSort = await prisma.item.aggregate({ where: { projectId: source.projectId }, _max: { sortOrder: true } });
 
   const copy = await prisma.item.create({
     data: {
       projectId: source.projectId,
-      procurementListId: parsed.data.procurementListId,
+      procurementListId: data.procurementListId,
       tag: source.tag,
       name: source.name,
       invoiceDisplayName: source.invoiceDisplayName,

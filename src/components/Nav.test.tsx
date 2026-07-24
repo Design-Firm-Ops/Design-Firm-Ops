@@ -1,9 +1,13 @@
-import { describe, it, expect, vi } from 'vitest';
-import { renderWithProviders, screen, userEvent } from '@/test';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { renderWithProviders, screen, userEvent, mockNextNavigation, nextNavigationMock } from '@/test';
 import Nav from './Nav';
 
 // Nav reads the active route and signs out; mock both boundaries.
-vi.mock('next/navigation', () => ({ usePathname: () => '/app/vendors' }));
+vi.mock('next/navigation', () => nextNavigationMock);
+
+beforeEach(() => {
+  mockNextNavigation({ pathname: '/app/vendors' });
+});
 
 const signOut = vi.fn();
 vi.mock('next-auth/react', async (importOriginal) => ({
@@ -14,7 +18,7 @@ vi.mock('next-auth/react', async (importOriginal) => ({
 describe('Nav', () => {
   it('renders the primary navigation links', () => {
     renderWithProviders(<Nav userName="Madison" />);
-    for (const label of ['Projects', 'Business Development', 'Vendors', 'Administration', 'Settings']) {
+    for (const label of ['Projects', 'Business Development', 'Vendors', 'Documents', 'Settings']) {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
     }
   });

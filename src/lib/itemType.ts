@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { nextOrder } from '@/lib/order';
 
 /**
  * Finds an ItemTypeOption by (category, name) or creates it — the list
@@ -24,13 +25,13 @@ export async function findOrCreateItemType(
   );
   const tagPrefix = generateUniquePrefix(trimmedName, existingPrefixes);
 
-  const maxOrder = await prisma.itemTypeOption.aggregate({
-    where: { category: trimmedCategory },
-    _max: { order: true },
-  });
-
   const created = await prisma.itemTypeOption.create({
-    data: { category: trimmedCategory, name: trimmedName, tagPrefix, order: (maxOrder._max.order ?? -1) + 1 },
+    data: {
+      category: trimmedCategory,
+      name: trimmedName,
+      tagPrefix,
+      order: await nextOrder(prisma.itemTypeOption, { category: trimmedCategory }),
+    },
   });
   return created.id;
 }

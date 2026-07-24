@@ -1,8 +1,10 @@
 import React from 'react';
 import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
 import Decimal from 'decimal.js';
-import { priceLine, computeInvoiceTotals } from '@/lib/pricing';
+import { computeInvoiceTotals } from '@/lib/pricing';
+import { priceItem } from '@/lib/financials';
 import { formatMoney, formatPercentFromFraction } from '@/lib/money';
+import { formatLongDate } from '@/lib/format';
 import { INVOICE_COLUMNS, COLUMN_LABELS, InvoiceColumnConfig, InvoiceColumnKey } from '@/lib/invoiceColumns';
 import { RichTextPdf } from './richTextToPdf';
 
@@ -58,11 +60,6 @@ export interface InvoicePdfProps {
   };
 }
 
-function fmtDate(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
 export function InvoiceDocument(props: InvoicePdfProps) {
   const primary = props.company.primaryColor || DEFAULT_PRIMARY;
   const accent = props.company.accentColor || DEFAULT_ACCENT;
@@ -71,14 +68,9 @@ export function InvoiceDocument(props: InvoicePdfProps) {
   // Price and project only the fields this render is allowed to show —
   // server-side enforcement of columnConfig, not just conditional JSX.
   const priced = props.items.map((item) => {
-    const line = priceLine({
-      unitCost: item.unitCost,
-      platformFee: item.platformFee,
-      qty: item.qty,
-      markupPct: item.markupPct,
-      markupMode: item.markupMode,
-      projectDefaultMarkupPct: props.project.defaultMarkupPct,
-      projectMarkupMode: props.project.markupMode,
+    const line = priceItem(item, {
+      defaultMarkupPct: props.project.defaultMarkupPct,
+      markupMode: props.project.markupMode,
     });
     const row: Record<Exclude<InvoiceColumnKey, 'image'>, string> = {
       tag: item.tag,
@@ -169,9 +161,9 @@ export function InvoiceDocument(props: InvoicePdfProps) {
           </View>
           <View>
             <Text style={styles.metaLabel}>Issue Date</Text>
-            <Text style={styles.metaValue}>{fmtDate(props.issuedDate)}</Text>
+            <Text style={styles.metaValue}>{formatLongDate(props.issuedDate)}</Text>
             <Text style={styles.metaLabel}>Due Date</Text>
-            <Text style={styles.metaValue}>{fmtDate(props.dueDate)}</Text>
+            <Text style={styles.metaValue}>{formatLongDate(props.dueDate)}</Text>
           </View>
         </View>
 

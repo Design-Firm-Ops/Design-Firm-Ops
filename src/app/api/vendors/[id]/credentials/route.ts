@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { forbidden, notFound } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/lib/permissions';
 import { decryptSecret } from '@/lib/crypto';
 
@@ -11,14 +12,14 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const perms = await resolvePermissions(session);
   if (!perms.vendorCredentials) {
-    return NextResponse.json({ error: 'You do not have permission to view trade account credentials' }, { status: 403 });
+    return forbidden('You do not have permission to view trade account credentials');
   }
 
   const vendor = await prisma.vendor.findUnique({
     where: { id: params.id },
     select: { tradeAccountUsername: true, tradeAccountPasswordEncrypted: true, tradeAccountNotes: true },
   });
-  if (!vendor) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!vendor) return notFound();
 
   let password: string | null = null;
   if (vendor.tradeAccountPasswordEncrypted) {

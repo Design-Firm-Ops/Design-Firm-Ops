@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { apiError, apiSend } from '@/lib/apiClient';
+import Modal from '@/components/Modal';
 
 interface PartnerRow {
   id: string;
@@ -52,17 +54,16 @@ export default function ReferralPartnersManager({ initialPartners }: { initialPa
     setSaving(true);
     setError(null);
 
-    const res = await fetch(editingId ? `/api/referral-partners/${editingId}` : '/api/referral-partners', {
-      method: editingId ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
+    const res = await apiSend(
+      editingId ? `/api/referral-partners/${editingId}` : '/api/referral-partners',
+      editingId ? 'PATCH' : 'POST',
+      form
+    );
 
     setSaving(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ? JSON.stringify(data.error) : 'Something went wrong.');
+      setError(await apiError(res, 'Something went wrong.'));
       return;
     }
 
@@ -75,12 +76,11 @@ export default function ReferralPartnersManager({ initialPartners }: { initialPa
     setDeleting(true);
     setDeleteError(null);
 
-    const res = await fetch(`/api/referral-partners/${pendingDelete.id}`, { method: 'DELETE' });
+    const res = await apiSend(`/api/referral-partners/${pendingDelete.id}`, 'DELETE');
     setDeleting(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setDeleteError(data?.error ?? 'Failed to delete partner.');
+      setDeleteError(await apiError(res, 'Failed to delete partner.'));
       return;
     }
 
@@ -144,66 +144,64 @@ export default function ReferralPartnersManager({ initialPartners }: { initialPa
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <form onSubmit={handleSubmit} className="card w-full max-w-md space-y-4 p-6">
-            <h2 className="text-lg font-medium text-brown">{editingId ? 'Edit Referral Partner' : 'New Referral Partner'}</h2>
+        <Modal width="md" onSubmit={handleSubmit} className="space-y-4">
+          <h2 className="text-lg font-medium text-brown">{editingId ? 'Edit Referral Partner' : 'New Referral Partner'}</h2>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Name</label>
-              <input
-                className="input"
-                required
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Business Name</label>
-              <input
-                className="input"
-                value={form.businessName}
-                onChange={(e) => setForm({ ...form, businessName: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Contact Email</label>
-              <input
-                type="email"
-                className="input"
-                value={form.contactEmail}
-                onChange={(e) => setForm({ ...form, contactEmail: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Contact Phone</label>
-              <input
-                className="input"
-                value={form.contactPhone}
-                onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Notes</label>
-              <textarea
-                className="input"
-                rows={2}
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              />
-            </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Name</label>
+            <input
+              className="input"
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Business Name</label>
+            <input
+              className="input"
+              value={form.businessName}
+              onChange={(e) => setForm({ ...form, businessName: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Contact Email</label>
+            <input
+              type="email"
+              className="input"
+              value={form.contactEmail}
+              onChange={(e) => setForm({ ...form, contactEmail: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Contact Phone</label>
+            <input
+              className="input"
+              value={form.contactPhone}
+              onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Notes</label>
+            <textarea
+              className="input"
+              rows={2}
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            />
+          </div>
 
-            {error && <p className="text-sm text-red-700">{error}</p>}
+          {error && <p className="text-sm text-red-700">{error}</p>}
 
-            <div className="flex justify-end gap-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary" disabled={saving}>
-                {saving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </form>
-        </div>
+          <div className="flex justify-end gap-3">
+            <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </Modal>
       )}
 
       <ConfirmDialog

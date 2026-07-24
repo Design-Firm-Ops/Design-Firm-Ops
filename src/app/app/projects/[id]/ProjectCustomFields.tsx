@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { apiSend } from '@/lib/apiClient';
 
 export interface FieldDefRow {
   id: string;
@@ -33,11 +34,7 @@ export default function ProjectCustomFields({
   const visibleDefs = isAdmin ? fieldDefs : fieldDefs.filter((d) => d.visibleToDesigner);
 
   async function saveValue(fieldDefId: string, value: string) {
-    await fetch(`/api/projects/${projectId}/field-values`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fieldDefId, value }),
-    });
+    await apiSend(`/api/projects/${projectId}/field-values`, 'PATCH', { fieldDefId, value });
   }
 
   if (visibleDefs.length === 0) return null;

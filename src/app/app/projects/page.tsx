@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import StatusFilter from './StatusFilter';
+import { formatDate } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,7 +62,7 @@ export default async function ProjectsPage({
                   </span>
                 </td>
                 <td className="px-4 py-3 text-brown/70">
-                  {project.startDate ? new Date(project.startDate).toLocaleDateString() : '—'}
+                  {formatDate(project.startDate)}
                 </td>
               </tr>
             ))}

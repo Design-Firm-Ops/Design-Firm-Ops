@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { badRequest, forbidden, parseBody } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/lib/permissions';
 import { isItemLocked } from '@/lib/itemLock';
 
@@ -17,16 +18,13 @@ export async function POST(req: NextRequest) {
 
   const perms = await resolvePermissions(session);
   if (!perms.procurement) {
-    return NextResponse.json({ error: 'You do not have permission to edit procurement' }, { status: 403 });
+    return forbidden('You do not have permission to edit procurement');
   }
 
-  const body = await req.json();
-  const parsed = bulkSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, bulkSchema);
+  if (response) return response;
 
-  const { ids, action, status } = parsed.data;
+  const { ids, action, status } = data;
 
   // Bulk actions never carry an unlock override — invoiced items are
   // silently skipped rather than failing the whole batch, and the
@@ -44,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   if (action === 'setStatus') {
     if (!status) {
-      return NextResponse.json({ error: 'status is required for setStatus' }, { status: 400 });
+      return badRequest('status is required for setStatus');
     }
     if (editableIds.length > 0) {
       await prisma.item.updateMany({ where: { id: { in: editableIds } }, data: { status } });
@@ -52,5 +50,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped });
   }
 
-  return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+  return badRequest('Unknown action');
 }

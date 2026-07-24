@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import RichTextEditor from '@/components/RichTextEditor';
+import { apiError, apiSend } from '@/lib/apiClient';
 
 interface SettingsData {
   id: number;
@@ -47,17 +48,12 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Set
     setError(null);
     setMessage(null);
 
-    const res = await fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, logoUrl: logoUrl ?? '' }),
-    });
+    const res = await apiSend('/api/settings', 'PUT', { ...form, logoUrl: logoUrl ?? '' });
 
     setSaving(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ? JSON.stringify(data.error) : 'Something went wrong.');
+      setError(await apiError(res, 'Something went wrong.'));
       return;
     }
 
@@ -79,8 +75,7 @@ export default function SettingsForm({ initialSettings }: { initialSettings: Set
     setUploadingLogo(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ?? 'Logo upload failed.');
+      setError(await apiError(res, 'Logo upload failed.'));
       return;
     }
 

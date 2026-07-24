@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { priceLine } from '@/lib/pricing';
+import { priceItem } from '@/lib/financials';
 import { formatMoney } from '@/lib/money';
-import ItemDocumentsSection from './ItemDocumentsSection';
+import AttachedDocuments from '@/components/AttachedDocuments';
 import ItemCustomFields, { ItemFieldDefRow } from './ItemCustomFields';
 import type { ItemRow } from './ItemsTable';
+import { apiError, apiSend } from '@/lib/apiClient';
+import Modal from '@/components/Modal';
 
 export type { ItemFieldDefRow };
 
@@ -77,15 +79,16 @@ export default function ItemDetailModal({
   const isLighting = item.category === LIGHTING_CATEGORY;
   const relevantItemTypes = itemTypeOptions.filter((t) => t.category === item.category);
 
-  const priced = priceLine({
-    unitCost: form.unitCost,
-    platformFee: form.platformFee,
-    qty: form.qty,
-    markupPct: form.markupPct === '' ? null : form.markupPct,
-    markupMode: (form.markupMode || null) as 'MARKUP' | 'MARGIN' | null,
-    projectDefaultMarkupPct,
-    projectMarkupMode: projectMarkupMode as 'MARKUP' | 'MARGIN',
-  });
+  const priced = priceItem(
+    {
+      unitCost: form.unitCost,
+      platformFee: form.platformFee,
+      qty: form.qty,
+      markupPct: form.markupPct === '' ? null : form.markupPct,
+      markupMode: form.markupMode || null,
+    },
+    { defaultMarkupPct: projectDefaultMarkupPct, markupMode: projectMarkupMode }
+  );
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -121,17 +124,12 @@ export default function ItemDetailModal({
       bulbQty: form.bulbQty === '' ? null : Number(form.bulbQty),
     };
 
-    const res = await fetch(`/api/items/${item.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    const res = await apiSend(`/api/items/${item.id}`, 'PATCH', payload);
 
     setSaving(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ? JSON.stringify(data.error) : 'Something went wrong.');
+      setError(await apiError(res, 'Something went wrong.'));
       return;
     }
 
@@ -152,13 +150,17 @@ export default function ItemDetailModal({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-      <form onSubmit={handleSubmit} className="card w-full max-w-2xl max-h-[90vh] space-y-4 overflow-y-auto p-6">
+    <>
+      <Modal
+        width="2xl"
+        onSubmit={handleSubmit}
+        className="max-h-[90vh] space-y-4 overflow-y-auto"
+      >
         <h2 className="text-lg font-medium text-brown">Item Details — {item.tag}</h2>
 
         {locked && (
           <p className="rounded-md border border-gold/40 bg-gold/10 p-3 text-sm text-brown">
-            🔒 Locked to invoice {item.invoiceNumber}. Use "Correct this item" in the Procurement list to edit.
+            🔒 Locked to invoice {item.invoiceNumber}. Use &ldquo;Correct this item&rdquo; in the Procurement list to edit.
           </p>
         )}
 
@@ -417,7 +419,13 @@ export default function ItemDetailModal({
           onDefsChanged={setDefs}
         />
 
-        <ItemDocumentsSection itemId={item.id} projectId={projectId} />
+        <AttachedDocuments
+          listUrl={`/api/items/${item.id}/documents`}
+          uploadUrl="/api/documents"
+          deleteUrl={(docId) => `/api/documents/${docId}`}
+          extraFields={{ projectId, itemId: item.id, type: 'VENDOR_INVOICE' }}
+          heading="Documents (quotes, spec sheets…)"
+        />
 
         {error && <p className="text-sm text-red-700">{error}</p>}
 
@@ -431,13 +439,16 @@ export default function ItemDetailModal({
             </button>
           )}
         </div>
-      </form>
-
+      </Modal>
       {enlarged && imageUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-8" onClick={() => setEnlarged(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-8"
+          onClick={() => setEnlarged(false)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={imageUrl} alt={form.name} className="max-h-full max-w-full rounded" />
         </div>
       )}
-    </div>
+    </>
   );
 }

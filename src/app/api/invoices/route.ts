@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { badRequest, forbidden, notFound, parseBody } from '@/lib/apiRoute';
 import { invoiceCreateSchema } from '@/lib/validation';
 import { nextInvoiceNumber } from '@/lib/invoiceNumber';
 import { resolvePermissions } from '@/lib/permissions';
@@ -9,31 +10,28 @@ export async function POST(req: NextRequest) {
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const body = await req.json();
-  const parsed = invoiceCreateSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, invoiceCreateSchema);
+  if (response) return response;
 
   const { projectId, type, itemIds, designFeeChargeIds, newDesignFeeCharges, shippingTotal, taxRate, taxBase, dueDate, notes } =
-    parsed.data;
+    data;
 
   const perms = await resolvePermissions(session);
   const allowed = type === 'DESIGN_FEE' ? perms.financials : perms.invoices;
   if (!allowed) {
-    return NextResponse.json({ error: 'You do not have permission to create this invoice' }, { status: 403 });
+    return forbidden('You do not have permission to create this invoice');
   }
 
   const project = await prisma.project.findUnique({ where: { id: projectId } });
-  if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+  if (!project) return notFound('Project not found');
 
   if (type === 'DESIGN_FEE') {
     if (designFeeChargeIds.length === 0 && newDesignFeeCharges.length === 0) {
-      return NextResponse.json({ error: 'Select a charge or add a custom line item' }, { status: 400 });
+      return badRequest('Select a charge or add a custom line item');
     }
     const charges = await prisma.designFeeCharge.findMany({ where: { id: { in: designFeeChargeIds }, projectId } });
     if (charges.length !== designFeeChargeIds.length) {
-      return NextResponse.json({ error: 'Some charges were not found on this project' }, { status: 400 });
+      return badRequest('Some charges were not found on this project');
     }
     const alreadyInvoiced = charges.filter((c) => c.invoiceId);
     if (alreadyInvoiced.length > 0) {
@@ -74,12 +72,12 @@ export async function POST(req: NextRequest) {
   }
 
   if (itemIds.length === 0) {
-    return NextResponse.json({ error: 'Select at least one item' }, { status: 400 });
+    return badRequest('Select at least one item');
   }
 
   const items = await prisma.item.findMany({ where: { id: { in: itemIds }, projectId } });
   if (items.length !== itemIds.length) {
-    return NextResponse.json({ error: 'Some items were not found on this project' }, { status: 400 });
+    return badRequest('Some items were not found on this project');
   }
   const alreadyInvoiced = items.filter((i) => i.invoiceId);
   if (alreadyInvoiced.length > 0) {

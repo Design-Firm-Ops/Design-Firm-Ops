@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiError, apiSend } from '@/lib/apiClient';
 
 interface RoleDefaults {
   designerCanViewFinancials: boolean;
@@ -101,17 +102,12 @@ export default function PermissionsManager({
     setRoleError(null);
     setRoleMessage(null);
 
-    const res = await fetch('/api/settings/permissions', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(roleDefaults),
-    });
+    const res = await apiSend('/api/settings/permissions', 'PUT', roleDefaults);
 
     setSavingRole(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setRoleError(data?.error ? JSON.stringify(data.error) : 'Something went wrong.');
+      setRoleError(await apiError(res, 'Something went wrong.'));
       return;
     }
 
@@ -125,17 +121,12 @@ export default function PermissionsManager({
     setSavingUserId(userId);
     setOverrideError(null);
 
-    const res = await fetch(`/api/users/${userId}/permissions`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(nextForUser),
-    });
+    const res = await apiSend(`/api/users/${userId}/permissions`, 'PUT', nextForUser);
 
     setSavingUserId(null);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setOverrideError(data?.error ? JSON.stringify(data.error) : 'Could not save that override.');
+      setOverrideError(await apiError(res, 'Could not save that override.'));
       return;
     }
 

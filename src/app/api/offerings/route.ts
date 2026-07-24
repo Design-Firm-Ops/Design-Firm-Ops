@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nextOrder } from '@/lib/order';
 import { requireSession } from '@/lib/apiAuth';
+import { parseBody } from '@/lib/apiRoute';
 import { offeringSchema } from '@/lib/validation';
 
 export async function GET() {
@@ -15,15 +17,11 @@ export async function POST(req: NextRequest) {
   const { unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const body = await req.json();
-  const parsed = offeringSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, offeringSchema);
+  if (response) return response;
 
-  const maxOrder = await prisma.offering.aggregate({ _max: { order: true } });
   const offering = await prisma.offering.create({
-    data: { name: parsed.data.name, order: (maxOrder._max.order ?? -1) + 1 },
+    data: { name: data.name, order: await nextOrder(prisma.offering) },
   });
   return NextResponse.json(offering, { status: 201 });
 }

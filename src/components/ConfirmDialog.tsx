@@ -4,6 +4,8 @@
 // client/vendor/item/document, etc). Every destructive action in the
 // app should route through this rather than firing immediately.
 
+import Modal from './Modal';
+
 export default function ConfirmDialog({
   open,
   title,
@@ -21,22 +23,21 @@ export default function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="card w-full max-w-sm p-6">
-        <h2 className="text-lg font-medium text-brown">{title}</h2>
-        <p className="mt-2 text-sm text-brown/70">{message}</p>
-        <div className="mt-6 flex justify-end gap-3">
-          <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
-            Cancel
-          </button>
-          <button type="button" className="btn-danger" onClick={onConfirm} disabled={busy}>
-            {busy ? 'Working…' : confirmLabel}
-          </button>
-        </div>
+    // Elevated because a confirm usually opens on top of the form that
+    // triggered it. Dismissing is always "cancel", never the destructive
+    // action — and it's disabled entirely while the action is in flight.
+    <Modal open={open} onClose={busy ? undefined : onCancel} width="sm" elevated>
+      <h2 className="text-lg font-medium text-brown">{title}</h2>
+      <p className="mt-2 text-sm text-brown/70">{message}</p>
+      <div className="mt-6 flex justify-end gap-3">
+        <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>
+          Cancel
+        </button>
+        <button type="button" className="btn-danger" onClick={onConfirm} disabled={busy}>
+          {busy ? 'Working…' : confirmLabel}
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 }

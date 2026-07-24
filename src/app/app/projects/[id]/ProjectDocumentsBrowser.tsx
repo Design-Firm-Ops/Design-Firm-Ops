@@ -4,6 +4,9 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import FolderIcon from '../../administration/FolderIcon';
+import { apiError, apiSend } from '@/lib/apiClient';
+import { formatDate } from '@/lib/format';
+import Modal from '@/components/Modal';
 
 export interface DocumentRow {
   id: string;
@@ -81,8 +84,7 @@ export default function ProjectDocumentsBrowser({
     e.target.value = '';
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ?? 'Upload failed.');
+      setError(await apiError(res, 'Upload failed.'));
       return;
     }
 
@@ -92,7 +94,7 @@ export default function ProjectDocumentsBrowser({
   async function confirmDelete() {
     if (!pendingDelete) return;
     setDeleting(true);
-    await fetch(`/api/documents/${pendingDelete.id}`, { method: 'DELETE' });
+    await apiSend(`/api/documents/${pendingDelete.id}`, 'DELETE');
     setDeleting(false);
     setPendingDelete(null);
     router.refresh();
@@ -104,16 +106,11 @@ export default function ProjectDocumentsBrowser({
     setCreatingFolder(true);
     setFolderError(null);
 
-    const res = await fetch('/api/document-folders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId, name: newFolderName.trim() }),
-    });
+    const res = await apiSend('/api/document-folders', 'POST', { projectId, name: newFolderName.trim() });
     setCreatingFolder(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setFolderError(data?.error ?? 'Could not create folder.');
+      setFolderError(await apiError(res, 'Could not create folder.'));
       return;
     }
 
@@ -129,11 +126,7 @@ export default function ProjectDocumentsBrowser({
       setRenamingId(null);
       return;
     }
-    await fetch(`/api/document-folders/${folderId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: renameValue.trim() }),
-    });
+    await apiSend(`/api/document-folders/${folderId}`, 'PATCH', { name: renameValue.trim() });
     setRenamingId(null);
     router.refresh();
   }
@@ -141,7 +134,7 @@ export default function ProjectDocumentsBrowser({
   async function confirmDeleteFolder() {
     if (!pendingDeleteFolder) return;
     setDeletingFolder(true);
-    await fetch(`/api/document-folders/${pendingDeleteFolder.id}`, { method: 'DELETE' });
+    await apiSend(`/api/document-folders/${pendingDeleteFolder.id}`, 'DELETE');
     setDeletingFolder(false);
     setPendingDeleteFolder(null);
     if (openFolderId === pendingDeleteFolder.id) setOpenFolderId(null);
@@ -198,7 +191,7 @@ export default function ProjectDocumentsBrowser({
                     )}
                   </td>
                   <td className="px-4 py-3 text-brown/70">{TYPE_LABELS[doc.type] ?? doc.type}</td>
-                  <td className="px-4 py-3 text-brown/70">{new Date(doc.uploadedAt).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-brown/70">{formatDate(doc.uploadedAt)}</td>
                   <td className="px-4 py-3 text-right">
                     <button className="text-sm text-red-700 hover:text-red-900" onClick={() => setPendingDelete(doc)}>
                       Delete
@@ -297,28 +290,26 @@ export default function ProjectDocumentsBrowser({
       </div>
 
       {showNewFolder && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <form onSubmit={handleCreateFolder} className="card w-full max-w-sm space-y-4 p-6">
-            <h2 className="text-lg font-medium text-brown">New Folder</h2>
-            <input
-              className="input"
-              required
-              autoFocus
-              placeholder="Folder name"
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-            />
-            {folderError && <p className="text-sm text-red-700">{folderError}</p>}
-            <div className="flex justify-end gap-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowNewFolder(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary" disabled={creatingFolder}>
-                {creatingFolder ? 'Creating…' : 'Create'}
-              </button>
-            </div>
-          </form>
-        </div>
+        <Modal width="sm" onSubmit={handleCreateFolder} className="space-y-4">
+          <h2 className="text-lg font-medium text-brown">New Folder</h2>
+          <input
+            className="input"
+            required
+            autoFocus
+            placeholder="Folder name"
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+          />
+          {folderError && <p className="text-sm text-red-700">{folderError}</p>}
+          <div className="flex justify-end gap-3">
+            <button type="button" className="btn-secondary" onClick={() => setShowNewFolder(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={creatingFolder}>
+              {creatingFolder ? 'Creating…' : 'Create'}
+            </button>
+          </div>
+        </Modal>
       )}
 
       <ConfirmDialog

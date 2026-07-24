@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiError, apiSend } from '@/lib/apiClient';
 
 export default function NewProjectForm({
   clients,
@@ -47,21 +48,16 @@ export default function NewProjectForm({
     setError(null);
 
     const { salesTaxRatePct, ...rest } = form;
-    const res = await fetch('/api/projects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const res = await apiSend('/api/projects', 'POST', {
         ...rest,
         clientId: useNewClient ? '' : form.clientId,
         salesTaxRate: salesTaxRatePct ? Number(salesTaxRatePct) / 100 : 0,
-      }),
-    });
+      });
 
     setSaving(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ? JSON.stringify(data.error) : 'Something went wrong.');
+      setError(await apiError(res, 'Something went wrong.'));
       return;
     }
 

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import VendorFormModal, { VendorRow } from './VendorFormModal';
 import OfferingManager, { OfferingRow } from './OfferingManager';
+import { apiError, apiSend } from '@/lib/apiClient';
 
 type SortKey = 'name' | 'accountType' | 'productType' | 'priceRange';
 
@@ -84,12 +85,11 @@ export default function VendorsManager({
     setDeleting(true);
     setDeleteError(null);
 
-    const res = await fetch(`/api/vendors/${pendingDelete.id}`, { method: 'DELETE' });
+    const res = await apiSend(`/api/vendors/${pendingDelete.id}`, 'DELETE');
     setDeleting(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setDeleteError(data?.error ?? 'Failed to delete vendor.');
+      setDeleteError(await apiError(res, 'Failed to delete vendor.'));
       return;
     }
 

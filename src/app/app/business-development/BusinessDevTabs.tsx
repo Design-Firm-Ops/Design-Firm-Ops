@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import LeadsBoard, { LeadRow, StageRow } from './LeadsBoard';
+import { apiError, apiSend } from '@/lib/apiClient';
 
 const MAX_BOARDS = 5;
 
@@ -39,16 +40,11 @@ export default function BusinessDevTabs({
     setCreating(true);
     setError(null);
 
-    const res = await fetch('/api/lead-boards', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newBoardName.trim() }),
-    });
+    const res = await apiSend('/api/lead-boards', 'POST', { name: newBoardName.trim() });
     setCreating(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ?? 'Could not create board.');
+      setError(await apiError(res, 'Could not create board.'));
       return;
     }
 
@@ -64,20 +60,15 @@ export default function BusinessDevTabs({
       setRenamingId(null);
       return;
     }
-    await fetch(`/api/lead-boards/${boardId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: renameValue.trim() }),
-    });
+    await apiSend(`/api/lead-boards/${boardId}`, 'PATCH', { name: renameValue.trim() });
     setRenamingId(null);
     router.refresh();
   }
 
   async function handleDeleteBoard(boardId: string) {
-    const res = await fetch(`/api/lead-boards/${boardId}`, { method: 'DELETE' });
+    const res = await apiSend(`/api/lead-boards/${boardId}`, 'DELETE');
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ?? 'Could not delete board.');
+      setError(await apiError(res, 'Could not delete board.'));
       return;
     }
     setActive(boards.find((b) => b.id !== boardId)?.id ?? 'partners');

@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { apiError, apiSend } from '@/lib/apiClient';
+import Modal from '@/components/Modal';
 
 interface UserRow {
   id: string;
@@ -50,26 +52,17 @@ export default function UsersManager({
     setError(null);
 
     const res = editingUser
-      ? await fetch(`/api/users/${editingUser.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+      ? await apiSend(`/api/users/${editingUser.id}`, 'PATCH', {
             name: form.name,
             role: form.role,
             ...(form.password ? { password: form.password } : {}),
-          }),
         })
-      : await fetch('/api/users', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(form),
-        });
+      : await apiSend('/api/users', 'POST', form);
 
     setSaving(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ? JSON.stringify(data.error) : 'Something went wrong.');
+      setError(await apiError(res, 'Something went wrong.'));
       return;
     }
 
@@ -83,11 +76,7 @@ export default function UsersManager({
       setPendingDeactivate(user);
       return;
     }
-    await fetch(`/api/users/${user.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ active: true }),
-    });
+    await apiSend(`/api/users/${user.id}`, 'PATCH', { active: true });
     router.refresh();
   }
 
@@ -96,16 +85,11 @@ export default function UsersManager({
     setDeactivating(true);
     setDeactivateError(null);
 
-    const res = await fetch(`/api/users/${pendingDeactivate.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ active: false }),
-    });
+    const res = await apiSend(`/api/users/${pendingDeactivate.id}`, 'PATCH', { active: false });
     setDeactivating(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setDeactivateError(data?.error ?? 'Failed to deactivate user.');
+      setDeactivateError(await apiError(res, 'Failed to deactivate user.'));
       return;
     }
 
@@ -167,57 +151,55 @@ export default function UsersManager({
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <form onSubmit={handleSubmit} className="card w-full max-w-md space-y-4 p-6">
-            <h2 className="text-lg font-medium text-brown">{editingUser ? 'Edit Teammate' : 'Add Teammate'}</h2>
+        <Modal width="md" onSubmit={handleSubmit} className="space-y-4">
+          <h2 className="text-lg font-medium text-brown">{editingUser ? 'Edit Teammate' : 'Add Teammate'}</h2>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Name</label>
-              <input className="input" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Email</label>
-              <input
-                type="email"
-                className="input"
-                required
-                disabled={!!editingUser}
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">
-                {editingUser ? 'New Password (leave blank to keep current)' : 'Password'}
-              </label>
-              <input
-                type="password"
-                className="input"
-                required={!editingUser}
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Role</label>
-              <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                <option value="DESIGNER">Designer</option>
-                <option value="ADMIN">Administrator</option>
-              </select>
-            </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Name</label>
+            <input className="input" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Email</label>
+            <input
+              type="email"
+              className="input"
+              required
+              disabled={!!editingUser}
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">
+              {editingUser ? 'New Password (leave blank to keep current)' : 'Password'}
+            </label>
+            <input
+              type="password"
+              className="input"
+              required={!editingUser}
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Role</label>
+            <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+              <option value="DESIGNER">Designer</option>
+              <option value="ADMIN">Administrator</option>
+            </select>
+          </div>
 
-            {error && <p className="text-sm text-red-700">{error}</p>}
+          {error && <p className="text-sm text-red-700">{error}</p>}
 
-            <div className="flex justify-end gap-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary" disabled={saving}>
-                {saving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </form>
-        </div>
+          <div className="flex justify-end gap-3">
+            <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </Modal>
       )}
 
       <ConfirmDialog

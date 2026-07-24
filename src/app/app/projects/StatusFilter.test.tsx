@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, userEvent, createRouterMock } from '@/test';
+import { render, screen, userEvent, mockNextNavigation, nextNavigationMock, type RouterMock } from '@/test';
 import StatusFilter from './StatusFilter';
 
 // StatusFilter navigates via next/navigation's router; mock it so we can
 // assert on where it pushes without a real Next runtime.
-const router = createRouterMock();
-vi.mock('next/navigation', () => ({ useRouter: () => router }));
+vi.mock('next/navigation', () => nextNavigationMock);
 
+let router: RouterMock;
 beforeEach(() => {
-  router.push.mockClear();
+  router = mockNextNavigation({ pathname: '/app/projects' });
 });
 
 describe('StatusFilter', () => {

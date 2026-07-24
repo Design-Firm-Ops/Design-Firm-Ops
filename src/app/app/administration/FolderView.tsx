@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { apiError, apiSend } from '@/lib/apiClient';
+import { formatDate } from '@/lib/format';
 
 export interface ResourceRow {
   id: string;
@@ -40,8 +42,7 @@ export default function FolderView({ folder, files, query }: { folder: string; f
     e.target.value = '';
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setError(data?.error ?? 'Upload failed.');
+      setError(await apiError(res, 'Upload failed.'));
       return;
     }
 
@@ -51,7 +52,7 @@ export default function FolderView({ folder, files, query }: { folder: string; f
   async function confirmDelete() {
     if (!pendingDelete) return;
     setDeleting(true);
-    await fetch(`/api/resources/${pendingDelete.id}`, { method: 'DELETE' });
+    await apiSend(`/api/resources/${pendingDelete.id}`, 'DELETE');
     setDeleting(false);
     setPendingDelete(null);
     router.refresh();
@@ -90,7 +91,7 @@ export default function FolderView({ folder, files, query }: { folder: string; f
                   )}
                 </td>
                 <td className="px-4 py-3 text-brown/70">{r.uploadedByName ?? '—'}</td>
-                <td className="px-4 py-3 text-brown/70">{new Date(r.uploadedAt).toLocaleDateString()}</td>
+                <td className="px-4 py-3 text-brown/70">{formatDate(r.uploadedAt)}</td>
                 <td className="px-4 py-3 text-right">
                   <button className="text-sm text-red-700 hover:text-red-900" onClick={() => setPendingDelete(r)}>
                     Delete

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { nextOrder } from '@/lib/order';
 
 /**
  * Registers a room name as a suggestion for this project if it isn't
@@ -13,6 +14,7 @@ export async function findOrCreateRoom(projectId: string, name: string | undefin
   const existing = await prisma.projectRoom.findUnique({ where: { projectId_name: { projectId, name: trimmed } } });
   if (existing) return;
 
-  const maxOrder = await prisma.projectRoom.aggregate({ where: { projectId }, _max: { order: true } });
-  await prisma.projectRoom.create({ data: { projectId, name: trimmed, order: (maxOrder._max.order ?? -1) + 1 } });
+  await prisma.projectRoom.create({
+    data: { projectId, name: trimmed, order: await nextOrder(prisma.projectRoom, { projectId }) },
+  });
 }

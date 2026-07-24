@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/apiAuth';
+import { conflict, parseBody } from '@/lib/apiRoute';
 import { userCreateSchema } from '@/lib/validation';
 
 const USER_SELECT = {
@@ -25,21 +26,18 @@ export async function POST(req: NextRequest) {
   const { unauthorized } = await requireAdmin();
   if (unauthorized) return unauthorized;
 
-  const body = await req.json();
-  const parsed = userCreateSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, userCreateSchema);
+  if (response) return response;
 
-  const email = parsed.data.email.toLowerCase().trim();
+  const email = data.email.toLowerCase().trim();
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    return NextResponse.json({ error: 'A user with that email already exists' }, { status: 409 });
+    return conflict('A user with that email already exists');
   }
 
-  const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+  const passwordHash = await bcrypt.hash(data.password, 10);
   const user = await prisma.user.create({
-    data: { name: parsed.data.name, email, passwordHash, role: parsed.data.role },
+    data: { name: data.name, email, passwordHash, role: data.role },
     select: USER_SELECT,
   });
 

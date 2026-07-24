@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin, requireSession } from '@/lib/apiAuth';
+import { parseBody } from '@/lib/apiRoute';
 import { resourceFolderPermissionSchema } from '@/lib/validation';
 import { z } from 'zod';
 
@@ -21,16 +22,13 @@ export async function PUT(req: NextRequest) {
   const { unauthorized } = await requireAdmin();
   if (unauthorized) return unauthorized;
 
-  const body = await req.json();
-  const parsed = upsertSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, upsertSchema);
+  if (response) return response;
 
   const folder = await prisma.resourceFolder.upsert({
-    where: { name: parsed.data.name },
-    create: { name: parsed.data.name, allowedUserIds: parsed.data.allowedUserIds },
-    update: { allowedUserIds: parsed.data.allowedUserIds },
+    where: { name: data.name },
+    create: { name: data.name, allowedUserIds: data.allowedUserIds },
+    update: { allowedUserIds: data.allowedUserIds },
   });
   return NextResponse.json(folder);
 }

@@ -1,22 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { notFound, ok, parseBody } from '@/lib/apiRoute';
 import { documentFolderUpdateSchema } from '@/lib/validation';
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const { unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const body = await req.json();
-  const parsed = documentFolderUpdateSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, documentFolderUpdateSchema);
+  if (response) return response;
 
   const existing = await prisma.projectDocumentFolder.findUnique({ where: { id: params.id } });
-  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!existing) return notFound();
 
-  const { name, ...rest } = parsed.data;
+  const { name, ...rest } = data;
 
   // Document.folder is free text, not a FK — renaming the folder means
   // repointing every document currently tagged with the old name too.
@@ -35,7 +33,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   if (unauthorized) return unauthorized;
 
   const existing = await prisma.projectDocumentFolder.findUnique({ where: { id: params.id } });
-  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!existing) return notFound();
 
   // Documents in a deleted folder move to Uncategorized rather than being deleted.
   await prisma.$transaction([
@@ -43,5 +41,5 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     prisma.projectDocumentFolder.delete({ where: { id: params.id } }),
   ]);
 
-  return NextResponse.json({ ok: true });
+  return ok();
 }

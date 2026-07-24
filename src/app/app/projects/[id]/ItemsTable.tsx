@@ -3,11 +3,13 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Decimal from 'decimal.js';
-import { priceLine } from '@/lib/pricing';
+import { priceItem } from '@/lib/financials';
 import { formatMoney } from '@/lib/money';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Tooltip from '@/components/Tooltip';
 import ItemDetailModal, { ItemFieldDefRow } from './ItemDetailModal';
+import { apiError, apiSend } from '@/lib/apiClient';
+import Modal from '@/components/Modal';
 
 export interface ItemRow {
   id: string;
@@ -60,16 +62,7 @@ const LIGHTING_CATEGORY = 'Lighting';
 type GroupBy = 'none' | 'room' | 'vendor' | 'itemType';
 
 function computeRow(item: ItemRow, projectDefaultMarkupPct: string, projectMarkupMode: string) {
-  const priced = priceLine({
-    unitCost: item.unitCost,
-    platformFee: item.platformFee,
-    qty: item.qty,
-    markupPct: item.markupPct,
-    markupMode: item.markupMode as 'MARKUP' | 'MARGIN' | null,
-    projectDefaultMarkupPct,
-    projectMarkupMode: projectMarkupMode as 'MARKUP' | 'MARGIN',
-  });
-  return priced;
+  return priceItem(item, { defaultMarkupPct: projectDefaultMarkupPct, markupMode: projectMarkupMode });
 }
 
 export default function ItemsTable({
@@ -133,11 +126,7 @@ export default function ItemsTable({
 
   async function saveField(id: string, patch: Record<string, unknown>) {
     const item = items.find((i) => i.id === id);
-    const res = await fetch(`/api/items/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(item?.invoiceId ? { ...patch, unlockOverride: true } : patch),
-    });
+    const res = await apiSend(`/api/items/${id}`, 'PATCH', item?.invoiceId ? { ...patch, unlockOverride: true } : patch);
     if (res.ok) {
       // The server may auto-fill the tag once an item type is set —
       // reflect that immediately rather than waiting on a full reload.
@@ -155,10 +144,7 @@ export default function ItemsTable({
 
   async function handleAddRow() {
     setAddingRow(true);
-    const res = await fetch('/api/items', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const res = await apiSend('/api/items', 'POST', {
         projectId,
         procurementListId: procurementListId && procurementListId !== 'unassigned' ? procurementListId : '',
         tag: '',
@@ -166,8 +152,7 @@ export default function ItemsTable({
         category: defaultCategory,
         qty: 1,
         unitCost: 0,
-      }),
-    });
+      });
     setAddingRow(false);
     if (res.ok) {
       const created = await res.json();
@@ -185,16 +170,11 @@ export default function ItemsTable({
     setAddingItemType(true);
     setAddItemTypeError(null);
 
-    const res = await fetch('/api/item-types', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ category: newItemTypeCategory, name: newItemTypeName.trim() }),
-    });
+    const res = await apiSend('/api/item-types', 'POST', { category: newItemTypeCategory, name: newItemTypeName.trim() });
     setAddingItemType(false);
 
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setAddItemTypeError(data?.error ?? 'Could not add item type.');
+      setAddItemTypeError(await apiError(res, 'Could not add item type.'));
       return;
     }
 
@@ -222,11 +202,7 @@ export default function ItemsTable({
 
   async function handleBulkDelete() {
     setBulkBusy(true);
-    await fetch('/api/items/bulk', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: Array.from(selected), action: 'delete' }),
-    });
+    await apiSend('/api/items/bulk', 'POST', { ids: Array.from(selected), action: 'delete' });
     setBulkBusy(false);
     setItems((prev) => prev.filter((i) => !selected.has(i.id)));
     setSelected(new Set());
@@ -236,11 +212,7 @@ export default function ItemsTable({
   async function handleBulkStatus(status: string) {
     if (!status) return;
     setBulkBusy(true);
-    await fetch('/api/items/bulk', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: Array.from(selected), action: 'setStatus', status }),
-    });
+    await apiSend('/api/items/bulk', 'POST', { ids: Array.from(selected), action: 'setStatus', status });
     setBulkBusy(false);
     setItems((prev) => prev.map((i) => (selected.has(i.id) ? { ...i, status } : i)));
     router.refresh();
@@ -249,7 +221,7 @@ export default function ItemsTable({
   async function confirmDeleteRow() {
     if (!pendingDelete) return;
     setDeleting(true);
-    await fetch(`/api/items/${pendingDelete.id}`, { method: 'DELETE' });
+    await apiSend(`/api/items/${pendingDelete.id}`, 'DELETE');
     setDeleting(false);
     setItems((prev) => prev.filter((i) => i.id !== pendingDelete.id));
     setPendingDelete(null);
@@ -259,11 +231,7 @@ export default function ItemsTable({
   async function handleCopy(itemId: string, procurementListId: string) {
     if (!procurementListId) return;
     setCopyingId(itemId);
-    await fetch(`/api/items/${itemId}/copy`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ procurementListId }),
-    });
+    await apiSend(`/api/items/${itemId}/copy`, 'POST', { procurementListId });
     setCopyingId(null);
     router.refresh();
   }
@@ -709,44 +677,42 @@ export default function ItemsTable({
       </div>
 
       {showAddItemType && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <form onSubmit={handleAddItemType} className="card w-full max-w-sm space-y-4 p-6">
-            <h2 className="text-lg font-medium text-brown">Add Item Type</h2>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Category</label>
-              <select
-                className="input"
-                value={newItemTypeCategory}
-                onChange={(e) => setNewItemTypeCategory(e.target.value)}
-              >
-                {categoryOptions.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-brown">Name</label>
-              <input
-                className="input"
-                placeholder="e.g. Bench"
-                value={newItemTypeName}
-                autoFocus
-                onChange={(e) => setNewItemTypeName(e.target.value)}
-              />
-            </div>
-            {addItemTypeError && <p className="text-sm text-red-700">{addItemTypeError}</p>}
-            <div className="flex justify-end gap-3">
-              <button type="button" className="btn-secondary" onClick={() => setShowAddItemType(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="btn-primary" disabled={addingItemType}>
-                {addingItemType ? 'Adding…' : 'Add'}
-              </button>
-            </div>
-          </form>
-        </div>
+        <Modal width="sm" onSubmit={handleAddItemType} className="space-y-4">
+          <h2 className="text-lg font-medium text-brown">Add Item Type</h2>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Category</label>
+            <select
+              className="input"
+              value={newItemTypeCategory}
+              onChange={(e) => setNewItemTypeCategory(e.target.value)}
+            >
+              {categoryOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-brown">Name</label>
+            <input
+              className="input"
+              placeholder="e.g. Bench"
+              value={newItemTypeName}
+              autoFocus
+              onChange={(e) => setNewItemTypeName(e.target.value)}
+            />
+          </div>
+          {addItemTypeError && <p className="text-sm text-red-700">{addItemTypeError}</p>}
+          <div className="flex justify-end gap-3">
+            <button type="button" className="btn-secondary" onClick={() => setShowAddItemType(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={addingItemType}>
+              {addingItemType ? 'Adding…' : 'Add'}
+            </button>
+          </div>
+        </Modal>
       )}
 
       <div className="card overflow-x-auto">
@@ -799,7 +765,7 @@ export default function ItemsTable({
             {items.length === 0 && (
               <tr>
                 <td colSpan={COLUMN_COUNT} className="px-4 py-8 text-center text-brown/50">
-                  No line items yet. Click "Add Row" to get started.
+                  No line items yet. Click &ldquo;Add Row&rdquo; to get started.
                 </td>
               </tr>
             )}

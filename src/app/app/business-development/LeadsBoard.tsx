@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import LeadFormModal from './LeadFormModal';
+import { apiError, apiSend } from '@/lib/apiClient';
 
 export interface StageRow {
   id: string;
@@ -80,11 +81,7 @@ export default function LeadsBoard({
     setLeads((prev) => prev.map((l) => (l.id === draggingId ? { ...l, pipelineStageId: stageId, sortOrder: newSortOrder } : l)));
     setDraggingId(null);
 
-    await fetch(`/api/leads/${lead.id}/move`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pipelineStageId: stageId, sortOrder: newSortOrder }),
-    });
+    await apiSend(`/api/leads/${lead.id}/move`, 'PATCH', { pipelineStageId: stageId, sortOrder: newSortOrder });
     router.refresh();
   }
 
@@ -93,11 +90,7 @@ export default function LeadsBoard({
     if (!newStageName.trim()) return;
     setAddingStage(true);
 
-    const res = await fetch('/api/pipeline-stages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newStageName.trim(), boardId }),
-    });
+    const res = await apiSend('/api/pipeline-stages', 'POST', { name: newStageName.trim(), boardId });
     setAddingStage(false);
 
     if (res.ok) {
@@ -109,21 +102,16 @@ export default function LeadsBoard({
 
   async function handleRenameStage(stage: StageRow, name: string) {
     setStages((prev) => prev.map((s) => (s.id === stage.id ? { ...s, name } : s)));
-    await fetch(`/api/pipeline-stages/${stage.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    });
+    await apiSend(`/api/pipeline-stages/${stage.id}`, 'PATCH', { name });
     router.refresh();
   }
 
   async function confirmDeleteStage() {
     if (!pendingDeleteStage) return;
     setStageError(null);
-    const res = await fetch(`/api/pipeline-stages/${pendingDeleteStage.id}`, { method: 'DELETE' });
+    const res = await apiSend(`/api/pipeline-stages/${pendingDeleteStage.id}`, 'DELETE');
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      setStageError(data?.error ?? 'Failed to delete stage.');
+      setStageError(await apiError(res, 'Failed to delete stage.'));
       return;
     }
     setStages((prev) => prev.filter((s) => s.id !== pendingDeleteStage.id));

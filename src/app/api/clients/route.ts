@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { parseBody } from '@/lib/apiRoute';
 import { clientSchema } from '@/lib/validation';
 
 export async function GET() {
@@ -15,13 +16,10 @@ export async function POST(req: NextRequest) {
   const { unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const body = await req.json();
-  const parsed = clientSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, clientSchema);
+  if (response) return response;
 
-  const { contacts, ...rest } = parsed.data;
+  const { contacts, ...rest } = data;
 
   const client = await prisma.client.create({
     data: {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { conflict, forbidden, notFound, ok, parseBody } from '@/lib/apiRoute';
 import { itemUpdateSchema } from '@/lib/validation';
 import { resolvePermissions } from '@/lib/permissions';
 import { isItemLocked, lockedItemMessage } from '@/lib/itemLock';
@@ -14,26 +15,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const perms = await resolvePermissions(session);
   if (!perms.procurement) {
-    return NextResponse.json({ error: 'You do not have permission to edit procurement' }, { status: 403 });
+    return forbidden('You do not have permission to edit procurement');
   }
 
-  const body = await req.json();
-  const parsed = itemUpdateSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
+  const { data, response } = await parseBody(req, itemUpdateSchema);
+  if (response) return response;
 
   const existing = await prisma.item.findUnique({ where: { id: params.id }, include: { invoice: true } });
-  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!existing) return notFound();
 
-  const { unlockOverride, vendorId, itemType, procurementListId, tag, ...rest } = parsed.data;
+  const { unlockOverride, vendorId, itemType, procurementListId, tag, ...rest } = data;
 
   if (isItemLocked(existing)) {
     if (!unlockOverride) {
-      return NextResponse.json({ error: lockedItemMessage(existing.invoice!.invoiceNumber) }, { status: 409 });
+      return conflict(lockedItemMessage(existing.invoice!.invoiceNumber));
     }
     if (!perms.invoices) {
-      return NextResponse.json({ error: 'You do not have permission to correct an invoiced item' }, { status: 403 });
+      return forbidden('You do not have permission to correct an invoiced item');
     }
   }
 
@@ -71,23 +69,23 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
   const perms = await resolvePermissions(session);
   if (!perms.procurement) {
-    return NextResponse.json({ error: 'You do not have permission to edit procurement' }, { status: 403 });
+    return forbidden('You do not have permission to edit procurement');
   }
 
   const existing = await prisma.item.findUnique({ where: { id: params.id }, include: { invoice: true } });
-  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!existing) return notFound();
 
   const unlockOverride = req.nextUrl.searchParams.get('unlockOverride') === 'true';
 
   if (isItemLocked(existing)) {
     if (!unlockOverride) {
-      return NextResponse.json({ error: lockedItemMessage(existing.invoice!.invoiceNumber) }, { status: 409 });
+      return conflict(lockedItemMessage(existing.invoice!.invoiceNumber));
     }
     if (!perms.invoices) {
-      return NextResponse.json({ error: 'You do not have permission to correct an invoiced item' }, { status: 403 });
+      return forbidden('You do not have permission to correct an invoiced item');
     }
   }
 
   await prisma.item.delete({ where: { id: params.id } });
-  return NextResponse.json({ ok: true });
+  return ok();
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { apiSend } from '@/lib/apiClient';
 
 export interface ItemFieldDefRow {
   id: string;
@@ -34,22 +35,14 @@ export default function ItemCustomFields({
   const visibleDefs = isAdmin ? fieldDefs : fieldDefs.filter((d) => d.visibleToDesigner);
 
   async function saveValue(fieldDefId: string, value: string) {
-    await fetch(`/api/items/${itemId}/field-values`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fieldDefId, value }),
-    });
+    await apiSend(`/api/items/${itemId}/field-values`, 'PATCH', { fieldDefId, value });
   }
 
   async function handleAddField(e: React.FormEvent) {
     e.preventDefault();
     if (!newField.label.trim()) return;
     setSaving(true);
-    const res = await fetch('/api/item-field-defs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newField),
-    });
+    const res = await apiSend('/api/item-field-defs', 'POST', newField);
     setSaving(false);
     if (res.ok) {
       const created = await res.json();
@@ -60,18 +53,14 @@ export default function ItemCustomFields({
   }
 
   async function handleDeleteField(id: string) {
-    await fetch(`/api/item-field-defs/${id}`, { method: 'DELETE' });
+    await apiSend(`/api/item-field-defs/${id}`, 'DELETE');
     onDefsChanged(fieldDefs.filter((d) => d.id !== id));
   }
 
   async function handleToggleVisibility(field: ItemFieldDefRow) {
     const visibleToDesigner = !field.visibleToDesigner;
     onDefsChanged(fieldDefs.map((d) => (d.id === field.id ? { ...d, visibleToDesigner } : d)));
-    await fetch(`/api/item-field-defs/${field.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visibleToDesigner }),
-    });
+    await apiSend(`/api/item-field-defs/${field.id}`, 'PATCH', { visibleToDesigner });
   }
 
   if (fieldDefs.length === 0 && !isAdmin) return null;

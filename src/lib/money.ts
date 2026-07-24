@@ -22,3 +22,12 @@ export function formatPercentFromFraction(fraction: Decimal.Value): string {
 export function formatPercent(pct: Decimal.Value): string {
   return `${new Decimal(pct).toDP(3).toNumber()}%`;
 }
+
+/**
+ * Adds a list of money values, rounded to the cent. Use this instead of
+ * `reduce((sum, x) => sum + Number(x), 0)` — native addition drifts (0.1 +
+ * 0.2 === 0.30000000000000004) and money never uses floats here.
+ */
+export function sumMoney(values: Decimal.Value[]): Decimal {
+  return values.reduce<Decimal>((sum, value) => sum.plus(value), new Decimal(0)).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+}

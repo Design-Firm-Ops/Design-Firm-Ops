@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSession } from '@/lib/apiAuth';
+import { conflict, forbidden, notFound } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/lib/permissions';
 
 /**
@@ -18,16 +19,16 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     where: { id: params.id },
     include: { items: true, designFeeCharges: true },
   });
-  if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (!invoice) return notFound();
 
   const perms = await resolvePermissions(session);
   const allowed = invoice.type === 'DESIGN_FEE' ? perms.financials : perms.invoices;
   if (!allowed) {
-    return NextResponse.json({ error: 'You do not have permission to void this invoice' }, { status: 403 });
+    return forbidden('You do not have permission to void this invoice');
   }
 
   if (invoice.status === 'VOID') {
-    return NextResponse.json({ error: 'This invoice is already voided' }, { status: 409 });
+    return conflict('This invoice is already voided');
   }
 
   const itemIds = invoice.items.map((i) => i.id);
