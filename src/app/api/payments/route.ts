@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
+import { projectFirmId } from '@/server/firm';
 import { requireSession } from '@/server/apiAuth';
 import { conflict, forbidden, notFound, parseBody } from '@/lib/apiRoute';
 import { paymentSchema } from '@/lib/validation';
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest) {
       ...rest,
       invoiceId: invoiceId || null,
       date: date ? new Date(date) : new Date(),
+      firmId: await projectFirmId(rest.projectId),
     },
   });
 

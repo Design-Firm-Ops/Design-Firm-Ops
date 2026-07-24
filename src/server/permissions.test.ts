@@ -4,6 +4,13 @@ import { resolvePermissions } from '@/server/permissions';
 
 vi.mock('@/server/prisma', () => ({ prisma: prismaMock }));
 
+// Tenancy is not on the session yet (DES-#2), so the firm is resolved by
+// `currentFirmId()`. Stub it: these tests are about the find-or-create
+// behaviour, not about how the firm is discovered.
+const FIRM = 'firm-1';
+vi.mock('@/server/firm', () => ({ currentFirmId: async () => FIRM }));
+
+
 // The policy itself is covered without a database in lib/permissions.test.ts.
 // This covers only the loading half: which rows it fetches, and for whom.
 
@@ -34,7 +41,7 @@ describe('resolvePermissions', () => {
 
     expect(perms.isAdmin).toBe(false);
     expect(perms.financials).toBe(true);
-    expect(prismaMock.settings.findUnique).toHaveBeenCalledWith({ where: { id: 1 } });
+    expect(prismaMock.settings.findUnique).toHaveBeenCalledWith({ where: { firmId: FIRM } });
     expect(prismaMock.userPermissionOverride.findUnique).toHaveBeenCalledWith({ where: { userId: 'u1' } });
   });
 

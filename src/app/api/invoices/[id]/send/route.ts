@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
+import { currentFirmId } from '@/server/firm';
 import { requireSession } from '@/server/apiAuth';
 import { badRequest, conflict, forbidden, notFound } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/server/permissions';
@@ -48,7 +49,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const pdf = await renderInvoicePdf(params.id);
   if (!pdf) return NextResponse.json({ error: 'Could not generate PDF' }, { status: 500 });
 
-  const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+  const settings = await prisma.settings.findUnique({ where: { firmId: invoice.firmId } });
 
   const totals = invoiceTotals(invoice, invoice.project);
 

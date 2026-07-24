@@ -6,6 +6,13 @@ import { findOrCreateFeeStructureOption } from '@/server/feeStructure';
 
 vi.mock('@/server/prisma', () => ({ prisma: prismaMock }));
 
+// Tenancy is not on the session yet (DES-#2), so the firm is resolved by
+// `currentFirmId()`. Stub it: these tests are about the find-or-create
+// behaviour, not about how the firm is discovered.
+const FIRM = 'firm-1';
+vi.mock('@/server/firm', () => ({ currentFirmId: async () => FIRM }));
+
+
 // These grow user-editable taxonomies as people type new values. The shared
 // contract: blank input is a no-op, whitespace is trimmed, and an existing
 // row is reused rather than duplicated.
@@ -25,13 +32,15 @@ describe('findOrCreateProjectType', () => {
     prismaMock.projectType.findUnique.mockResolvedValue(null);
     prismaMock.projectType.create.mockResolvedValue({ id: 'pt-new' });
     expect(await findOrCreateProjectType('Hospitality')).toBe('pt-new');
-    expect(prismaMock.projectType.create).toHaveBeenCalledWith({ data: { name: 'Hospitality' } });
+    expect(prismaMock.projectType.create).toHaveBeenCalledWith({ data: { name: 'Hospitality', firmId: FIRM } });
   });
 
   it('trims before looking up, so " Residential " is not a second type', async () => {
     prismaMock.projectType.findUnique.mockResolvedValue({ id: 'pt-1' });
     await findOrCreateProjectType('  Residential  ');
-    expect(prismaMock.projectType.findUnique).toHaveBeenCalledWith({ where: { name: 'Residential' } });
+    expect(prismaMock.projectType.findUnique).toHaveBeenCalledWith({
+      where: { firmId_name: { firmId: FIRM, name: 'Residential' } },
+    });
   });
 
   it('treats blank input as "not set" and touches nothing', async () => {
@@ -102,17 +111,18 @@ describe('findOrCreateFeeStructureOption', () => {
 
     expect(await findOrCreateFeeStructureOption('Cost Plus', 'PROCUREMENT')).toBe('fs-new');
     expect(prismaMock.feeStructureOption.create).toHaveBeenCalledWith({
-      data: { name: 'Cost Plus', scope: 'PROCUREMENT', order: 1 },
+      data: { name: 'Cost Plus', scope: 'PROCUREMENT', firmId: FIRM, order: 1 },
     });
   });
 
-  // The same label can legitimately exist under both scopes.
-  it('keys the lookup on scope as well as name', async () => {
+  // The same label can legitimately exist under both scopes — and, now, under
+  // two different firms.
+  it('keys the lookup on firm and scope as well as name', async () => {
     prismaMock.feeStructureOption.findUnique.mockResolvedValue(null);
     prismaMock.feeStructureOption.aggregate.mockResolvedValue({ _max: { order: null } });
     await findOrCreateFeeStructureOption('Flat Fee', 'DESIGN_FEE');
     expect(prismaMock.feeStructureOption.findUnique).toHaveBeenCalledWith({
-      where: { scope_name: { scope: 'DESIGN_FEE', name: 'Flat Fee' } },
+      where: { firmId_scope_name: { firmId: FIRM, scope: 'DESIGN_FEE', name: 'Flat Fee' } },
     });
   });
 

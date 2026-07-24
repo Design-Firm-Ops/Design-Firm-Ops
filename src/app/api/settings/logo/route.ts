@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
+import { currentFirmId } from '@/server/firm';
 import { requireSession } from '@/server/apiAuth';
 import { badRequest } from '@/lib/apiRoute';
 import { storage, storagePath } from '@/server/storage';
@@ -27,9 +28,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Storage upload failed: ${message}` }, { status: 502 });
   }
 
+  const firmId = await currentFirmId();
   const settings = await prisma.settings.upsert({
-    where: { id: 1 },
-    create: { id: 1, companyName: 'Madison Ditton Interiors', logoUrl },
+    where: { firmId },
+    create: { companyName: 'Madison Ditton Interiors', logoUrl, firmId },
     update: { logoUrl },
   });
 

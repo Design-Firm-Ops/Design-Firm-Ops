@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
+import { currentFirmId } from '@/server/firm';
 import { requireSession } from '@/server/apiAuth';
 import { badRequest } from '@/lib/apiRoute';
 import { storage, storagePath } from '@/server/storage';
@@ -30,6 +31,7 @@ export async function POST(req: NextRequest) {
       filename: file.name,
       storagePath: path,
       uploadedById: session!.user.id,
+      firmId: await currentFirmId(),
     },
   });
 

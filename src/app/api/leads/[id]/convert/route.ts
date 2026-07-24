@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
+import { currentFirmId } from '@/server/firm';
 import { requireSession } from '@/server/apiAuth';
 import { conflict, notFound } from '@/lib/apiRoute';
 import { DEFAULT_PROCUREMENT_LISTS } from '@/lib/procurement';
@@ -22,6 +23,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const client = await prisma.client.create({
     data: {
       name: lead.clientName,
+      firmId: await currentFirmId(),
       email: lead.contactEmail,
       phone: lead.contactPhone,
       billingAddress: lead.address,
@@ -32,6 +34,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const project = await prisma.project.create({
     data: {
       clientId: client.id,
+      firmId: client.firmId,
       name: `${lead.clientName} Project`,
       projectAddress: lead.address,
       projectTypeId: lead.projectTypeId,

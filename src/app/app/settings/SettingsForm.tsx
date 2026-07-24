@@ -7,7 +7,8 @@ import RichTextEditor from '@/components/RichTextEditor';
 import { apiError, apiSend } from '@/lib/apiClient';
 
 interface SettingsData {
-  id: number;
+  // cuid since Settings stopped being an id=1 singleton (DES-23).
+  id: string;
   companyName: string;
   companyAddress: string | null;
   owner1Name: string | null;

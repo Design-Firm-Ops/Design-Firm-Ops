@@ -1,4 +1,5 @@
 import { prisma } from '@/server/prisma';
+import { currentFirmId } from '@/server/firm';
 import { nextOrder } from '@/server/order';
 import type { FeeStructureScope } from '@/lib/domain';
 
@@ -10,11 +11,14 @@ export async function findOrCreateFeeStructureOption(
   const trimmed = name?.trim();
   if (!trimmed) return null;
 
-  const existing = await prisma.feeStructureOption.findUnique({ where: { scope_name: { scope, name: trimmed } } });
+  const firmId = await currentFirmId();
+  const existing = await prisma.feeStructureOption.findUnique({
+    where: { firmId_scope_name: { firmId, scope, name: trimmed } },
+  });
   if (existing) return existing.id;
 
   const created = await prisma.feeStructureOption.create({
-    data: { name: trimmed, scope, order: await nextOrder(prisma.feeStructureOption, { scope }) },
+    data: { name: trimmed, scope, firmId, order: await nextOrder(prisma.feeStructureOption, { firmId, scope }) },
   });
   return created.id;
 }

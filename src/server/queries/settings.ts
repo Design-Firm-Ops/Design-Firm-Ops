@@ -1,9 +1,10 @@
 import { prisma } from '@/server/prisma';
+import { currentFirmId } from '@/server/firm';
 
 // Firm settings and user administration reads.
 
-export function getSettings() {
-  return prisma.settings.findUnique({ where: { id: 1 } });
+export async function getSettings() {
+  return prisma.settings.findUnique({ where: { firmId: await currentFirmId() } });
 }
 
 export function listUsers() {

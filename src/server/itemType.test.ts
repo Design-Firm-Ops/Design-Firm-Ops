@@ -4,6 +4,13 @@ import { generateUniquePrefix, findOrCreateItemType } from '@/server/itemType';
 
 vi.mock('@/server/prisma', () => ({ prisma: prismaMock }));
 
+// Tenancy is not on the session yet (DES-#2), so the firm is resolved by
+// `currentFirmId()`. Stub it: these tests are about the find-or-create
+// behaviour, not about how the firm is discovered.
+const FIRM = 'firm-1';
+vi.mock('@/server/firm', () => ({ currentFirmId: async () => FIRM }));
+
+
 // Prefixes end up in the tag on every line item ("TA-1", "SC-3"), and two
 // types sharing one would make tags ambiguous — so uniqueness is the property
 // under test, across all three fallback tiers.
@@ -103,14 +110,14 @@ describe('findOrCreateItemType', () => {
     };
     // Prefix uniqueness is global, not per-category, so tags stay unambiguous.
     expect(created.data.tagPrefix).not.toBe('SC');
-    expect(created.data).toMatchObject({ category: 'Lighting', name: 'Sconce', order: 2 });
+    expect(created.data).toMatchObject({ category: 'Lighting', name: 'Sconce', firmId: FIRM, order: 2 });
   });
 
   it('trims both category and name', async () => {
     prismaMock.itemTypeOption.findUnique.mockResolvedValue({ id: 'it-1' });
     await findOrCreateItemType('  Lighting  ', '  Sconce  ');
     expect(prismaMock.itemTypeOption.findUnique).toHaveBeenCalledWith({
-      where: { category_name: { category: 'Lighting', name: 'Sconce' } },
+      where: { firmId_category_name: { firmId: FIRM, category: 'Lighting', name: 'Sconce' } },
     });
   });
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/server/prisma';
+import { currentFirmId } from '@/server/firm';
 import { requireSession } from '@/server/apiAuth';
 import { forbidden, notFound, parseBody } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/server/permissions';
@@ -30,6 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const copy = await prisma.item.create({
     data: {
       projectId: source.projectId,
+      firmId: source.firmId,
       procurementListId: data.procurementListId,
       tag: source.tag,
       name: source.name,

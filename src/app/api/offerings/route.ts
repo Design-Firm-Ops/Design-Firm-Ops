@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
+import { currentFirmId } from '@/server/firm';
 import { nextOrder } from '@/server/order';
 import { requireSession } from '@/server/apiAuth';
 import { parseBody } from '@/lib/apiRoute';
@@ -20,8 +21,9 @@ export async function POST(req: NextRequest) {
   const { data, response } = await parseBody(req, offeringSchema);
   if (response) return response;
 
+  const firmId = await currentFirmId();
   const offering = await prisma.offering.create({
-    data: { name: data.name, order: await nextOrder(prisma.offering) },
+    data: { name: data.name, firmId, order: await nextOrder(prisma.offering, { firmId }) },
   });
   return NextResponse.json(offering, { status: 201 });
 }

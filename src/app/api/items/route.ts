@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
+import { projectFirmId } from '@/server/firm';
 import { requireSession } from '@/server/apiAuth';
 import { forbidden, parseBody } from '@/lib/apiRoute';
 import { itemSchema } from '@/lib/validation';
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
       itemTypeId,
       procurementListId: procurementListId || null,
       sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
+      firmId: await projectFirmId(data.projectId),
     },
   });
   return NextResponse.json(item, { status: 201 });

@@ -85,7 +85,10 @@ Add `firmId String` + a `firm Firm @relation(...)` and `@@index([firmId])` to ev
 scope at the aggregate roots and rely on FKs below them:
 
 - Direct `firmId`: `User`, `Client`, `Project`, `Vendor`, `Offering`, `ProjectType`,
-  `ResourceFolder`, `Resource`, `LeadBoard`, `ReferralPartner`, `Settings`.
+  `ResourceFolder`, `Resource`, `LeadBoard`, `ReferralPartner`, `Settings`,
+  **`ItemTypeOption`, `FeeStructureOption`** (added in DES-23 — both are user-grown
+  per-firm vocabulary with global composite uniques; leaving them global leaked one
+  firm's taxonomy into another's dropdowns and silently reused its rows).
 - Inherited (no direct column needed, reached via parent): `Item`, `ProcurementList`,
   `Invoice`, `Payment`, `DesignFeeCharge`, `Document`, `ProjectFieldDef/Value`,
   `ItemFieldDef/Value`, `PipelineStage`, `Lead`. _(Decision point — see §6: some of these
@@ -208,12 +211,15 @@ Ordered; each maps to a Phase 7 issue. Earlier ones block later ones.
 
 ## 6. Open questions (resolve before starting #1)
 
-1. **One login across firms, or one account per firm?** Determines whether `User.email`
-   stays globally unique or becomes `@@unique([firmId, email])`. (Recommendation: per-firm
-   accounts for v1 — simplest isolation; revisit if multi-firm users become a real need.)
-2. **Denormalize `firmId` onto child tables** (Item, Invoice, Payment, …) for cheaper
-   isolation checks, or always join through the parent? (Recommendation: denormalize the
-   high-traffic ones — Item, Invoice, Payment — for simpler `where` and defense-in-depth.)
+1. ~~One login across firms, or one account per firm?~~ — **Decided (DES-23): `User.email`
+   stays globally unique.** Per-firm emails are incompatible with Q5's session-derived
+   tenancy — credentials login is `findUnique({ where: { email } })`, which stops
+   identifying one user. And because `SUPER_ADMIN` has `firmId = null`, Postgres treats
+   NULLs as distinct in a unique index, so `@@unique([firmId, email])` would permit many
+   super-admins sharing an email. Widening to per-firm later is a non-breaking change.
+2. ~~Denormalize `firmId` onto child tables~~ — **Decided (DES-23): denormalize onto
+   `Invoice`, `Item`, and `Payment`.** Everything else scopes through its parent.
+   (`Invoice` is forced regardless, by the per-firm `invoiceNumber` unique.)
 3. **Scoping mechanism:** Prisma client extension (auto-inject) vs. explicit repository
    layer? (Recommendation: client extension.)
 4. **Billing/plans scope for v1:** just a free-form `plan` string + status, or real plan

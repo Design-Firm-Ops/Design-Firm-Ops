@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
+import { projectFirmId } from '@/server/firm';
 import { requireSession } from '@/server/apiAuth';
 import { badRequest, forbidden, notFound, parseBody } from '@/lib/apiRoute';
 import { invoiceCreateSchema } from '@/lib/validation';
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
         taxBase: taxBase ?? 'MERCH_ONLY',
         dueDate: dueDate ? new Date(dueDate) : null,
         notes: notes || null,
+        firmId: await projectFirmId(projectId),
         designFeeCharges: { connect: allChargeIds.map((id) => ({ id })) },
       },
       include: { designFeeCharges: true },
@@ -99,6 +101,7 @@ export async function POST(req: NextRequest) {
       taxBase: taxBase ?? project.taxBase,
       dueDate: dueDate ? new Date(dueDate) : null,
       notes: notes || null,
+      firmId: await projectFirmId(projectId),
       items: { connect: itemIds.map((id) => ({ id })) },
     },
     include: { items: true },
