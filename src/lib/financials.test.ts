@@ -210,3 +210,36 @@ describe('summarizeDesignFee', () => {
     expect(summary.billed.toFixed(2)).toBe('1075.00');
   });
 });
+
+describe('markup/tax coercion at the boundary', () => {
+  it('defaults an unrecognized project markupMode to MARKUP', () => {
+    // A loosely-typed project row shouldn't silently price as a margin.
+    const line = priceItem(item({ markupPct: '15' }), { defaultMarkupPct: '15', markupMode: 'nonsense' });
+    expect(line.unitPrice.toFixed(2)).toBe('126.50');
+  });
+
+  it('honours a MARGIN project default when the item has no override', () => {
+    const line = priceItem(item({ qty: 1 }), { defaultMarkupPct: '20', markupMode: 'MARGIN' });
+    // (100 + 10) / (1 - 0.20) = 137.50
+    expect(line.unitPrice.toFixed(2)).toBe('137.50');
+  });
+
+  it('treats an unrecognized taxBase as MERCH_ONLY', () => {
+    const totals = invoiceTotals(
+      invoice({ items: [item()], shippingTotal: '100', taxRate: '0.10', taxBase: 'GARBAGE' }),
+      project
+    );
+    // Tax on merch only (253.00), not merch + shipping.
+    expect(totals.tax.toFixed(2)).toBe('25.30');
+  });
+
+  it('handles an invoice with no type as procurement', () => {
+    const totals = invoiceTotals({ shippingTotal: '0', taxRate: '0', taxBase: 'MERCH_ONLY', items: [item()] }, project);
+    expect(totals.merchandiseSubtotal.toFixed(2)).toBe('253.00');
+  });
+
+  it('returns zero totals for an invoice with neither items nor charges', () => {
+    const totals = invoiceTotals(invoice({ items: undefined, designFeeCharges: undefined }), project);
+    expect(totals.grandTotal.toFixed(2)).toBe('0.00');
+  });
+});

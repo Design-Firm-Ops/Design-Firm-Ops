@@ -30,5 +30,41 @@ export default defineConfig({
         },
       },
     ],
+
+    // Coverage is measured on the layers that are *meant* to be unit-tested —
+    // the pure domain logic, the shared UI, and the server-side logic modules.
+    // API routes and page components are excluded on purpose: they're wiring
+    // that needs Prisma, next-auth, and a request/response pair, so covering
+    // them belongs to an integration layer rather than these unit tests.
+    // Including them would drag the global number down to noise and make a
+    // threshold meaningless. See plans/DES-34_PLAN.md.
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      include: ['src/lib/**', 'src/server/**', 'src/components/**'],
+      exclude: [
+        '**/*.test.*',
+        'src/test/**',
+        // Thin read wrappers over Prisma — no logic of their own to verify.
+        'src/server/queries/**',
+        // Wiring with nothing to assert.
+        'src/components/Providers.tsx',
+        'src/server/prisma.ts',
+        // contentEditable / React-PDF rendering: a snapshot here would be
+        // high-churn and low-signal. The parsing behind it (parseRichText) and
+        // the pricing behind the PDF are both covered directly.
+        'src/components/RichTextEditor.tsx',
+        'src/lib/pdf/InvoiceDocument.tsx',
+        'src/server/pdf/**',
+      ],
+      // Set just under the levels these layers actually hit, so the gate
+      // catches regressions without failing on rounding.
+      thresholds: {
+        statements: 95,
+        branches: 90,
+        functions: 95,
+        lines: 95,
+      },
+    },
   },
 });

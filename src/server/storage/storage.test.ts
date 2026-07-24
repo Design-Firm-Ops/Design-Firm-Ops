@@ -171,3 +171,55 @@ describe('supabase FileStorage adapter', () => {
     expect(storage.getPublicUrl('branding', 'logo.png')).toBe('https://public.test/branding/logo.png');
   });
 });
+
+describe('supabase adapter — failure paths', () => {
+  it('reports a bucket it could not create', async () => {
+    const { client } = fakeSupabase({
+      bucketExists: false,
+      createBucketError: { message: 'insufficient privileges' },
+    });
+    const storage = createSupabaseFileStorage(() => client as never);
+
+    await expect(storage.upload('documents', 'a.pdf', body())).rejects.toThrow(StorageError);
+    await expect(storage.upload('resources', 'a.pdf', body())).rejects.toThrow(/insufficient privileges/);
+  });
+
+  it('translates a failed delete into StorageError', async () => {
+    const { client } = fakeSupabase({ removeResult: { error: { message: 'object locked' } } });
+    const storage = createSupabaseFileStorage(() => client as never);
+
+    await expect(storage.remove('documents', ['a.pdf'])).rejects.toThrow(/object locked/);
+  });
+
+  it('returns null when the provider throws while signing', async () => {
+    const storage = createSupabaseFileStorage(() => {
+      throw new Error('not configured');
+    });
+    // A missing thumbnail must not take down the page that lists it.
+    expect(await storage.createSignedUrl('documents', 'a.pdf')).toBeNull();
+  });
+
+  it('passes the requested expiry through', async () => {
+    const { client, calls } = fakeSupabase();
+    const storage = createSupabaseFileStorage(() => client as never);
+
+    await storage.createSignedUrl('documents', 'a.pdf', 60);
+    expect(calls.find((c) => c.op === 'createSignedUrl')!.args).toEqual(['a.pdf', 60]);
+  });
+
+  it('defaults the expiry to an hour', async () => {
+    const { client, calls } = fakeSupabase();
+    const storage = createSupabaseFileStorage(() => client as never);
+
+    await storage.createSignedUrl('documents', 'a.pdf');
+    expect(calls.find((c) => c.op === 'createSignedUrl')!.args).toEqual(['a.pdf', 3600]);
+  });
+
+  it('removes several objects in one call', async () => {
+    const { client, calls } = fakeSupabase();
+    const storage = createSupabaseFileStorage(() => client as never);
+
+    await storage.remove('resources', ['a.pdf', 'b.pdf']);
+    expect(calls[0].args[0]).toEqual(['a.pdf', 'b.pdf']);
+  });
+});

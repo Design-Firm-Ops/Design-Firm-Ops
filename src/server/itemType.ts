@@ -36,7 +36,13 @@ export async function findOrCreateItemType(
   return created.id;
 }
 
-function generateUniquePrefix(name: string, taken: Set<string>): string {
+/**
+ * Picks a 2-character tag prefix for a new item type that no existing type is
+ * already using — "TA" for Table, "SC" for Sconce. Exported for testing: the
+ * collision handling is the interesting part, and driving it through
+ * `findOrCreateItemType` would mean a database round trip per case.
+ */
+export function generateUniquePrefix(name: string, taken: Set<string>): string {
   const letters = name.toUpperCase().replace(/[^A-Z]/g, '') || 'XX';
 
   const base = letters.slice(0, 2).padEnd(2, 'X');

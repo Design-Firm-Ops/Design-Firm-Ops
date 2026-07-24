@@ -88,3 +88,42 @@ describe('AttachedDocuments', () => {
     );
   });
 });
+
+describe('AttachedDocuments — remaining paths', () => {
+  it('shows an empty list when the fetch fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }) as Response));
+    render(<AttachedDocuments {...props} />);
+    expect(await screen.findByText('No documents attached yet.')).toBeInTheDocument();
+  });
+
+  it('defaults the upload endpoint to the list endpoint', async () => {
+    const fetchMock = mockFetch([]);
+    // This is how the lead documents panel is wired — one endpoint for both.
+    render(<AttachedDocuments listUrl="/api/leads/l1/documents" deleteUrl={(id) => `/api/leads/l1/documents/${id}`} />);
+    await screen.findByText('No documents attached yet.');
+
+    await userEvent.upload(screen.getByLabelText('+ Upload'), new File(['x'], 'a.pdf'));
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(([, init]) => (init as RequestInit)?.method === 'POST');
+      expect(post![0]).toBe('/api/leads/l1/documents');
+    });
+  });
+
+  it('sends only the file when there are no extra fields', async () => {
+    const fetchMock = mockFetch([]);
+    render(<AttachedDocuments listUrl="/api/x" deleteUrl={(id) => `/api/x/${id}`} />);
+    await screen.findByText('No documents attached yet.');
+
+    await userEvent.upload(screen.getByLabelText('+ Upload'), new File(['x'], 'a.pdf'));
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(([, init]) => (init as RequestInit)?.method === 'POST');
+      expect(Array.from((post![1] as RequestInit & { body: FormData }).body.keys())).toEqual(['file']);
+    });
+  });
+
+  it('uses the caller-supplied heading', async () => {
+    mockFetch([]);
+    render(<AttachedDocuments {...props} heading="Quotes and spec sheets" />);
+    expect(await screen.findByText('Quotes and spec sheets')).toBeInTheDocument();
+  });
+});

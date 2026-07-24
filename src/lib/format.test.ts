@@ -41,3 +41,10 @@ describe('formatLongDate', () => {
     expect(formatLongDate(null)).toBe('—');
   });
 });
+
+describe('formatDate — edge inputs', () => {
+  it('rejects an Invalid Date object rather than rendering "Invalid Date"', () => {
+    expect(formatDate(new Date('nonsense'))).toBe('—');
+    expect(formatLongDate(new Date('nonsense'))).toBe('—');
+  });
+});
