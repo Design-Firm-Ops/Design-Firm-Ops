@@ -1,0 +1,16 @@
+-- SUPER_ADMIN platform-operator role (DES-24), part 1 of 2.
+--
+-- This migration does nothing but add the enum value. The partial unique index
+-- that *uses* the value is a separate migration on purpose: Postgres rejects
+-- using a new enum value in the same transaction that added it —
+--
+--   ERROR: unsafe use of new value "SUPER_ADMIN" of enum type "UserRole"
+--   HINT:  New enum values must be committed before they can be used.
+--
+-- and Prisma runs each migration file in one transaction. Splitting them lets
+-- the value commit first. (Running both statements through psql appears to
+-- work, because psql autocommits per statement — which is exactly how this
+-- hides until `prisma migrate deploy` runs it for real.)
+--
+-- Idempotent.
+ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'SUPER_ADMIN';

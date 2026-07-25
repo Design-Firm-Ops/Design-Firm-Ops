@@ -13,6 +13,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { encryptSecret } from '../src/lib/crypto';
 import { RAW_VENDORS } from './vendorData';
+import { seedSuperAdmin } from '../src/server/superAdmin';
 
 const prisma = new PrismaClient();
 
@@ -394,6 +395,14 @@ async function seedDemoProject(firmId: string) {
 
 async function main() {
   console.log('Seeding Design Firm Ops...');
+
+  const superAdmin = await seedSuperAdmin(prisma);
+  if (superAdmin.status === 'skipped') {
+    console.log(`  super-admin: skipped (${superAdmin.reason})`);
+  } else {
+    console.log(`  super-admin: ${superAdmin.email} (${superAdmin.created ? 'created' : 'updated'})`);
+  }
+
   const firmId = await seedFirm();
   await seedUsers(firmId);
   await seedSettings(firmId);
