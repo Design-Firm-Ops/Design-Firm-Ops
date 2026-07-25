@@ -6,11 +6,8 @@ import { findOrCreateFeeStructureOption } from '@/server/feeStructure';
 
 vi.mock('@/server/prisma', () => ({ prisma: prismaMock }));
 
-// Tenancy is not on the session yet (DES-#2), so the firm is resolved by
-// `currentFirmId()`. Stub it: these tests are about the find-or-create
-// behaviour, not about how the firm is discovered.
 const FIRM = 'firm-1';
-vi.mock('@/server/firm', () => ({ currentFirmId: async () => FIRM }));
+
 
 
 // These grow user-editable taxonomies as people type new values. The shared
@@ -24,20 +21,20 @@ beforeEach(() => {
 describe('findOrCreateProjectType', () => {
   it('returns the existing row without creating a duplicate', async () => {
     prismaMock.projectType.findUnique.mockResolvedValue({ id: 'pt-1', name: 'Residential' });
-    expect(await findOrCreateProjectType('Residential')).toBe('pt-1');
+    expect(await findOrCreateProjectType('Residential', FIRM)).toBe('pt-1');
     expect(prismaMock.projectType.create).not.toHaveBeenCalled();
   });
 
   it('creates a new one when the name is unknown', async () => {
     prismaMock.projectType.findUnique.mockResolvedValue(null);
     prismaMock.projectType.create.mockResolvedValue({ id: 'pt-new' });
-    expect(await findOrCreateProjectType('Hospitality')).toBe('pt-new');
+    expect(await findOrCreateProjectType('Hospitality', FIRM)).toBe('pt-new');
     expect(prismaMock.projectType.create).toHaveBeenCalledWith({ data: { name: 'Hospitality', firmId: FIRM } });
   });
 
   it('trims before looking up, so " Residential " is not a second type', async () => {
     prismaMock.projectType.findUnique.mockResolvedValue({ id: 'pt-1' });
-    await findOrCreateProjectType('  Residential  ');
+    await findOrCreateProjectType('  Residential  ', FIRM);
     expect(prismaMock.projectType.findUnique).toHaveBeenCalledWith({
       where: { firmId_name: { firmId: FIRM, name: 'Residential' } },
     });
@@ -45,7 +42,7 @@ describe('findOrCreateProjectType', () => {
 
   it('treats blank input as "not set" and touches nothing', async () => {
     for (const blank of ['', '   ', null, undefined]) {
-      expect(await findOrCreateProjectType(blank)).toBeNull();
+      expect(await findOrCreateProjectType(blank, FIRM)).toBeNull();
     }
     expect(prismaMock.projectType.findUnique).not.toHaveBeenCalled();
     expect(prismaMock.projectType.create).not.toHaveBeenCalled();
@@ -55,7 +52,7 @@ describe('findOrCreateProjectType', () => {
 describe('findOrCreateRoom', () => {
   it('is a no-op when the room already exists', async () => {
     prismaMock.projectRoom.findUnique.mockResolvedValue({ id: 'r-1' });
-    await findOrCreateRoom('p1', 'Primary Bath');
+    await findOrCreateRoom('p1', 'Primary Bath', FIRM);
     expect(prismaMock.projectRoom.create).not.toHaveBeenCalled();
   });
 
@@ -63,9 +60,9 @@ describe('findOrCreateRoom', () => {
     prismaMock.projectRoom.findUnique.mockResolvedValue(null);
     prismaMock.projectRoom.aggregate.mockResolvedValue({ _max: { order: 2 } });
 
-    await findOrCreateRoom('p1', 'Kitchen');
+    await findOrCreateRoom('p1', 'Kitchen', FIRM);
     expect(prismaMock.projectRoom.create).toHaveBeenCalledWith({
-      data: { projectId: 'p1', name: 'Kitchen', order: 3 },
+      data: { projectId: 'p1', name: 'Kitchen', firmId: FIRM, order: 3 },
     });
   });
 
@@ -73,15 +70,15 @@ describe('findOrCreateRoom', () => {
     prismaMock.projectRoom.findUnique.mockResolvedValue(null);
     prismaMock.projectRoom.aggregate.mockResolvedValue({ _max: { order: null } });
 
-    await findOrCreateRoom('p1', 'Kitchen');
+    await findOrCreateRoom('p1', 'Kitchen', FIRM);
     expect(prismaMock.projectRoom.create).toHaveBeenCalledWith({
-      data: { projectId: 'p1', name: 'Kitchen', order: 0 },
+      data: { projectId: 'p1', name: 'Kitchen', firmId: FIRM, order: 0 },
     });
   });
 
   it('ignores blank names', async () => {
     for (const blank of ['', '  ', null, undefined]) {
-      await findOrCreateRoom('p1', blank);
+      await findOrCreateRoom('p1', blank, FIRM);
     }
     expect(prismaMock.projectRoom.findUnique).not.toHaveBeenCalled();
   });
@@ -90,7 +87,7 @@ describe('findOrCreateRoom', () => {
   it('scopes the lookup to the project', async () => {
     prismaMock.projectRoom.findUnique.mockResolvedValue(null);
     prismaMock.projectRoom.aggregate.mockResolvedValue({ _max: { order: null } });
-    await findOrCreateRoom('project-7', 'Kitchen');
+    await findOrCreateRoom('project-7', 'Kitchen', FIRM);
     expect(prismaMock.projectRoom.findUnique).toHaveBeenCalledWith({
       where: { projectId_name: { projectId: 'project-7', name: 'Kitchen' } },
     });
@@ -100,7 +97,7 @@ describe('findOrCreateRoom', () => {
 describe('findOrCreateFeeStructureOption', () => {
   it('reuses an existing option within the same scope', async () => {
     prismaMock.feeStructureOption.findUnique.mockResolvedValue({ id: 'fs-1' });
-    expect(await findOrCreateFeeStructureOption('Flat Fee', 'DESIGN_FEE')).toBe('fs-1');
+    expect(await findOrCreateFeeStructureOption('Flat Fee', 'DESIGN_FEE', FIRM)).toBe('fs-1');
     expect(prismaMock.feeStructureOption.create).not.toHaveBeenCalled();
   });
 
@@ -109,7 +106,7 @@ describe('findOrCreateFeeStructureOption', () => {
     prismaMock.feeStructureOption.aggregate.mockResolvedValue({ _max: { order: 0 } });
     prismaMock.feeStructureOption.create.mockResolvedValue({ id: 'fs-new' });
 
-    expect(await findOrCreateFeeStructureOption('Cost Plus', 'PROCUREMENT')).toBe('fs-new');
+    expect(await findOrCreateFeeStructureOption('Cost Plus', 'PROCUREMENT', FIRM)).toBe('fs-new');
     expect(prismaMock.feeStructureOption.create).toHaveBeenCalledWith({
       data: { name: 'Cost Plus', scope: 'PROCUREMENT', firmId: FIRM, order: 1 },
     });
@@ -120,14 +117,14 @@ describe('findOrCreateFeeStructureOption', () => {
   it('keys the lookup on firm and scope as well as name', async () => {
     prismaMock.feeStructureOption.findUnique.mockResolvedValue(null);
     prismaMock.feeStructureOption.aggregate.mockResolvedValue({ _max: { order: null } });
-    await findOrCreateFeeStructureOption('Flat Fee', 'DESIGN_FEE');
+    await findOrCreateFeeStructureOption('Flat Fee', 'DESIGN_FEE', FIRM);
     expect(prismaMock.feeStructureOption.findUnique).toHaveBeenCalledWith({
       where: { firmId_scope_name: { firmId: FIRM, scope: 'DESIGN_FEE', name: 'Flat Fee' } },
     });
   });
 
   it('ignores blank names', async () => {
-    expect(await findOrCreateFeeStructureOption('   ', 'DESIGN_FEE')).toBeNull();
+    expect(await findOrCreateFeeStructureOption('   ', 'DESIGN_FEE', FIRM)).toBeNull();
     expect(prismaMock.feeStructureOption.findUnique).not.toHaveBeenCalled();
   });
 });

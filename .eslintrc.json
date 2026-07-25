@@ -1,6 +1,10 @@
 {
   "extends": "next/core-web-vitals",
-  "ignorePatterns": ["node_modules", ".next", "src/generated"],
+  "ignorePatterns": [
+    "node_modules",
+    ".next",
+    "src/generated"
+  ],
   "rules": {
     "no-restricted-imports": [
       "error",
@@ -17,8 +21,11 @@
         ],
         "patterns": [
           {
-            "group": ["@/server/prisma", "**/server/prisma"],
-            "message": "Persistence belongs in src/server/. Import a query/repository from '@/server/...' instead, or add one there. See plans/DES-33_PLAN.md."
+            "group": [
+              "@/server/prisma",
+              "**/server/prisma"
+            ],
+            "message": "Persistence belongs in src/server/, and tenant data must go through the tenant-scoped client: `const { db } = tenantContext(session)` from '@/server/tenantDb'. Raw prisma is unscoped and reads across firms. See plans/DES-25_PLAN.md."
           }
         ]
       }
@@ -26,23 +33,11 @@
   },
   "overrides": [
     {
-      "files": ["src/server/**"],
-      "rules": { "no-restricted-imports": "off" }
-    },
-    {
-      "files": ["src/app/api/**"],
+      "files": [
+        "src/server/**"
+      ],
       "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "paths": [
-              {
-                "name": "@supabase/supabase-js",
-                "message": "Use the FileStorage port: import { storage } from '@/server/storage'."
-              }
-            ]
-          }
-        ]
+        "no-restricted-imports": "off"
       }
     }
   ]

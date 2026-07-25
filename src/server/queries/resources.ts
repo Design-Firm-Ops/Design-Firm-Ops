@@ -3,8 +3,8 @@ import { storage } from '@/server/storage';
 
 // The firm-wide resource library behind the Documents area.
 
-export function listResourceFolders() {
-  return prisma.resourceFolder.findMany();
+export function listResourceFolders(firmId: string) {
+  return prisma.resourceFolder.findMany({ where: { firmId } });
 }
 
 /**
@@ -15,10 +15,18 @@ export function listResourceFolders() {
  * The filtering lives here rather than in the page so that a caller can't
  * render the list without applying it.
  */
-export async function listVisibleResources({ userId, isAdmin }: { userId: string; isAdmin: boolean }) {
+export async function listVisibleResources({
+  userId,
+  isAdmin,
+  firmId,
+}: {
+  userId: string;
+  isAdmin: boolean;
+  firmId: string;
+}) {
   const [resources, folderPermissions] = await Promise.all([
-    prisma.resource.findMany({ include: { uploadedBy: true }, orderBy: { uploadedAt: 'desc' } }),
-    listResourceFolders(),
+    prisma.resource.findMany({ where: { firmId }, include: { uploadedBy: true }, orderBy: { uploadedAt: 'desc' } }),
+    listResourceFolders(firmId),
   ]);
 
   const restrictedFolders = new Set(

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
-import { currentFirmId } from '@/server/firm';
+import { tenantContext } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { conflict, notFound } from '@/lib/apiRoute';
 import { DEFAULT_PROCUREMENT_LISTS } from '@/lib/procurement';
@@ -11,19 +10,21 @@ import { DEFAULT_PROCUREMENT_LISTS } from '@/lib/procurement';
  * deleted, so the pipeline history is preserved.
  */
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const lead = await prisma.lead.findUnique({ where: { id: params.id } });
+  const { db, firmId } = tenantContext(session);
+
+  const lead = await db.lead.findUnique({ where: { id: params.id } });
   if (!lead) return notFound();
   if (lead.convertedProjectId) {
     return conflict('This lead has already been converted');
   }
 
-  const client = await prisma.client.create({
+  const client = await db.client.create({
     data: {
       name: lead.clientName,
-      firmId: await currentFirmId(),
+      firmId: firmId,
       email: lead.contactEmail,
       phone: lead.contactPhone,
       billingAddress: lead.address,
@@ -31,7 +32,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     },
   });
 
-  const project = await prisma.project.create({
+  const project = await db.project.create({
     data: {
       clientId: client.id,
       firmId: client.firmId,
@@ -42,15 +43,15 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     },
   });
 
-  await prisma.lead.update({ where: { id: lead.id }, data: { convertedProjectId: project.id } });
+  await db.lead.update({ where: { id: lead.id }, data: { convertedProjectId: project.id } });
 
-  await prisma.procurementList.createMany({
-    data: DEFAULT_PROCUREMENT_LISTS.map((name, order) => ({ projectId: project.id, name, order })),
+  await db.procurementList.createMany({
+    data: DEFAULT_PROCUREMENT_LISTS.map((name, order) => ({ projectId: project.id, name, order, firmId })),
   });
 
   // Move any documents saved on the lead card into the new project's
   // Project Documents tab rather than copying files.
-  await prisma.document.updateMany({
+  await db.document.updateMany({
     where: { leadId: lead.id },
     data: { leadId: null, projectId: project.id, folder: 'Outside Design Documents' },
   });

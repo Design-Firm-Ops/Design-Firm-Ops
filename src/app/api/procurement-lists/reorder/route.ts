@@ -1,16 +1,18 @@
 import type { NextRequest } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { getTenantDb } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { applyOrder, ok, parseBody } from '@/lib/apiRoute';
 import { reorderSchema } from '@/lib/validation';
 
 export async function PATCH(req: NextRequest) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
+
+  const db = getTenantDb(session);
 
   const { data, response } = await parseBody(req, reorderSchema);
   if (response) return response;
 
-  await applyOrder(prisma.procurementList, data.order);
+  await applyOrder(db.procurementList, data.order);
   return ok();
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { getTenantDb } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { isAdmin, resolvePermissions } from '@/server/permissions';
 
@@ -37,6 +37,8 @@ export async function GET(req: NextRequest) {
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
+  const db = getTenantDb(session);
+
   const q = (req.nextUrl.searchParams.get('q') ?? '').trim();
   if (q.length < 1) return NextResponse.json({ results: [] });
 
@@ -49,21 +51,21 @@ export async function GET(req: NextRequest) {
   );
 
   const [projects, vendors, leads, documents, resources] = await Promise.all([
-    prisma.project.findMany({
+    db.project.findMany({
       where: { OR: [{ name: { contains: q, mode: 'insensitive' } }, { client: { name: { contains: q, mode: 'insensitive' } } }] },
       include: { client: true },
       take: 6,
     }),
-    prisma.vendor.findMany({ where: { name: { contains: q, mode: 'insensitive' } }, take: 6 }),
-    prisma.lead.findMany({ where: { clientName: { contains: q, mode: 'insensitive' } }, take: 6 }),
+    db.vendor.findMany({ where: { name: { contains: q, mode: 'insensitive' } }, take: 6 }),
+    db.lead.findMany({ where: { clientName: { contains: q, mode: 'insensitive' } }, take: 6 }),
     perms.documentsPresentations || perms.contracts
-      ? prisma.document.findMany({
+      ? db.document.findMany({
           where: { filename: { contains: q, mode: 'insensitive' }, projectId: { not: null } },
           include: { project: true },
           take: 6,
         })
       : Promise.resolve([]),
-    prisma.resource.findMany({ where: { filename: { contains: q, mode: 'insensitive' } }, take: 6 }),
+    db.resource.findMany({ where: { filename: { contains: q, mode: 'insensitive' } }, take: 6 }),
   ]);
 
   const results: SearchResult[] = [

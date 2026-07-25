@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { tenantContext } from '@/server/tenantDb';
 import { requireAdmin } from '@/server/apiAuth';
 import { notFound, parseBody } from '@/lib/apiRoute';
 import { userPermissionOverrideSchema } from '@/lib/validation';
@@ -10,18 +10,20 @@ import { userPermissionOverrideSchema } from '@/lib/validation';
  * permission. See lib/permissions.ts for how these are resolved.
  */
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  const { unauthorized } = await requireAdmin();
+  const { session, unauthorized } = await requireAdmin();
   if (unauthorized) return unauthorized;
+
+  const { db, firmId } = tenantContext(session);
 
   const { data, response } = await parseBody(req, userPermissionOverrideSchema);
   if (response) return response;
 
-  const user = await prisma.user.findUnique({ where: { id: params.id } });
+  const user = await db.user.findUnique({ where: { id: params.id } });
   if (!user) return notFound();
 
-  const override = await prisma.userPermissionOverride.upsert({
+  const override = await db.userPermissionOverride.upsert({
     where: { userId: params.id },
-    create: { userId: params.id, ...data },
+    create: { userId: params.id, firmId, ...data },
     update: data,
   });
 

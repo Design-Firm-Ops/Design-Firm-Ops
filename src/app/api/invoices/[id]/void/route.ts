@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { getTenantDb } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { conflict, forbidden, notFound } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/server/permissions';
@@ -15,7 +15,9 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const invoice = await prisma.invoice.findUnique({
+  const db = getTenantDb(session);
+
+  const invoice = await db.invoice.findUnique({
     where: { id: params.id },
     include: { items: true, designFeeCharges: true },
   });
@@ -34,13 +36,13 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const itemIds = invoice.items.map((i) => i.id);
   const chargeIds = invoice.designFeeCharges.map((c) => c.id);
 
-  const [updatedInvoice] = await prisma.$transaction([
-    prisma.invoice.update({ where: { id: params.id }, data: { status: 'VOID' } }),
-    prisma.item.updateMany({
+  const [updatedInvoice] = await db.$transaction([
+    db.invoice.update({ where: { id: params.id }, data: { status: 'VOID' } }),
+    db.item.updateMany({
       where: { id: { in: itemIds } },
       data: { invoiceId: null, status: 'APPROVED' },
     }),
-    prisma.designFeeCharge.updateMany({
+    db.designFeeCharge.updateMany({
       where: { id: { in: chargeIds } },
       data: { invoiceId: null },
     }),

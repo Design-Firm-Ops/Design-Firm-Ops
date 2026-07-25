@@ -185,6 +185,22 @@ model Firm {
   invoices Invoice[]
   items    Item[]
   payments Payment[]
+
+  // Every remaining tenant-owned model also carries firmId, so the tenant
+  // client can scope all of them with one rule (plans/DES-25_PLAN.md).
+  clientContacts          ClientContact[]
+  designFeeCharges        DesignFeeCharge[]
+  documents               Document[]
+  itemFieldDefs           ItemFieldDef[]
+  itemFieldValues         ItemFieldValue[]
+  leads                   Lead[]
+  pipelineStages          PipelineStage[]
+  procurementLists        ProcurementList[]
+  projectDocumentFolders  ProjectDocumentFolder[]
+  projectFieldDefs        ProjectFieldDef[]
+  projectFieldValues      ProjectFieldValue[]
+  projectRooms            ProjectRoom[]
+  userPermissionOverrides UserPermissionOverride[]
 }
 
 model Offering {
@@ -293,6 +309,14 @@ model UserPermissionOverride {
   vendorCredentials      Boolean?
 
   updatedAt DateTime @updatedAt
+
+  // Denormalized so tenant scoping is one uniform rule for every model —
+  // see plans/DES-25_PLAN.md. Set automatically by the tenant client on
+  // create; must always match the owning firm.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
+  @@index([firmId])
 }
 
 model Client {
@@ -332,7 +356,14 @@ model ClientContact {
 
   createdAt DateTime @default(now())
 
+  // Denormalized so tenant scoping is one uniform rule for every model —
+  // see plans/DES-25_PLAN.md. Set automatically by the tenant client on
+  // create; must always match the owning firm.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   @@index([clientId])
+  @@index([firmId])
 }
 
 /// Expandable lookup shared by Project and Lead — grows as users type
@@ -426,6 +457,14 @@ model ProjectFieldDef {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Denormalized so tenant scoping is one uniform rule for every model —
+  // see plans/DES-25_PLAN.md. Set automatically by the tenant client on
+  // create; must always match the owning firm.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
+  @@index([firmId])
 }
 
 model ProjectFieldValue {
@@ -438,7 +477,14 @@ model ProjectFieldValue {
 
   updatedAt DateTime @updatedAt
 
+  // Denormalized so tenant scoping is one uniform rule for every model —
+  // see plans/DES-25_PLAN.md. Set automatically by the tenant client on
+  // create; must always match the owning firm.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   @@unique([projectId, fieldDefId])
+  @@index([firmId])
 }
 
 /// Same pattern as ProjectFieldDef, scoped to line items instead —
@@ -454,6 +500,14 @@ model ItemFieldDef {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Denormalized so tenant scoping is one uniform rule for every model —
+  // see plans/DES-25_PLAN.md. Set automatically by the tenant client on
+  // create; must always match the owning firm.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
+  @@index([firmId])
 }
 
 model ItemFieldValue {
@@ -466,7 +520,14 @@ model ItemFieldValue {
 
   updatedAt DateTime @updatedAt
 
+  // Denormalized so tenant scoping is one uniform rule for every model —
+  // see plans/DES-25_PLAN.md. Set automatically by the tenant client on
+  // create; must always match the owning firm.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   @@unique([itemId, fieldDefId])
+  @@index([firmId])
 }
 
 /// A single billed-toward-the-design-fee line entry. Separate from
@@ -486,8 +547,15 @@ model DesignFeeCharge {
   invoice   Invoice? @relation(fields: [invoiceId], references: [id])
   invoiceId String?
 
+  // Denormalized so tenant scoping is one uniform rule for every model —
+  // see plans/DES-25_PLAN.md. Set automatically by the tenant client on
+  // create; must always match the owning firm.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   @@index([projectId])
   @@index([invoiceId])
+  @@index([firmId])
 }
 
 model Vendor {
@@ -635,7 +703,14 @@ model ProcurementList {
 
   createdAt DateTime @default(now())
 
+  // Denormalized so tenant scoping is one uniform rule for every model —
+  // see plans/DES-25_PLAN.md. Set automatically by the tenant client on
+  // create; must always match the owning firm.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   @@index([projectId])
+  @@index([firmId])
 }
 
 /// A named folder shown in a project's Project Documents tab — same
@@ -652,7 +727,14 @@ model ProjectDocumentFolder {
 
   createdAt DateTime @default(now())
 
+  // Denormalized so tenant scoping is one uniform rule for every model —
+  // see plans/DES-25_PLAN.md. Set automatically by the tenant client on
+  // create; must always match the owning firm.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   @@index([projectId])
+  @@index([firmId])
 }
 
 /// A project-scoped, growable list of room-name suggestions — Item.room
@@ -669,7 +751,14 @@ model ProjectRoom {
 
   createdAt DateTime @default(now())
 
+  // Denormalized so tenant scoping is one uniform rule for every model —
+  // see plans/DES-25_PLAN.md. Set automatically by the tenant client on
+  // create; must always match the owning firm.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   @@unique([projectId, name])
+  @@index([firmId])
 }
 
 model Document {
@@ -699,9 +788,16 @@ model Document {
 
   sourcedItems Item[]
 
+  // Denormalized so tenant scoping is one uniform rule for every model —
+  // see plans/DES-25_PLAN.md. Set automatically by the tenant client on
+  // create; must always match the owning firm.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   @@index([projectId])
   @@index([leadId])
   @@index([itemId])
+  @@index([firmId])
 }
 
 /// A generated merchandise invoice. Shipping/tax are snapshotted at
@@ -812,7 +908,14 @@ model PipelineStage {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Denormalized so tenant scoping is one uniform rule for every model —
+  // see plans/DES-25_PLAN.md. Set automatically by the tenant client on
+  // create; must always match the owning firm.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   @@index([boardId])
+  @@index([firmId])
 }
 
 model ReferralPartner {
@@ -873,7 +976,14 @@ model Lead {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Denormalized so tenant scoping is one uniform rule for every model —
+  // see plans/DES-25_PLAN.md. Set automatically by the tenant client on
+  // create; must always match the owning firm.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   @@index([pipelineStageId])
+  @@index([firmId])
 }
 
 /// A firm-wide file in the Administration storage center — templates,

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
-import { projectFirmId } from '@/server/firm';
+import { tenantContext } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { badRequest, forbidden, notFound, parseBody } from '@/lib/apiRoute';
 import { invoiceCreateSchema } from '@/lib/validation';
@@ -10,6 +9,8 @@ import { resolvePermissions } from '@/server/permissions';
 export async function POST(req: NextRequest) {
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
+
+  const { db, firmId } = tenantContext(session);
 
   const { data, response } = await parseBody(req, invoiceCreateSchema);
   if (response) return response;
@@ -23,14 +24,14 @@ export async function POST(req: NextRequest) {
     return forbidden('You do not have permission to create this invoice');
   }
 
-  const project = await prisma.project.findUnique({ where: { id: projectId } });
+  const project = await db.project.findUnique({ where: { id: projectId } });
   if (!project) return notFound('Project not found');
 
   if (type === 'DESIGN_FEE') {
     if (designFeeChargeIds.length === 0 && newDesignFeeCharges.length === 0) {
       return badRequest('Select a charge or add a custom line item');
     }
-    const charges = await prisma.designFeeCharge.findMany({ where: { id: { in: designFeeChargeIds }, projectId } });
+    const charges = await db.designFeeCharge.findMany({ where: { id: { in: designFeeChargeIds }, projectId } });
     if (charges.length !== designFeeChargeIds.length) {
       return badRequest('Some charges were not found on this project');
     }
@@ -49,12 +50,12 @@ export async function POST(req: NextRequest) {
     // separate "Bill Design Fee" step required.
     const createdCharges = await Promise.all(
       newDesignFeeCharges.map((line) =>
-        prisma.designFeeCharge.create({ data: { projectId, description: line.description, amount: line.amount } })
+        db.designFeeCharge.create({ data: { projectId, firmId, description: line.description, amount: line.amount } })
       )
     );
     const allChargeIds = [...designFeeChargeIds, ...createdCharges.map((c) => c.id)];
 
-    const invoice = await prisma.invoice.create({
+    const invoice = await db.invoice.create({
       data: {
         projectId,
         invoiceNumber,
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
         taxBase: taxBase ?? 'MERCH_ONLY',
         dueDate: dueDate ? new Date(dueDate) : null,
         notes: notes || null,
-        firmId: await projectFirmId(projectId),
+        firmId: firmId,
         designFeeCharges: { connect: allChargeIds.map((id) => ({ id })) },
       },
       include: { designFeeCharges: true },
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
     return badRequest('Select at least one item');
   }
 
-  const items = await prisma.item.findMany({ where: { id: { in: itemIds }, projectId } });
+  const items = await db.item.findMany({ where: { id: { in: itemIds }, projectId } });
   if (items.length !== itemIds.length) {
     return badRequest('Some items were not found on this project');
   }
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
 
   const invoiceNumber = await nextInvoiceNumber(projectId, project.invoicePrefix, 'PROCUREMENT');
 
-  const invoice = await prisma.invoice.create({
+  const invoice = await db.invoice.create({
     data: {
       projectId,
       invoiceNumber,
@@ -101,13 +102,13 @@ export async function POST(req: NextRequest) {
       taxBase: taxBase ?? project.taxBase,
       dueDate: dueDate ? new Date(dueDate) : null,
       notes: notes || null,
-      firmId: await projectFirmId(projectId),
+      firmId: firmId,
       items: { connect: itemIds.map((id) => ({ id })) },
     },
     include: { items: true },
   });
 
-  await prisma.item.updateMany({
+  await db.item.updateMany({
     where: { id: { in: itemIds } },
     data: { status: 'INVOICED' },
   });

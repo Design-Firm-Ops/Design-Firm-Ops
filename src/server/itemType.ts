@@ -1,5 +1,4 @@
 import { prisma } from '@/server/prisma';
-import { currentFirmId } from '@/server/firm';
 import { nextOrder } from '@/server/order';
 
 /**
@@ -10,13 +9,13 @@ import { nextOrder } from '@/server/order';
  */
 export async function findOrCreateItemType(
   category: string | undefined | null,
-  name: string | undefined | null
+  name: string | undefined | null,
+  firmId: string
 ): Promise<string | null> {
   const trimmedCategory = category?.trim();
   const trimmedName = name?.trim();
   if (!trimmedCategory || !trimmedName) return null;
 
-  const firmId = await currentFirmId();
   const existing = await prisma.itemTypeOption.findUnique({
     where: { firmId_category_name: { firmId, category: trimmedCategory, name: trimmedName } },
   });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { tenantContext } from '@/server/tenantDb';
 import { jsonOrNull } from '@/server/json';
 import { requireSession } from '@/server/apiAuth';
 import { notFound, ok, parseBody } from '@/lib/apiRoute';
@@ -8,10 +8,12 @@ import { findOrCreateProjectType } from '@/server/projectType';
 import { findOrCreateFeeStructureOption } from '@/server/feeStructure';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const project = await prisma.project.findUnique({
+  const { db, firmId } = tenantContext(session);
+
+  const project = await db.project.findUnique({
     where: { id: params.id },
     include: { client: true },
   });
@@ -20,8 +22,10 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
+
+  const { db, firmId } = tenantContext(session);
 
   const { data: payload, response } = await parseBody(req, projectSchema.partial());
   if (response) return response;
@@ -42,16 +46,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const data: Record<string, unknown> = { ...rest };
   if (clientId) data.clientId = clientId;
   if (startDate !== undefined) data.startDate = startDate ? new Date(startDate) : null;
-  if (projectType !== undefined) data.projectTypeId = await findOrCreateProjectType(projectType);
+  if (projectType !== undefined) data.projectTypeId = await findOrCreateProjectType(projectType, firmId);
   if (designFeeStructure !== undefined) {
-    data.designFeeStructureId = await findOrCreateFeeStructureOption(designFeeStructure, 'DESIGN_FEE');
+    data.designFeeStructureId = await findOrCreateFeeStructureOption(designFeeStructure, 'DESIGN_FEE', firmId);
   }
   if (procurementFeeStructure !== undefined) {
-    data.procurementFeeStructureId = await findOrCreateFeeStructureOption(procurementFeeStructure, 'PROCUREMENT');
+    data.procurementFeeStructureId = await findOrCreateFeeStructureOption(procurementFeeStructure, 'PROCUREMENT', firmId);
   }
   if (data.defaultInvoiceColumnConfig === null) data.defaultInvoiceColumnConfig = jsonOrNull(null);
 
-  const project = await prisma.project.update({
+  const project = await db.project.update({
     where: { id: params.id },
     data,
   });
@@ -59,9 +63,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  await prisma.project.delete({ where: { id: params.id } });
+  const { db, firmId } = tenantContext(session);
+
+  await db.project.delete({ where: { id: params.id } });
   return ok();
 }

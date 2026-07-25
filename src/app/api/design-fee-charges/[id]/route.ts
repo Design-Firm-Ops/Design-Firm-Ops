@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { getTenantDb } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { conflict, forbidden, notFound, ok } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/server/permissions';
@@ -9,12 +9,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
+  const db = getTenantDb(session);
+
   const perms = await resolvePermissions(session);
   if (!perms.financials) {
     return forbidden('You do not have permission to modify the design fee');
   }
 
-  const existing = await prisma.designFeeCharge.findUnique({
+  const existing = await db.designFeeCharge.findUnique({
     where: { id: params.id },
     include: { invoice: { select: { invoiceNumber: true } } },
   });
@@ -23,6 +25,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     return conflict(lockedChargeMessage(existing.invoice!.invoiceNumber));
   }
 
-  await prisma.designFeeCharge.delete({ where: { id: params.id } });
+  await db.designFeeCharge.delete({ where: { id: params.id } });
   return ok();
 }

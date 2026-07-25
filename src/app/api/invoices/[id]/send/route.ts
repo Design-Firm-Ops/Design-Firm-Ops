@@ -1,7 +1,6 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
-import { currentFirmId } from '@/server/firm';
+import { tenantContext } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { badRequest, conflict, forbidden, notFound } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/server/permissions';
@@ -18,7 +17,9 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const invoice = await prisma.invoice.findUnique({
+  const { db, firmId } = tenantContext(session);
+
+  const invoice = await db.invoice.findUnique({
     where: { id: params.id },
     include: { items: true, designFeeCharges: true, project: { include: { client: true } } },
   });
@@ -41,7 +42,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const issuedDate = invoice.issuedDate ?? new Date();
   const status = invoice.status === 'DRAFT' ? 'SENT' : invoice.status;
 
-  const updated = await prisma.invoice.update({
+  const updated = await db.invoice.update({
     where: { id: params.id },
     data: { portalToken, issuedDate, status },
   });
@@ -49,7 +50,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const pdf = await renderInvoicePdf(params.id);
   if (!pdf) return NextResponse.json({ error: 'Could not generate PDF' }, { status: 500 });
 
-  const settings = await prisma.settings.findUnique({ where: { firmId: invoice.firmId } });
+  const settings = await db.settings.findUnique({ where: { firmId: invoice.firmId } });
 
   const totals = invoiceTotals(invoice, invoice.project);
 

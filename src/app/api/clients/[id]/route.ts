@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { tenantContext } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { ok, parseBody } from '@/lib/apiRoute';
 import { clientSchema } from '@/lib/validation';
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
+
+  const { db, firmId } = tenantContext(session);
 
   const { data, response } = await parseBody(req, clientSchema.partial());
   if (response) return response;
@@ -16,13 +18,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   // Additional contacts are sent as the full current list — replace
   // all existing rows rather than trying to diff/reconcile individual
   // adds/edits/removes.
-  const client = await prisma.$transaction(async (tx) => {
+  const client = await db.$transaction(async (tx) => {
     if (contacts !== undefined) {
       await tx.clientContact.deleteMany({ where: { clientId: params.id } });
       if (contacts.length > 0) {
         await tx.clientContact.createMany({
           data: contacts.map((c, order) => ({
             clientId: params.id,
+            firmId,
             name: c.name || null,
             email: c.email || null,
             phone: c.phone || null,
@@ -42,10 +45,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const projectCount = await prisma.project.count({ where: { clientId: params.id } });
+  const { db, firmId } = tenantContext(session);
+
+  const projectCount = await db.project.count({ where: { clientId: params.id } });
   if (projectCount > 0) {
     return NextResponse.json(
       { error: `Cannot delete: this client has ${projectCount} project(s). Reassign or delete those first.` },
@@ -53,6 +58,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     );
   }
 
-  await prisma.client.delete({ where: { id: params.id } });
+  await db.client.delete({ where: { id: params.id } });
   return ok();
 }

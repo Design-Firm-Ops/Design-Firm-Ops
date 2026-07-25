@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/server/prisma';
+import { getTenantDb } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { badRequest, forbidden, parseBody } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/server/permissions';
@@ -16,6 +16,8 @@ export async function POST(req: NextRequest) {
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
+  const db = getTenantDb(session);
+
   const perms = await resolvePermissions(session);
   if (!perms.procurement) {
     return forbidden('You do not have permission to edit procurement');
@@ -29,13 +31,13 @@ export async function POST(req: NextRequest) {
   // Bulk actions never carry an unlock override — invoiced items are
   // silently skipped rather than failing the whole batch, and the
   // caller is told how many were skipped so the table can flag them.
-  const targets = await prisma.item.findMany({ where: { id: { in: ids } }, select: { id: true, invoiceId: true } });
+  const targets = await db.item.findMany({ where: { id: { in: ids } }, select: { id: true, invoiceId: true } });
   const editableIds = targets.filter((t) => !isItemLocked(t)).map((t) => t.id);
   const skipped = targets.length - editableIds.length;
 
   if (action === 'delete') {
     if (editableIds.length > 0) {
-      await prisma.item.deleteMany({ where: { id: { in: editableIds } } });
+      await db.item.deleteMany({ where: { id: { in: editableIds } } });
     }
     return NextResponse.json({ ok: true, skipped });
   }
@@ -45,7 +47,7 @@ export async function POST(req: NextRequest) {
       return badRequest('status is required for setStatus');
     }
     if (editableIds.length > 0) {
-      await prisma.item.updateMany({ where: { id: { in: editableIds } }, data: { status } });
+      await db.item.updateMany({ where: { id: { in: editableIds } }, data: { status } });
     }
     return NextResponse.json({ ok: true, skipped });
   }

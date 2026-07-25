@@ -1,5 +1,4 @@
 import { prisma } from '@/server/prisma';
-import { currentFirmId } from '@/server/firm';
 import type { InvoiceType } from '@/lib/domain';
 
 /**

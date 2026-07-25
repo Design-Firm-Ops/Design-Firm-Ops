@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { tenantContext } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { forbidden, parseBody } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/server/permissions';
@@ -11,6 +11,8 @@ export async function POST(req: NextRequest) {
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
+  const { db, firmId } = tenantContext(session);
+
   const perms = await resolvePermissions(session);
   if (!perms.procurement) {
     return forbidden('You do not have permission to edit procurement');
@@ -19,7 +21,7 @@ export async function POST(req: NextRequest) {
   const { data, response } = await parseBody(req, itemTypeCreateSchema);
   if (response) return response;
 
-  const id = await findOrCreateItemType(data.category, data.name);
-  const itemType = await prisma.itemTypeOption.findUnique({ where: { id: id! } });
+  const id = await findOrCreateItemType(data.category, data.name, firmId);
+  const itemType = await db.itemTypeOption.findUnique({ where: { id: id! } });
   return NextResponse.json(itemType, { status: 201 });
 }

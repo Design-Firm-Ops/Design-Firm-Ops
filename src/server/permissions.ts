@@ -1,7 +1,7 @@
 import type { Session } from 'next-auth';
 import { prisma } from '@/server/prisma';
-import { currentFirmId } from '@/server/firm';
 import { isAdmin, resolvePermissionFlags, ADMIN_PERMISSIONS, type ResolvedPermissions } from '@/lib/permissions';
+import { requireFirmId } from '@/lib/tenant';
 
 // Loads the inputs the permission policy needs. The policy itself lives in
 // `@/lib/permissions` and is pure — this is the only part that needs a database.
@@ -15,7 +15,7 @@ export async function resolvePermissions(session: Session | null): Promise<Resol
   if (isAdmin(session)) return { ...ADMIN_PERMISSIONS };
 
   const [settings, override] = await Promise.all([
-    currentFirmId().then((firmId) => prisma.settings.findUnique({ where: { firmId } })),
+    prisma.settings.findUnique({ where: { firmId: requireFirmId(session) } }),
     session?.user?.id
       ? prisma.userPermissionOverride.findUnique({ where: { userId: session.user.id } })
       : Promise.resolve(null),

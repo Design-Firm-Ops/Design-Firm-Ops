@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { tenantContext } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { conflict, forbidden, notFound, ok, parseBody } from '@/lib/apiRoute';
 import { itemUpdateSchema } from '@/lib/validation';
@@ -13,6 +13,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
+  const { db, firmId } = tenantContext(session);
+
   const perms = await resolvePermissions(session);
   if (!perms.procurement) {
     return forbidden('You do not have permission to edit procurement');
@@ -21,7 +23,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { data, response } = await parseBody(req, itemUpdateSchema);
   if (response) return response;
 
-  const existing = await prisma.item.findUnique({ where: { id: params.id }, include: { invoice: true } });
+  const existing = await db.item.findUnique({ where: { id: params.id }, include: { invoice: true } });
   if (!existing) return notFound();
 
   const { unlockOverride, vendorId, itemType, procurementListId, tag, ...rest } = data;
@@ -36,9 +38,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const itemTypeId =
-    itemType !== undefined ? await findOrCreateItemType(rest.category ?? existing.category, itemType) : undefined;
+    itemType !== undefined ? await findOrCreateItemType(rest.category ?? existing.category, itemType, firmId) : undefined;
 
-  if (rest.room) await findOrCreateRoom(existing.projectId, rest.room);
+  if (rest.room) await findOrCreateRoom(existing.projectId, rest.room, firmId);
 
   // A blank tag auto-fills the moment an item type is set — matches
   // the same rule as item creation — but never overwrites a tag
@@ -50,7 +52,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         ? (await nextItemTag(existing.projectId, itemTypeId)) ?? undefined
         : undefined;
 
-  const item = await prisma.item.update({
+  const item = await db.item.update({
     where: { id: params.id },
     data: {
       ...rest,
@@ -67,12 +69,14 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
+  const { db, firmId } = tenantContext(session);
+
   const perms = await resolvePermissions(session);
   if (!perms.procurement) {
     return forbidden('You do not have permission to edit procurement');
   }
 
-  const existing = await prisma.item.findUnique({ where: { id: params.id }, include: { invoice: true } });
+  const existing = await db.item.findUnique({ where: { id: params.id }, include: { invoice: true } });
   if (!existing) return notFound();
 
   const unlockOverride = req.nextUrl.searchParams.get('unlockOverride') === 'true';
@@ -86,6 +90,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     }
   }
 
-  await prisma.item.delete({ where: { id: params.id } });
+  await db.item.delete({ where: { id: params.id } });
   return ok();
 }

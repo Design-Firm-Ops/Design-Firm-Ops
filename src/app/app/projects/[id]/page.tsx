@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
+import { requireFirmId } from '@/lib/tenant';
 import { getProjectDetail, getProjectDetailOptions } from '@/server/queries/projects';
 import { storage } from '@/server/storage';
 import { resolvePermissions, isAdmin as checkIsAdmin } from '@/server/permissions';
@@ -81,15 +82,16 @@ function serializeInvoiceItem(item: {
 
 export default async function ProjectPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
+  const firmId = requireFirmId(session);
   const perms = await resolvePermissions(session);
   const admin = checkIsAdmin(session);
 
-  const project = await getProjectDetail(params.id);
+  const project = await getProjectDetail(params.id, firmId);
 
   if (!project) notFound();
 
   const { vendors, projectTypes, feeStructureOptions, itemTypeOptions, itemFieldDefs, projectFieldDefs } =
-    await getProjectDetailOptions();
+    await getProjectDetailOptions(firmId);
 
   const designFeeStructureOptions = feeStructureOptions.filter((f) => f.scope === 'DESIGN_FEE').map((f) => f.name);
   const procurementFeeStructureOptions = feeStructureOptions.filter((f) => f.scope === 'PROCUREMENT').map((f) => f.name);

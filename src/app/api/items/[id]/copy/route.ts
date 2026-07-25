@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/server/prisma';
-import { currentFirmId } from '@/server/firm';
+import { tenantContext } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { forbidden, notFound, parseBody } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/server/permissions';
@@ -15,6 +14,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
+  const { db, firmId } = tenantContext(session);
+
   const perms = await resolvePermissions(session);
   if (!perms.procurement) {
     return forbidden('You do not have permission to edit procurement');
@@ -23,12 +24,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { data, response } = await parseBody(req, copySchema);
   if (response) return response;
 
-  const source = await prisma.item.findUnique({ where: { id: params.id }, include: { fieldValues: true } });
+  const source = await db.item.findUnique({ where: { id: params.id }, include: { fieldValues: true } });
   if (!source) return notFound();
 
-  const maxSort = await prisma.item.aggregate({ where: { projectId: source.projectId }, _max: { sortOrder: true } });
+  const maxSort = await db.item.aggregate({ where: { projectId: source.projectId }, _max: { sortOrder: true } });
 
-  const copy = await prisma.item.create({
+  const copy = await db.item.create({
     data: {
       projectId: source.projectId,
       firmId: source.firmId,
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       status: source.status,
       sortOrder: (maxSort._max.sortOrder ?? 0) + 1,
       fieldValues: {
-        create: source.fieldValues.map((v) => ({ fieldDefId: v.fieldDefId, value: v.value })),
+        create: source.fieldValues.map((v) => ({ fieldDefId: v.fieldDefId, value: v.value, firmId })),
       },
     },
     include: { fieldValues: true },

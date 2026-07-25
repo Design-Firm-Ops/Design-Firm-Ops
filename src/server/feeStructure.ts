@@ -1,17 +1,16 @@
 import { prisma } from '@/server/prisma';
-import { currentFirmId } from '@/server/firm';
 import { nextOrder } from '@/server/order';
 import type { FeeStructureScope } from '@/lib/domain';
 
 /** Finds a FeeStructureOption by (scope, name) or creates it — the list grows as users type new values. */
 export async function findOrCreateFeeStructureOption(
   name: string | undefined | null,
-  scope: FeeStructureScope
+  scope: FeeStructureScope,
+  firmId: string
 ): Promise<string | null> {
   const trimmed = name?.trim();
   if (!trimmed) return null;
 
-  const firmId = await currentFirmId();
   const existing = await prisma.feeStructureOption.findUnique({
     where: { firmId_scope_name: { firmId, scope, name: trimmed } },
   });

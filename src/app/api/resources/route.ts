@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
-import { currentFirmId } from '@/server/firm';
+import { tenantContext } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { badRequest } from '@/lib/apiRoute';
 import { storage, storagePath } from '@/server/storage';
@@ -8,6 +7,8 @@ import { storage, storagePath } from '@/server/storage';
 export async function POST(req: NextRequest) {
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
+
+  const { db, firmId } = tenantContext(session);
 
   const form = await req.formData();
   const file = form.get('file');
@@ -25,13 +26,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Storage upload failed: ${message}` }, { status: 502 });
   }
 
-  const resource = await prisma.resource.create({
+  const resource = await db.resource.create({
     data: {
       folder: folder.trim(),
       filename: file.name,
       storagePath: path,
       uploadedById: session!.user.id,
-      firmId: await currentFirmId(),
+      firmId: firmId,
     },
   });
 

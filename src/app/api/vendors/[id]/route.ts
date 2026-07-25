@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { getTenantDb } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { forbidden, ok, parseBody } from '@/lib/apiRoute';
 import { vendorSchema } from '@/lib/validation';
@@ -45,6 +45,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
+  const db = getTenantDb(session);
+
   const { data, response } = await parseBody(req, vendorSchema.partial());
   if (response) return response;
 
@@ -57,7 +59,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return forbidden('You do not have permission to change trade account credentials');
   }
 
-  const vendor = await prisma.vendor.update({
+  const vendor = await db.vendor.update({
     where: { id: params.id },
     data: {
       ...rest,
@@ -70,10 +72,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const itemCount = await prisma.item.count({ where: { vendorId: params.id } });
+  const db = getTenantDb(session);
+
+  const itemCount = await db.item.count({ where: { vendorId: params.id } });
   if (itemCount > 0) {
     return NextResponse.json(
       { error: `Cannot delete: this vendor is referenced by ${itemCount} line item(s).` },
@@ -81,6 +85,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     );
   }
 
-  await prisma.vendor.delete({ where: { id: params.id } });
+  await db.vendor.delete({ where: { id: params.id } });
   return ok();
 }
