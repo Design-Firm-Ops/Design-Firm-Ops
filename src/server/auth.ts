@@ -26,7 +26,7 @@ export const authOptions: AuthOptions = {
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!valid) return null;
 
-        return { id: user.id, email: user.email, name: user.name, role: user.role };
+        return { id: user.id, email: user.email, name: user.name, role: user.role, firmId: user.firmId };
       },
     }),
   ],
@@ -35,13 +35,17 @@ export const authOptions: AuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        // The tenant travels on the token so every request knows it without a
+        // database round trip. Null for a SUPER_ADMIN.
+        token.firmId = user.firmId;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as { id?: string; role?: string }).id = token.id as string;
-        (session.user as { id?: string; role?: string }).role = token.role as string;
+        session.user.id = token.id;
+        session.user.role = token.role;
+        session.user.firmId = token.firmId ?? null;
       }
       return session;
     },

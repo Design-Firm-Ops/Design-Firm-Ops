@@ -28,9 +28,15 @@ enum FirmStatus {
   CANCELED
 }
 
+/// ADMIN and DESIGNER are roles *within* a firm. SUPER_ADMIN is a platform
+/// operator who belongs to no firm (`User.firmId` is null) — there is exactly
+/// one, seeded at deploy time and never mintable through the UI. A partial
+/// unique index enforces that; see the DES-24 migration for why it can't be
+/// expressed here (plans/ADMIN_DASHBOARD.md §3.3).
 enum UserRole {
   ADMIN
   DESIGNER
+  SUPER_ADMIN
 }
 
 enum ProjectStatus {

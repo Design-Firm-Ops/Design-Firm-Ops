@@ -3,7 +3,12 @@
 import { vi, type Mock } from 'vitest';
 import type { Session } from 'next-auth';
 
-/** A signed-in session, admin by default. Pass overrides for the user. */
+/**
+ * A signed-in session — a firm ADMIN by default. Pass overrides for the user.
+ *
+ * `firmId` defaults to a real value because that's the normal case: only a
+ * SUPER_ADMIN has none. Pass `{ role: 'SUPER_ADMIN', firmId: null }` for one.
+ */
 export function fakeSession(user: Partial<Session['user']> = {}): Session {
   return {
     user: {
@@ -11,6 +16,7 @@ export function fakeSession(user: Partial<Session['user']> = {}): Session {
       name: 'Test User',
       email: 'test@example.com',
       role: 'ADMIN',
+      firmId: 'firm-1',
       ...user,
     },
     expires: '2999-01-01T00:00:00.000Z',
