@@ -17,7 +17,7 @@ export async function renderInvoicePdf(invoiceId: string): Promise<{ buffer: Buf
   });
   if (!invoice) return null;
 
-  const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+  const settings = await prisma.settings.findUnique({ where: { firmId: invoice.firmId } });
 
   // Design Fee Invoices are a flat list of charges — no tag/markup/photo
   // columns apply, so their PDF always uses a fixed minimal layout

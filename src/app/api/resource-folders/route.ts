@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
+import { currentFirmId } from '@/server/firm';
 import { requireAdmin, requireSession } from '@/server/apiAuth';
 import { parseBody } from '@/lib/apiRoute';
 import { resourceFolderPermissionSchema } from '@/lib/validation';
@@ -25,9 +26,10 @@ export async function PUT(req: NextRequest) {
   const { data, response } = await parseBody(req, upsertSchema);
   if (response) return response;
 
+  const firmId = await currentFirmId();
   const folder = await prisma.resourceFolder.upsert({
-    where: { name: data.name },
-    create: { name: data.name, allowedUserIds: data.allowedUserIds },
+    where: { firmId_name: { firmId, name: data.name } },
+    create: { name: data.name, firmId, allowedUserIds: data.allowedUserIds },
     update: { allowedUserIds: data.allowedUserIds },
   });
   return NextResponse.json(folder);

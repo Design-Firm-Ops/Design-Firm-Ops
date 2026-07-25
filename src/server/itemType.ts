@@ -1,4 +1,5 @@
 import { prisma } from '@/server/prisma';
+import { currentFirmId } from '@/server/firm';
 import { nextOrder } from '@/server/order';
 
 /**
@@ -15,13 +16,16 @@ export async function findOrCreateItemType(
   const trimmedName = name?.trim();
   if (!trimmedCategory || !trimmedName) return null;
 
+  const firmId = await currentFirmId();
   const existing = await prisma.itemTypeOption.findUnique({
-    where: { category_name: { category: trimmedCategory, name: trimmedName } },
+    where: { firmId_category_name: { firmId, category: trimmedCategory, name: trimmedName } },
   });
   if (existing) return existing.id;
 
+  // Scoped to this firm: one firm's prefixes must not constrain another's, or
+  // firm B's first Sconce silently becomes "SC2" because firm A took "SC".
   const existingPrefixes = new Set(
-    (await prisma.itemTypeOption.findMany({ select: { tagPrefix: true } })).map((t) => t.tagPrefix)
+    (await prisma.itemTypeOption.findMany({ where: { firmId }, select: { tagPrefix: true } })).map((t) => t.tagPrefix)
   );
   const tagPrefix = generateUniquePrefix(trimmedName, existingPrefixes);
 
@@ -30,7 +34,8 @@ export async function findOrCreateItemType(
       category: trimmedCategory,
       name: trimmedName,
       tagPrefix,
-      order: await nextOrder(prisma.itemTypeOption, { category: trimmedCategory }),
+      firmId,
+      order: await nextOrder(prisma.itemTypeOption, { firmId, category: trimmedCategory }),
     },
   });
   return created.id;

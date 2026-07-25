@@ -16,7 +16,19 @@ import { RAW_VENDORS } from './vendorData';
 
 const prisma = new PrismaClient();
 
-async function seedUsers() {
+/// The demo tenant. Everything else the seed creates hangs off this firm —
+/// the app is multi-tenant now, so nothing is created "globally".
+async function seedFirm() {
+  const firm = await prisma.firm.upsert({
+    where: { slug: 'madison-ditton-interiors' },
+    create: { name: 'Madison Ditton Interiors', slug: 'madison-ditton-interiors', status: 'ACTIVE' },
+    update: {},
+  });
+  console.log(`  firm: ${firm.name} (${firm.slug})`);
+  return firm.id;
+}
+
+async function seedUsers(firmId: string) {
   const users = [
     {
       email: process.env.SEED_OWNER1_EMAIL ?? 'madison@mditerior.com',
@@ -42,18 +54,18 @@ async function seedUsers() {
     const passwordHash = await bcrypt.hash(u.password, 10);
     await prisma.user.upsert({
       where: { email: u.email.toLowerCase() },
-      create: { email: u.email.toLowerCase(), passwordHash, name: u.name, role: u.role },
-      update: { passwordHash, name: u.name, role: u.role },
+      create: { email: u.email.toLowerCase(), passwordHash, name: u.name, role: u.role, firmId },
+      update: { passwordHash, name: u.name, role: u.role, firmId },
     });
     console.log(`  user (${u.role}): ${u.email} / ${u.password}`);
   }
 }
 
-async function seedSettings() {
+async function seedSettings(firmId: string) {
   await prisma.settings.upsert({
-    where: { id: 1 },
+    where: { firmId },
     create: {
-      id: 1,
+      firmId,
       companyName: 'Madison Ditton Interiors',
       companyAddress: '212 Main Street, Park City, UT 84060',
       owner1Name: 'Madison Ditton',
@@ -69,13 +81,15 @@ async function seedSettings() {
   });
 }
 
-async function seedPipelineStages() {
+async function seedPipelineStages(firmId: string) {
   // The customizable-taxonomies migration always creates one default
   // LeadBoard ("Leads") and attaches any pre-existing stages to it —
   // reuse that board (or create it, for a from-scratch test DB where
   // migrations were generated differently) rather than assuming stages
   // don't exist yet.
-  const board = (await prisma.leadBoard.findFirst({ orderBy: { order: 'asc' } })) ?? (await prisma.leadBoard.create({ data: { name: 'Leads', order: 0 } }));
+  const board =
+    (await prisma.leadBoard.findFirst({ where: { firmId }, orderBy: { order: 'asc' } })) ??
+    (await prisma.leadBoard.create({ data: { name: 'Leads', order: 0, firmId } }));
 
   const existing = await prisma.pipelineStage.count({ where: { boardId: board.id } });
   if (existing > 0) return;
@@ -162,7 +176,7 @@ function parseShowroomRep(raw: string | null): {
   return { showroomName, repName, repEmail, repPhone };
 }
 
-async function seedVendors() {
+async function seedVendors(firmId: string) {
   let withCredentials = 0;
 
   for (const v of RAW_VENDORS) {
@@ -186,6 +200,7 @@ async function seedVendors() {
 
     await prisma.vendor.create({
       data: {
+        firmId,
         name: v.name,
         website: v.website,
         showroomName,
@@ -196,7 +211,9 @@ async function seedVendors() {
         productType: mapEnum<'STOCK' | 'CUSTOM' | 'BOTH'>(v.stockCustom, ['STOCK', 'CUSTOM', 'BOTH']),
         priceRange: mapEnum<'LOW' | 'MID' | 'HIGH'>(v.priceRange, ['LOW', 'MID', 'HIGH']),
         offerings: {
-          connect: v.offerings.map((o) => ({ name: o.charAt(0) + o.slice(1).toLowerCase() })),
+          connect: v.offerings.map((o) => ({
+            firmId_name: { firmId, name: o.charAt(0) + o.slice(1).toLowerCase() },
+          })),
         },
         notes: v.notes,
         tradeAccountNotes,
@@ -212,25 +229,26 @@ async function seedVendors() {
 // Leads/referral partners/pipeline stages are treated as persistent
 // business data, not demo data, so they're never cleared here — only
 // unlinked from a project about to be deleted.
-async function clearDemoData() {
+async function clearDemoData(firmId: string) {
   await prisma.lead.updateMany({ where: { convertedProjectId: { not: null } }, data: { convertedProjectId: null } });
 
-  await prisma.payment.deleteMany({});
-  await prisma.invoice.deleteMany({});
-  await prisma.item.deleteMany({});
+  await prisma.payment.deleteMany({ where: { firmId } });
+  await prisma.invoice.deleteMany({ where: { firmId } });
+  await prisma.item.deleteMany({ where: { firmId } });
   // Only clear project-scoped documents — lead-attached documents
   // (projectId null, leadId set) are persistent business data, same as
   // leads themselves, and must survive a re-seed.
   await prisma.document.deleteMany({ where: { projectId: { not: null } } });
-  await prisma.designFeeCharge.deleteMany({});
-  await prisma.project.deleteMany({});
-  await prisma.client.deleteMany({});
-  await prisma.vendor.deleteMany({});
+  await prisma.designFeeCharge.deleteMany({ where: { project: { firmId } } });
+  await prisma.project.deleteMany({ where: { firmId } });
+  await prisma.client.deleteMany({ where: { firmId } });
+  await prisma.vendor.deleteMany({ where: { firmId } });
 }
 
-async function seedDemoProject() {
+async function seedDemoProject(firmId: string) {
   const client = await prisma.client.create({
     data: {
+      firmId,
       name: 'Westland Reserve Development LLC',
       email: 'accounting@westlandreserve.com',
       phone: '(435) 555-0177',
@@ -240,20 +258,20 @@ async function seedDemoProject() {
   });
 
   const projectType = await prisma.projectType.upsert({
-    where: { name: 'Commercial Office' },
-    create: { name: 'Commercial Office' },
+    where: { firmId_name: { firmId, name: 'Commercial Office' } },
+    create: { name: 'Commercial Office', firmId },
     update: {},
   });
 
   const [designFeeStructure, procurementFeeStructure] = await Promise.all([
     prisma.feeStructureOption.upsert({
-      where: { scope_name: { scope: 'DESIGN_FEE', name: 'Hourly' } },
-      create: { scope: 'DESIGN_FEE', name: 'Hourly', order: 1 },
+      where: { firmId_scope_name: { firmId, scope: 'DESIGN_FEE', name: 'Hourly' } },
+      create: { scope: 'DESIGN_FEE', name: 'Hourly', order: 1, firmId },
       update: {},
     }),
     prisma.feeStructureOption.upsert({
-      where: { scope_name: { scope: 'PROCUREMENT', name: 'Cost Plus' } },
-      create: { scope: 'PROCUREMENT', name: 'Cost Plus', order: 0 },
+      where: { firmId_scope_name: { firmId, scope: 'PROCUREMENT', name: 'Cost Plus' } },
+      create: { scope: 'PROCUREMENT', name: 'Cost Plus', order: 0, firmId },
       update: {},
     }),
   ]);
@@ -261,6 +279,7 @@ async function seedDemoProject() {
   const project = await prisma.project.create({
     data: {
       clientId: client.id,
+      firmId,
       name: 'Westland Reserve Red Rock Office',
       projectAddress: '1425 Red Rock Canyon Dr, St. George, UT 84770',
       status: 'ACTIVE',
@@ -295,10 +314,10 @@ async function seedDemoProject() {
   // from the firm's real FF&E vendor list above, kept minimal since
   // their only role is to populate the Vendor column on these items.
   const [circa, visualComfort, rh, hinkley] = await Promise.all([
-    prisma.vendor.create({ data: { name: 'Circa Lighting', website: 'https://circalighting.com', repName: 'Ellen Marsh', repEmail: 'ellen@circalighting.com' } }),
-    prisma.vendor.create({ data: { name: 'Visual Comfort & Co.', website: 'https://visualcomfort.com', repName: 'Derek Paulson', repEmail: 'derek@visualcomfort.com' } }),
-    prisma.vendor.create({ data: { name: 'RH Lighting', website: 'https://rh.com', repName: 'Casey Nguyen', repEmail: 'casey@rh.com' } }),
-    prisma.vendor.create({ data: { name: 'Hinkley Lighting', website: 'https://hinkley.com', repName: 'Marcus Tell', repEmail: 'marcus@hinkley.com' } }),
+    prisma.vendor.create({ data: { firmId, name: 'Circa Lighting', website: 'https://circalighting.com', repName: 'Ellen Marsh', repEmail: 'ellen@circalighting.com' } }),
+    prisma.vendor.create({ data: { firmId, name: 'Visual Comfort & Co.', website: 'https://visualcomfort.com', repName: 'Derek Paulson', repEmail: 'derek@visualcomfort.com' } }),
+    prisma.vendor.create({ data: { firmId, name: 'RH Lighting', website: 'https://rh.com', repName: 'Casey Nguyen', repEmail: 'casey@rh.com' } }),
+    prisma.vendor.create({ data: { firmId, name: 'Hinkley Lighting', website: 'https://hinkley.com', repName: 'Marcus Tell', repEmail: 'marcus@hinkley.com' } }),
   ]);
 
   // Unit costs solved so the 13-item extended-price sum matches the
@@ -325,7 +344,7 @@ async function seedDemoProject() {
 
   const statuses = ['APPROVED', 'APPROVED', 'PROPOSED', 'APPROVED', 'APPROVED', 'APPROVED', 'PROPOSED', 'APPROVED', 'APPROVED', 'PROPOSED', 'APPROVED', 'APPROVED', 'APPROVED'];
 
-  const lightingTypes = await prisma.itemTypeOption.findMany({ where: { category: 'Lighting' } });
+  const lightingTypes = await prisma.itemTypeOption.findMany({ where: { firmId, category: 'Lighting' } });
   const lightingTypeIdByName = new Map(lightingTypes.map((t) => [t.name, t.id]));
 
   let sortOrder = 1;
@@ -333,6 +352,7 @@ async function seedDemoProject() {
     await prisma.item.create({
       data: {
         projectId: project.id,
+        firmId,
         tag: item.tag,
         name: item.name,
         category: 'Lighting',
@@ -365,7 +385,7 @@ async function seedDemoProject() {
     data: { projectId: project.id, description: 'Design fee — phase 1', amount: '4500.00', date: new Date('2025-04-15') },
   });
   await prisma.payment.create({
-    data: { projectId: project.id, category: 'DESIGN_FEE', amount: '2000.00', method: 'ACH', date: new Date('2025-04-20') },
+    data: { projectId: project.id, firmId, category: 'DESIGN_FEE', amount: '2000.00', method: 'ACH', date: new Date('2025-04-20') },
   });
 
   console.log(`  client: ${client.name}`);
@@ -374,12 +394,13 @@ async function seedDemoProject() {
 
 async function main() {
   console.log('Seeding Design Firm Ops...');
-  await seedUsers();
-  await seedSettings();
-  await seedPipelineStages();
-  await clearDemoData();
-  await seedVendors();
-  await seedDemoProject();
+  const firmId = await seedFirm();
+  await seedUsers(firmId);
+  await seedSettings(firmId);
+  await seedPipelineStages(firmId);
+  await clearDemoData(firmId);
+  await seedVendors(firmId);
+  await seedDemoProject(firmId);
   console.log('Done.');
 }
 

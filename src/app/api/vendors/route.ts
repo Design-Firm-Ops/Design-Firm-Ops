@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
+import { currentFirmId } from '@/server/firm';
 import { requireSession } from '@/server/apiAuth';
 import { forbidden, parseBody } from '@/lib/apiRoute';
 import { vendorSchema } from '@/lib/validation';
@@ -75,6 +76,7 @@ export async function POST(req: NextRequest) {
   const vendor = await prisma.vendor.create({
     data: {
       ...rest,
+      firmId: await currentFirmId(),
       offerings: { connect: offerings.map((id) => ({ id })) },
       tradeAccountPasswordEncrypted: tradeAccountPassword ? encryptSecret(tradeAccountPassword) : null,
     },

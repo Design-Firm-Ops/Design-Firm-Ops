@@ -6,8 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
   // Optional. `prisma migrate dev` needs a scratch "shadow database" to detect
   // drift; by default it creates one itself, which requires CREATEDB on the
   // connecting role. Where that can't be granted (most managed Postgres), point
@@ -17,6 +17,16 @@ datasource db {
 }
 
 // ---------- Enums ----------
+
+/// Lifecycle of a tenant. Suspending or cancelling a firm is a status flip,
+/// never data deletion — the records survive so the state stays reversible and
+/// auditable (plans/ADMIN_DASHBOARD.md §5).
+enum FirmStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELED
+}
 
 enum UserRole {
   ADMIN
@@ -136,14 +146,55 @@ enum FieldType {
 /// A user-customizable product category tagged on Vendor.offerings —
 /// labels are entirely up to the firm (seeded with the original FF&E
 /// spreadsheet categories, but freely renamable).
+/// The tenant root. Every firm-owned record traces back to a Firm, either by
+/// its own `firmId` or through its parent (plans/ADMIN_DASHBOARD.md §3.2).
+model Firm {
+  id     String     @id @default(cuid())
+  name   String
+  /// URL-safe handle. Used in /admin console URLs today, and the hook for
+  /// subdomain routing if that ever lands.
+  slug   String     @unique
+  status FirmStatus @default(TRIAL)
+  /// Free-form tier for now (BASIC/PRO/…); real plan limits are deferred.
+  plan   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users               User[]
+  clients             Client[]
+  projects            Project[]
+  vendors             Vendor[]
+  offerings           Offering[]
+  projectTypes        ProjectType[]
+  itemTypeOptions     ItemTypeOption[]
+  feeStructureOptions FeeStructureOption[]
+  resourceFolders     ResourceFolder[]
+  resources           Resource[]
+  leadBoards          LeadBoard[]
+  referralPartners    ReferralPartner[]
+  settings            Settings?
+
+  // Denormalized onto the money tables for cheap isolation checks (§6 Q2).
+  invoices Invoice[]
+  items    Item[]
+  payments Payment[]
+}
+
 model Offering {
   id    String @id @default(cuid())
-  name  String @unique
+  name  String
   order Int    @default(0)
+
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
 
   vendors Vendor[]
 
   createdAt DateTime @default(now())
+
+  @@unique([firmId, name])
+  @@index([firmId])
 }
 
 /// A user-customizable line-item sub-type scoped to a category (e.g.
@@ -160,9 +211,13 @@ model ItemTypeOption {
 
   items Item[]
 
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   createdAt DateTime @default(now())
 
-  @@unique([category, name])
+  @@unique([firmId, category, name])
+  @@index([firmId])
 }
 
 /// A user-customizable label for how a project's design fee or its
@@ -180,9 +235,13 @@ model FeeStructureOption {
   designFeeProjects      Project[] @relation("ProjectDesignFeeStructure")
   procurementFeeProjects Project[] @relation("ProjectProcurementFeeStructure")
 
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   createdAt DateTime @default(now())
 
-  @@unique([scope, name])
+  @@unique([firmId, scope, name])
+  @@index([firmId])
 }
 
 /// Internal user (owner or designer). Role gates visibility of
@@ -197,8 +256,16 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  /// Null for a platform operator (SUPER_ADMIN), who belongs to no firm.
+  /// Email stays globally unique so credentials login can identify a user
+  /// without a firm in hand — see plans/DES-23_PLAN.md Finding 2.
+  firm   Firm?   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String?
+
   uploadedResources  Resource[]
   permissionOverride UserPermissionOverride?
+
+  @@index([firmId])
 }
 
 /// Per-user permission overrides. Null on any field means "inherit the
@@ -235,8 +302,14 @@ model Client {
   notes          String?
   contacts       ClientContact[]
   projects       Project[]
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([firmId])
 }
 
 /// An additional point of contact for a client beyond the primary
@@ -260,12 +333,18 @@ model ClientContact {
 /// new project types rather than being a fixed enum.
 model ProjectType {
   id   String @id @default(cuid())
-  name String @unique
+  name String
+
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
 
   projects Project[]
   leads    Lead[]
 
   createdAt DateTime @default(now())
+
+  @@unique([firmId, name])
+  @@index([firmId])
 }
 
 model Project {
@@ -317,8 +396,13 @@ model Project {
   convertedFromLead Lead?
   fieldValues       ProjectFieldValue[]
 
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([firmId])
 }
 
 /// A user-defined field shown on every project's overview — admin
@@ -431,8 +515,13 @@ model Vendor {
 
   items Item[]
 
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([firmId])
 }
 
 /// A single merchandise line item within a project.
@@ -511,12 +600,19 @@ model Item {
 
   sortOrder Int @default(0)
 
+  // Denormalized from the parent project for cheap isolation checks on the
+  // money tables (plans/ADMIN_DASHBOARD.md §6 Q2). Must always match
+  // project.firmId.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([projectId])
   @@index([procurementListId])
   @@index([itemTypeId])
+  @@index([firmId])
 }
 
 /// A user-defined sub-list within a project's Procurement tab (e.g.
@@ -609,7 +705,7 @@ model Invoice {
   id            String        @id @default(cuid())
   project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId     String
-  invoiceNumber String        @unique
+  invoiceNumber String
   status        InvoiceStatus @default(DRAFT)
   type          InvoiceType   @default(PROCUREMENT)
 
@@ -636,10 +732,18 @@ model Invoice {
   designFeeCharges DesignFeeCharge[]
   payments         Payment[]
 
+  // Denormalized from the parent project for cheap isolation checks on the
+  // money tables (plans/ADMIN_DASHBOARD.md §6 Q2). Must always match
+  // project.firmId.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([firmId, invoiceNumber])
   @@index([projectId])
+  @@index([firmId])
 }
 
 model Payment {
@@ -657,9 +761,16 @@ model Payment {
   reference String?
   notes     String?
 
+  // Denormalized from the parent project for cheap isolation checks on the
+  // money tables (plans/ADMIN_DASHBOARD.md §6 Q2). Must always match
+  // project.firmId.
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   createdAt DateTime @default(now())
 
   @@index([projectId])
+  @@index([firmId])
 }
 
 /// One of up to 5 independent lead pipelines (e.g. "Residential",
@@ -672,8 +783,13 @@ model LeadBoard {
 
   stages PipelineStage[]
 
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([firmId])
 }
 
 /// A pipeline column on a Business Development kanban board — fully
@@ -703,8 +819,13 @@ model ReferralPartner {
 
   leads Lead[]
 
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([firmId])
 }
 
 /// A prospective client tracked through the sales pipeline. Converts
@@ -762,6 +883,11 @@ model Resource {
 
   uploadedBy   User?   @relation(fields: [uploadedById], references: [id])
   uploadedById String?
+
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
+
+  @@index([firmId])
 }
 
 /// Access-control metadata for a Storage Center folder, keyed by
@@ -771,16 +897,27 @@ model Resource {
 /// with Administration access can see the folder.
 model ResourceFolder {
   id             String   @id @default(cuid())
-  name           String   @unique
+  name           String
   allowedUserIds String[] @default([])
+
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([firmId, name])
+  @@index([firmId])
 }
 
 /// Singleton company settings row (id is always 1).
+/// Per-firm settings. Was a hard singleton (`id Int @default(1)`) when the app
+/// served one firm; now exactly one row per Firm, keyed by a unique firmId.
 model Settings {
-  id Int @id @default(1)
+  id String @id @default(cuid())
+
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId String @unique
 
   companyName    String
   companyAddress String?

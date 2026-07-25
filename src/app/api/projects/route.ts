@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
+import { currentFirmId } from '@/server/firm';
 import { jsonOrNull } from '@/server/json';
 import { requireSession } from '@/server/apiAuth';
 import { badRequest, parseBody } from '@/lib/apiRoute';
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
     const client = await prisma.client.create({
       data: {
         name: newClientName.trim(),
+        firmId: await currentFirmId(),
         email: newClientEmail || null,
         phone: newClientPhone || null,
         billingAddress: newClientAddress || null,
@@ -64,6 +66,7 @@ export async function POST(req: NextRequest) {
     data: {
       ...rest,
       clientId: resolvedClientId,
+      firmId: await currentFirmId(),
       projectTypeId,
       designFeeStructureId,
       procurementFeeStructureId,

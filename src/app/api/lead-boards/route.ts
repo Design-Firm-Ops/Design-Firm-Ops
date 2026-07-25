@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
+import { currentFirmId } from '@/server/firm';
 import { nextOrder } from '@/server/order';
 import { requireSession } from '@/server/apiAuth';
 import { conflict, parseBody } from '@/lib/apiRoute';
@@ -27,8 +28,9 @@ export async function POST(req: NextRequest) {
     return conflict(`You can have at most ${MAX_BOARDS} boards.`);
   }
 
+  const firmId = await currentFirmId();
   const board = await prisma.leadBoard.create({
-    data: { name: data.name, order: await nextOrder(prisma.leadBoard) },
+    data: { name: data.name, firmId, order: await nextOrder(prisma.leadBoard, { firmId }) },
   });
 
   // A brand-new board needs at least one column to be usable.
