@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { getTenantDb } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { forbidden, notFound } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/server/permissions';
@@ -9,7 +9,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const invoice = await prisma.invoice.findUnique({ where: { id: params.id }, select: { type: true } });
+  const db = getTenantDb(session);
+
+  const invoice = await db.invoice.findUnique({ where: { id: params.id }, select: { type: true } });
   if (!invoice) return notFound();
 
   const perms = await resolvePermissions(session);

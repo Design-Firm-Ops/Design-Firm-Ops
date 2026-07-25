@@ -3,6 +3,7 @@ import { authOptions } from '@/server/auth';
 import { listVisibleResources } from '@/server/queries/resources';
 import { listUsers } from '@/server/queries/settings';
 import { isAdmin } from '@/lib/permissions';
+import { requireFirmId } from '@/lib/tenant';
 import AdminBrowser from './AdminBrowser';
 
 export const dynamic = 'force-dynamic';
@@ -11,10 +12,11 @@ export default async function AdministrationPage() {
   const session = await getServerSession(authOptions);
   const admin = isAdmin(session);
   const currentUserId = session!.user.id;
+  const firmId = requireFirmId(session);
 
   const [{ rows: resourceRows, folderPermissions }, users] = await Promise.all([
-    listVisibleResources({ userId: currentUserId, isAdmin: admin }),
-    listUsers(),
+    listVisibleResources({ userId: currentUserId, isAdmin: admin, firmId }),
+    listUsers(firmId),
   ]);
 
   return (

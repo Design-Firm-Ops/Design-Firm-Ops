@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { getTenantDb } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { forbidden, notFound, ok } from '@/lib/apiRoute';
 import { removeQuietly } from '@/server/storage';
@@ -9,7 +9,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const document = await prisma.document.findUnique({ where: { id: params.id } });
+  const db = getTenantDb(session);
+
+  const document = await db.document.findUnique({ where: { id: params.id } });
   if (!document) return notFound();
 
   const perms = await resolvePermissions(session);
@@ -24,6 +26,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
   await removeQuietly('documents', document.storagePath);
 
-  await prisma.document.delete({ where: { id: params.id } });
+  await db.document.delete({ where: { id: params.id } });
   return ok();
 }

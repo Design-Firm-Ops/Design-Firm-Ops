@@ -1,3 +1,6 @@
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/server/auth';
+import { requireFirmId } from '@/lib/tenant';
 import Link from 'next/link';
 import { listProjects } from '@/server/queries/projects';
 import { isProjectStatus } from '@/lib/domain';
@@ -18,9 +21,12 @@ export default async function ProjectsPage({
 }: {
   searchParams: { status?: string };
 }) {
+  const session = await getServerSession(authOptions);
+  const firmId = requireFirmId(session);
+
   const status = searchParams.status ?? 'ACTIVE';
 
-  const projects = await listProjects(isProjectStatus(status) ? status : 'ALL');
+  const projects = await listProjects(firmId, isProjectStatus(status) ? status : 'ALL');
 
   return (
     <div>

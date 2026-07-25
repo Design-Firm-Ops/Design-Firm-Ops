@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
-import { currentFirmId } from '@/server/firm';
+import { tenantContext } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { forbidden, parseBody } from '@/lib/apiRoute';
 import { vendorSchema } from '@/lib/validation';
@@ -51,14 +50,18 @@ export async function GET() {
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
+  const { db, firmId } = tenantContext(session);
+
   const perms = await resolvePermissions(session);
-  const vendors = await prisma.vendor.findMany({ select: VENDOR_SELECT, orderBy: { name: 'asc' } });
+  const vendors = await db.vendor.findMany({ select: VENDOR_SELECT, orderBy: { name: 'asc' } });
   return NextResponse.json(vendors.map((v) => toClientVendor(v, perms.vendorCredentials)));
 }
 
 export async function POST(req: NextRequest) {
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
+
+  const { db, firmId } = tenantContext(session);
 
   const { data, response } = await parseBody(req, vendorSchema);
   if (response) return response;
@@ -73,10 +76,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const vendor = await prisma.vendor.create({
+  const vendor = await db.vendor.create({
     data: {
       ...rest,
-      firmId: await currentFirmId(),
+      firmId: firmId,
       offerings: { connect: offerings.map((id) => ({ id })) },
       tradeAccountPasswordEncrypted: tradeAccountPassword ? encryptSecret(tradeAccountPassword) : null,
     },

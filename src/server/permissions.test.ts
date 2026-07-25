@@ -4,18 +4,15 @@ import { resolvePermissions } from '@/server/permissions';
 
 vi.mock('@/server/prisma', () => ({ prisma: prismaMock }));
 
-// Tenancy is not on the session yet (DES-#2), so the firm is resolved by
-// `currentFirmId()`. Stub it: these tests are about the find-or-create
-// behaviour, not about how the firm is discovered.
 const FIRM = 'firm-1';
-vi.mock('@/server/firm', () => ({ currentFirmId: async () => FIRM }));
+
 
 
 // The policy itself is covered without a database in lib/permissions.test.ts.
 // This covers only the loading half: which rows it fetches, and for whom.
 
-const designer = { user: { id: 'u1', role: 'DESIGNER' } } as never;
-const admin = { user: { id: 'u2', role: 'ADMIN' } } as never;
+const designer = { user: { id: 'u1', role: 'DESIGNER', firmId: FIRM } } as never;
+const admin = { user: { id: 'u2', role: 'ADMIN', firmId: FIRM } } as never;
 
 beforeEach(() => {
   prismaMock.reset();
@@ -62,13 +59,16 @@ describe('resolvePermissions', () => {
     expect(perms.procurement).toBe(true);
   });
 
-  // A signed-out request must land on the most restrictive answer, not crash.
-  it('treats a null session as a designer with no override', async () => {
-    prismaMock.settings.findUnique.mockResolvedValue(null);
+  // A signed-out request now fails closed rather than resolving to designer
+  // defaults — those defaults still grant procurement, documents and invoices,
+  // which is not an answer a session with no tenant should get.
+  it('refuses a session with no firm rather than falling back to defaults', async () => {
+    await expect(resolvePermissions(null)).rejects.toThrow(/no firm/i);
+    expect(prismaMock.settings.findUnique).not.toHaveBeenCalled();
+  });
 
-    const perms = await resolvePermissions(null);
-    expect(perms.isAdmin).toBe(false);
-    expect(perms.financials).toBe(false);
-    expect(prismaMock.userPermissionOverride.findUnique).not.toHaveBeenCalled();
+  it('refuses a super-admin, who belongs to no firm', async () => {
+    const superAdmin = { user: { id: 'u3', role: 'SUPER_ADMIN', firmId: null } } as never;
+    await expect(resolvePermissions(superAdmin)).rejects.toThrow(/platform operator/i);
   });
 });

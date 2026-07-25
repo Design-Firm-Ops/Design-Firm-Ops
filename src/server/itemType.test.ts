@@ -4,11 +4,8 @@ import { generateUniquePrefix, findOrCreateItemType } from '@/server/itemType';
 
 vi.mock('@/server/prisma', () => ({ prisma: prismaMock }));
 
-// Tenancy is not on the session yet (DES-#2), so the firm is resolved by
-// `currentFirmId()`. Stub it: these tests are about the find-or-create
-// behaviour, not about how the firm is discovered.
 const FIRM = 'firm-1';
-vi.mock('@/server/firm', () => ({ currentFirmId: async () => FIRM }));
+
 
 
 // Prefixes end up in the tag on every line item ("TA-1", "SC-3"), and two
@@ -93,7 +90,7 @@ describe('findOrCreateItemType', () => {
 
   it('reuses an existing type under the same category', async () => {
     prismaMock.itemTypeOption.findUnique.mockResolvedValue({ id: 'it-1' });
-    expect(await findOrCreateItemType('Lighting', 'Sconce')).toBe('it-1');
+    expect(await findOrCreateItemType('Lighting', 'Sconce', FIRM)).toBe('it-1');
     expect(prismaMock.itemTypeOption.create).not.toHaveBeenCalled();
   });
 
@@ -104,7 +101,7 @@ describe('findOrCreateItemType', () => {
     prismaMock.itemTypeOption.aggregate.mockResolvedValue({ _max: { order: 1 } });
     prismaMock.itemTypeOption.create.mockResolvedValue({ id: 'it-new' });
 
-    expect(await findOrCreateItemType('Lighting', 'Sconce')).toBe('it-new');
+    expect(await findOrCreateItemType('Lighting', 'Sconce', FIRM)).toBe('it-new');
     const created = prismaMock.itemTypeOption.create.mock.calls[0][0] as {
       data: { tagPrefix: string; category: string; name: string; order: number };
     };
@@ -115,7 +112,7 @@ describe('findOrCreateItemType', () => {
 
   it('trims both category and name', async () => {
     prismaMock.itemTypeOption.findUnique.mockResolvedValue({ id: 'it-1' });
-    await findOrCreateItemType('  Lighting  ', '  Sconce  ');
+    await findOrCreateItemType('  Lighting  ', '  Sconce  ', FIRM);
     expect(prismaMock.itemTypeOption.findUnique).toHaveBeenCalledWith({
       where: { firmId_category_name: { firmId: FIRM, category: 'Lighting', name: 'Sconce' } },
     });
@@ -123,7 +120,7 @@ describe('findOrCreateItemType', () => {
 
   it('needs both a category and a name', async () => {
     for (const [category, name] of [['', 'Sconce'], ['Lighting', ''], [null, null], ['Lighting', '   ']] as const) {
-      expect(await findOrCreateItemType(category, name)).toBeNull();
+      expect(await findOrCreateItemType(category, name, FIRM)).toBeNull();
     }
     expect(prismaMock.itemTypeOption.findUnique).not.toHaveBeenCalled();
   });

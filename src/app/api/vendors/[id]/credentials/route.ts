@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { getTenantDb } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { forbidden, notFound } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/server/permissions';
@@ -10,12 +10,14 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
+  const db = getTenantDb(session);
+
   const perms = await resolvePermissions(session);
   if (!perms.vendorCredentials) {
     return forbidden('You do not have permission to view trade account credentials');
   }
 
-  const vendor = await prisma.vendor.findUnique({
+  const vendor = await db.vendor.findUnique({
     where: { id: params.id },
     select: { tradeAccountUsername: true, tradeAccountPasswordEncrypted: true, tradeAccountNotes: true },
   });

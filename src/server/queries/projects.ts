@@ -4,28 +4,28 @@ import type { ProjectStatus } from '@/lib/domain';
 // Project reads.
 
 /** The projects list, optionally narrowed to one status ("ALL" means no filter). */
-export function listProjects(status: ProjectStatus | 'ALL') {
+export function listProjects(firmId: string, status: ProjectStatus | 'ALL') {
   return prisma.project.findMany({
-    where: status === 'ALL' ? {} : { status },
+    where: status === 'ALL' ? { firmId } : { firmId, status },
     include: { client: true },
     orderBy: { createdAt: 'desc' },
   });
 }
 
-export function listActiveProjects() {
+export function listActiveProjects(firmId: string) {
   return prisma.project.findMany({
-    where: { status: 'ACTIVE' },
+    where: { firmId, status: 'ACTIVE' },
     select: { id: true, name: true },
     orderBy: { name: 'asc' },
   });
 }
 
 /** The lookup lists the "new project" form needs to populate its dropdowns. */
-export function getNewProjectFormOptions() {
+export function getNewProjectFormOptions(firmId: string) {
   return Promise.all([
-    prisma.client.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
-    prisma.projectType.findMany({ orderBy: { name: 'asc' }, select: { name: true } }),
-    prisma.feeStructureOption.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
+    prisma.client.findMany({ where: { firmId }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    prisma.projectType.findMany({ where: { firmId }, orderBy: { name: 'asc' }, select: { name: true } }),
+    prisma.feeStructureOption.findMany({ where: { firmId }, orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
   ]).then(([clients, projectTypes, feeStructureOptions]) => ({ clients, projectTypes, feeStructureOptions }));
 }
 
@@ -33,9 +33,9 @@ export function getNewProjectFormOptions() {
  * A whole project with everything its detail page renders. One question, one
  * round of includes — the page shouldn't be assembling this graph itself.
  */
-export function getProjectDetail(id: string) {
-  return prisma.project.findUnique({
-    where: { id },
+export function getProjectDetail(id: string, firmId: string) {
+  return prisma.project.findFirst({
+    where: { id, firmId },
     include: {
       client: { include: { contacts: { orderBy: { order: 'asc' } } } },
       projectType: true,
@@ -62,14 +62,14 @@ export function getProjectDetail(id: string) {
 }
 
 /** The lookup lists the project detail page needs alongside the project itself. */
-export function getProjectDetailOptions() {
+export function getProjectDetailOptions(firmId: string) {
   return Promise.all([
-    prisma.vendor.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
-    prisma.projectType.findMany({ orderBy: { name: 'asc' }, select: { name: true } }),
-    prisma.feeStructureOption.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
-    prisma.itemTypeOption.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
-    prisma.itemFieldDef.findMany({ orderBy: { order: 'asc' } }),
-    prisma.projectFieldDef.findMany({ orderBy: { order: 'asc' } }),
+    prisma.vendor.findMany({ where: { firmId }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    prisma.projectType.findMany({ where: { firmId }, orderBy: { name: 'asc' }, select: { name: true } }),
+    prisma.feeStructureOption.findMany({ where: { firmId }, orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
+    prisma.itemTypeOption.findMany({ where: { firmId }, orderBy: [{ order: 'asc' }, { name: 'asc' }] }),
+    prisma.itemFieldDef.findMany({ where: { firmId }, orderBy: { order: 'asc' } }),
+    prisma.projectFieldDef.findMany({ where: { firmId }, orderBy: { order: 'asc' } }),
   ]).then(([vendors, projectTypes, feeStructureOptions, itemTypeOptions, itemFieldDefs, projectFieldDefs]) => ({
     vendors,
     projectTypes,

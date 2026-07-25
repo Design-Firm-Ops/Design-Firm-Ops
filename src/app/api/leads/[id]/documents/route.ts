@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { tenantContext } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { badRequest } from '@/lib/apiRoute';
 import { storage, storagePath } from '@/server/storage';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const documents = await prisma.document.findMany({ where: { leadId: params.id }, orderBy: { uploadedAt: 'desc' } });
+  const { db, firmId } = tenantContext(session);
+
+  const documents = await db.document.findMany({ where: { leadId: params.id }, orderBy: { uploadedAt: 'desc' } });
   const rows = await Promise.all(
     documents.map(async (d) => ({
       id: d.id,
@@ -21,8 +23,10 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
+
+  const { db, firmId } = tenantContext(session);
 
   const form = await req.formData();
   const file = form.get('file');
@@ -38,8 +42,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: `Storage upload failed: ${message}` }, { status: 502 });
   }
 
-  const document = await prisma.document.create({
-    data: { leadId: params.id, type: 'OTHER', filename: file.name, storagePath: path },
+  const document = await db.document.create({
+    data: { leadId: params.id, type: 'OTHER', filename: file.name, storagePath: path, firmId },
   });
 
   return NextResponse.json(document, { status: 201 });

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
-import { currentFirmId } from '@/server/firm';
+import { tenantContext } from '@/server/tenantDb';
 import { jsonOrNull } from '@/server/json';
 import { requireSession } from '@/server/apiAuth';
 import { badRequest, parseBody } from '@/lib/apiRoute';
@@ -10,10 +9,12 @@ import { findOrCreateFeeStructureOption } from '@/server/feeStructure';
 import { DEFAULT_PROCUREMENT_LISTS, DEFAULT_DOCUMENT_FOLDERS } from '@/lib/procurement';
 
 export async function GET() {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const projects = await prisma.project.findMany({
+  const { db, firmId } = tenantContext(session);
+
+  const projects = await db.project.findMany({
     include: { client: true },
     orderBy: { createdAt: 'desc' },
   });
@@ -21,8 +22,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
+
+  const { db, firmId } = tenantContext(session);
 
   const { data, response } = await parseBody(req, projectSchema);
   if (response) return response;
@@ -43,10 +46,10 @@ export async function POST(req: NextRequest) {
 
   let resolvedClientId = clientId;
   if (!resolvedClientId && newClientName?.trim()) {
-    const client = await prisma.client.create({
+    const client = await db.client.create({
       data: {
         name: newClientName.trim(),
-        firmId: await currentFirmId(),
+        firmId: firmId,
         email: newClientEmail || null,
         phone: newClientPhone || null,
         billingAddress: newClientAddress || null,
@@ -58,15 +61,15 @@ export async function POST(req: NextRequest) {
     return badRequest('A client is required — pick one or fill in the new client fields.');
   }
 
-  const projectTypeId = await findOrCreateProjectType(projectType);
-  const designFeeStructureId = await findOrCreateFeeStructureOption(designFeeStructure, 'DESIGN_FEE');
-  const procurementFeeStructureId = await findOrCreateFeeStructureOption(procurementFeeStructure, 'PROCUREMENT');
+  const projectTypeId = await findOrCreateProjectType(projectType, firmId);
+  const designFeeStructureId = await findOrCreateFeeStructureOption(designFeeStructure, 'DESIGN_FEE', firmId);
+  const procurementFeeStructureId = await findOrCreateFeeStructureOption(procurementFeeStructure, 'PROCUREMENT', firmId);
 
-  const project = await prisma.project.create({
+  const project = await db.project.create({
     data: {
       ...rest,
       clientId: resolvedClientId,
-      firmId: await currentFirmId(),
+      firmId: firmId,
       projectTypeId,
       designFeeStructureId,
       procurementFeeStructureId,
@@ -75,11 +78,11 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  await prisma.procurementList.createMany({
-    data: DEFAULT_PROCUREMENT_LISTS.map((name, order) => ({ projectId: project.id, name, order })),
+  await db.procurementList.createMany({
+    data: DEFAULT_PROCUREMENT_LISTS.map((name, order) => ({ projectId: project.id, name, order, firmId })),
   });
-  await prisma.projectDocumentFolder.createMany({
-    data: DEFAULT_DOCUMENT_FOLDERS.map((name, order) => ({ projectId: project.id, name, order })),
+  await db.projectDocumentFolder.createMany({
+    data: DEFAULT_DOCUMENT_FOLDERS.map((name, order) => ({ projectId: project.id, name, order, firmId })),
   });
 
   return NextResponse.json(project, { status: 201 });

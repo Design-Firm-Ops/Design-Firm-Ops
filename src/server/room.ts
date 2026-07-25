@@ -7,7 +7,11 @@ import { nextOrder } from '@/server/order';
  * dropdown so re-typing the same room twice can't drift into a typo.
  * Safe to call on every item save; a no-op once the name exists.
  */
-export async function findOrCreateRoom(projectId: string, name: string | undefined | null): Promise<void> {
+export async function findOrCreateRoom(
+  projectId: string,
+  name: string | undefined | null,
+  firmId: string
+): Promise<void> {
   const trimmed = name?.trim();
   if (!trimmed) return;
 
@@ -15,6 +19,6 @@ export async function findOrCreateRoom(projectId: string, name: string | undefin
   if (existing) return;
 
   await prisma.projectRoom.create({
-    data: { projectId, name: trimmed, order: await nextOrder(prisma.projectRoom, { projectId }) },
+    data: { projectId, name: trimmed, firmId, order: await nextOrder(prisma.projectRoom, { projectId }) },
   });
 }

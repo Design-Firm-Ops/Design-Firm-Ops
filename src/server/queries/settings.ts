@@ -1,20 +1,19 @@
 import { prisma } from '@/server/prisma';
-import { currentFirmId } from '@/server/firm';
 
 // Firm settings and user administration reads.
 
-export async function getSettings() {
-  return prisma.settings.findUnique({ where: { firmId: await currentFirmId() } });
+export function getSettings(firmId: string) {
+  return prisma.settings.findUnique({ where: { firmId } });
 }
 
-export function listUsers() {
+export function listUsers(firmId: string) {
   return prisma.user.findMany({
     select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
     orderBy: { createdAt: 'asc' },
   });
 }
 
-export function listDesigners() {
+export function listDesigners(firmId: string) {
   return prisma.user.findMany({
     where: { role: 'DESIGNER' },
     select: { id: true, name: true, email: true },
@@ -22,6 +21,6 @@ export function listDesigners() {
   });
 }
 
-export function listPermissionOverrides() {
-  return prisma.userPermissionOverride.findMany();
+export function listPermissionOverrides(firmId: string) {
+  return prisma.userPermissionOverride.findMany({ where: { firmId } });
 }

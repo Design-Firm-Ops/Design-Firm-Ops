@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { getTenantDb } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { conflict, forbidden, notFound, ok, parseBody } from '@/lib/apiRoute';
 import { resolvePermissions } from '@/server/permissions';
@@ -10,7 +10,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const existing = await prisma.payment.findUnique({ where: { id: params.id } });
+  const db = getTenantDb(session);
+
+  const existing = await db.payment.findUnique({ where: { id: params.id } });
   if (!existing) return notFound();
 
   const perms = await resolvePermissions(session);
@@ -26,14 +28,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const nextInvoiceId = invoiceId !== undefined ? invoiceId || null : existing.invoiceId;
 
   if (nextInvoiceId) {
-    const invoice = await prisma.invoice.findUnique({ where: { id: nextInvoiceId }, select: { status: true } });
+    const invoice = await db.invoice.findUnique({ where: { id: nextInvoiceId }, select: { status: true } });
     if (!invoice) return notFound('Invoice not found');
     if (invoice.status === 'VOID') {
       return conflict('This invoice has been voided — payments cannot be recorded against it');
     }
   }
 
-  const payment = await prisma.payment.update({
+  const payment = await db.payment.update({
     where: { id: params.id },
     data: {
       ...rest,
@@ -53,7 +55,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const payment = await prisma.payment.findUnique({ where: { id: params.id } });
+  const db = getTenantDb(session);
+
+  const payment = await db.payment.findUnique({ where: { id: params.id } });
   if (!payment) return notFound();
 
   const perms = await resolvePermissions(session);
@@ -62,7 +66,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     return forbidden('You do not have permission to delete this payment');
   }
 
-  await prisma.payment.delete({ where: { id: params.id } });
+  await db.payment.delete({ where: { id: params.id } });
 
   if (payment.invoiceId) {
     await recalculateInvoiceStatus(payment.invoiceId);

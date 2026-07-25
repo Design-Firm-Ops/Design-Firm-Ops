@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import { getSettings, listDesigners, listPermissionOverrides, listUsers } from '@/server/queries/settings';
 import { isAdmin } from '@/lib/permissions';
+import { requireFirmId } from '@/lib/tenant';
 import SettingsForm from './SettingsForm';
 import PermissionsManager from './PermissionsManager';
 import UsersManager from './UsersManager';
@@ -11,16 +12,17 @@ export const dynamic = 'force-dynamic';
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
   const admin = isAdmin(session);
+  const firmId = requireFirmId(session);
 
-  const settings = await getSettings();
+  const settings = await getSettings(firmId);
 
   let usersSection = null;
   let permissionsSection = null;
   if (admin) {
     const [allUsers, designers, overrides] = await Promise.all([
-      listUsers(),
-      listDesigners(),
-      listPermissionOverrides(),
+      listUsers(firmId),
+      listDesigners(firmId),
+      listPermissionOverrides(firmId),
     ]);
 
     usersSection = (

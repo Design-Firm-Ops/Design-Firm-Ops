@@ -41,20 +41,20 @@ function toVendorRow({ tradeAccountPasswordEncrypted, ...vendor }: VendorRecord,
   };
 }
 
-export async function listVendors(canViewCredentials: boolean) {
-  const vendors = await prisma.vendor.findMany({ select: VENDOR_FIELDS, orderBy: { name: 'asc' } });
+export async function listVendors(firmId: string, canViewCredentials: boolean) {
+  const vendors = await prisma.vendor.findMany({ where: { firmId }, select: VENDOR_FIELDS, orderBy: { name: 'asc' } });
   return vendors.map((vendor) => toVendorRow(vendor, canViewCredentials));
 }
 
-export async function getVendor(id: string, canViewCredentials: boolean) {
-  const vendor = await prisma.vendor.findUnique({ where: { id }, select: VENDOR_FIELDS });
+export async function getVendor(id: string, firmId: string, canViewCredentials: boolean) {
+  const vendor = await prisma.vendor.findFirst({ where: { id, firmId }, select: VENDOR_FIELDS });
   return vendor ? toVendorRow(vendor, canViewCredentials) : null;
 }
 
-export function listOfferings() {
-  return prisma.offering.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] });
+export function listOfferings(firmId: string) {
+  return prisma.offering.findMany({ where: { firmId }, orderBy: [{ order: 'asc' }, { name: 'asc' }] });
 }
 
-export function listItemTypeOptions() {
-  return prisma.itemTypeOption.findMany({ orderBy: [{ order: 'asc' }, { name: 'asc' }] });
+export function listItemTypeOptions(firmId: string) {
+  return prisma.itemTypeOption.findMany({ where: { firmId }, orderBy: [{ order: 'asc' }, { name: 'asc' }] });
 }

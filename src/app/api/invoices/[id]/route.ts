@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { getTenantDb } from '@/server/tenantDb';
 import { jsonOrNull } from '@/server/json';
 import { requireSession } from '@/server/apiAuth';
 import { conflict, forbidden, notFound, parseBody } from '@/lib/apiRoute';
@@ -7,10 +7,12 @@ import { resolvePermissions } from '@/server/permissions';
 import { invoiceUpdateSchema } from '@/lib/validation';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const invoice = await prisma.invoice.findUnique({ where: { id: params.id }, include: { items: true } });
+  const db = getTenantDb(session);
+
+  const invoice = await db.invoice.findUnique({ where: { id: params.id }, include: { items: true } });
   if (!invoice) return notFound();
   return NextResponse.json(invoice);
 }
@@ -19,7 +21,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const existing = await prisma.invoice.findUnique({ where: { id: params.id } });
+  const db = getTenantDb(session);
+
+  const existing = await db.invoice.findUnique({ where: { id: params.id } });
   if (!existing) return notFound();
 
   const perms = await resolvePermissions(session);
@@ -37,7 +41,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const { dueDate, columnConfig, ...rest } = data;
 
-  const invoice = await prisma.invoice.update({
+  const invoice = await db.invoice.update({
     where: { id: params.id },
     data: {
       ...rest,

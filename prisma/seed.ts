@@ -97,7 +97,7 @@ async function seedPipelineStages(firmId: string) {
 
   const stages = ['New Lead', 'Contacted', 'Proposal Sent', 'Won', 'Lost'];
   for (const [i, name] of stages.entries()) {
-    await prisma.pipelineStage.create({ data: { name, order: i, boardId: board.id } });
+    await prisma.pipelineStage.create({ data: { name, order: i, boardId: board.id, firmId } });
   }
   console.log(`  pipeline stages: ${stages.join(', ')}`);
 }
@@ -300,14 +300,14 @@ async function seedDemoProject(firmId: string) {
 
   const procurementLists = await Promise.all(
     ['Lighting', 'Furniture', 'Decor', 'Materials', 'Other Merchandise'].map((name, order) =>
-      prisma.procurementList.create({ data: { projectId: project.id, name, order } })
+      prisma.procurementList.create({ data: { projectId: project.id, name, order, firmId } })
     )
   );
   const lightingList = procurementLists[0];
 
   await prisma.projectDocumentFolder.createMany({
     data: ['Outside Design Documents', 'Notes and Markups', 'Precedent Images', 'Presentations', 'Drawings'].map(
-      (name, order) => ({ projectId: project.id, name, order })
+      (name, order) => ({ projectId: project.id, name, order, firmId })
     ),
   });
 
@@ -383,7 +383,7 @@ async function seedDemoProject(firmId: string) {
   // A design fee charge/payment so the overview's Design Fee ledger
   // has something to show out of the box.
   await prisma.designFeeCharge.create({
-    data: { projectId: project.id, description: 'Design fee — phase 1', amount: '4500.00', date: new Date('2025-04-15') },
+    data: { projectId: project.id, firmId, description: 'Design fee — phase 1', amount: '4500.00', date: new Date('2025-04-15') },
   });
   await prisma.payment.create({
     data: { projectId: project.id, firmId, category: 'DESIGN_FEE', amount: '2000.00', method: 'ACH', date: new Date('2025-04-20') },

@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
+import { getTenantDb } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 
 /** Items previously linked to this vendor, across all projects — lets a vendor's history follow it. */
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const { unauthorized } = await requireSession();
+  const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
 
-  const items = await prisma.item.findMany({
+  const db = getTenantDb(session);
+
+  const items = await db.item.findMany({
     where: { vendorId: params.id },
     select: {
       id: true,

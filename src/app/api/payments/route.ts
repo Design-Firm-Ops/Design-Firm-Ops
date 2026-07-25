@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/server/prisma';
-import { projectFirmId } from '@/server/firm';
+import { tenantContext } from '@/server/tenantDb';
 import { requireSession } from '@/server/apiAuth';
 import { conflict, forbidden, notFound, parseBody } from '@/lib/apiRoute';
 import { paymentSchema } from '@/lib/validation';
@@ -10,6 +9,8 @@ import { recalculateInvoiceStatus } from '@/server/invoiceStatus';
 export async function POST(req: NextRequest) {
   const { session, unauthorized } = await requireSession();
   if (unauthorized) return unauthorized;
+
+  const { db, firmId } = tenantContext(session);
 
   const { data, response } = await parseBody(req, paymentSchema);
   if (response) return response;
@@ -23,19 +24,19 @@ export async function POST(req: NextRequest) {
   const { invoiceId, date, ...rest } = data;
 
   if (invoiceId) {
-    const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId }, select: { status: true } });
+    const invoice = await db.invoice.findUnique({ where: { id: invoiceId }, select: { status: true } });
     if (!invoice) return notFound('Invoice not found');
     if (invoice.status === 'VOID') {
       return conflict('This invoice has been voided — payments cannot be recorded against it');
     }
   }
 
-  const payment = await prisma.payment.create({
+  const payment = await db.payment.create({
     data: {
       ...rest,
       invoiceId: invoiceId || null,
       date: date ? new Date(date) : new Date(),
-      firmId: await projectFirmId(rest.projectId),
+      firmId: firmId,
     },
   });
 

@@ -1,4 +1,5 @@
 import { getServerSession } from 'next-auth';
+import { requireFirmId } from '@/lib/tenant';
 import { authOptions } from '@/server/auth';
 import { listOfferings, listVendors } from '@/server/queries/vendors';
 import { resolvePermissions } from '@/server/permissions';
@@ -8,11 +9,12 @@ export const dynamic = 'force-dynamic';
 
 export default async function VendorsPage() {
   const session = await getServerSession(authOptions);
+  const firmId = requireFirmId(session);
   const perms = await resolvePermissions(session);
 
   const [vendors, offerings] = await Promise.all([
-    listVendors(perms.vendorCredentials),
-    listOfferings(),
+    listVendors(firmId, perms.vendorCredentials),
+    listOfferings(firmId),
   ]);
 
   return (
