@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { UNSCOPED_MODELS } from '@/server/tenantDb';
-import { UNSCOPED_MODEL_NAMES } from '@/lib/isolation';
+import { UNSCOPED_MODELS, PLATFORM_ONLY_MODELS } from '@/server/tenantDb';
+import { UNSCOPED_MODEL_NAMES, PLATFORM_ONLY_MODEL_NAMES } from '@/lib/isolation';
 
 // Structural half of the isolation gate.
 //
@@ -24,17 +24,40 @@ const SRC = walk('src').filter((f) => !f.includes('.test.'));
 const ROUTES = walk('src/app/api').filter((f) => f.endsWith('route.ts'));
 
 describe('the tenant client is the only way into tenant data', () => {
-  it('every API route uses the tenant-scoped client', () => {
+  it('every API route goes through a guarded client', () => {
     // NextAuth's handler is the one exception: it authenticates, and runs
     // before any tenant exists to scope to.
     const AUTH_HANDLER = join('src', 'app', 'api', 'auth', '[...nextauth]', 'route.ts');
+    const ADMIN_API = join('src', 'app', 'api', 'admin');
 
     const unscoped = ROUTES.filter((f) => f !== AUTH_HANDLER).filter((f) => {
       const src = readFileSync(f, 'utf8');
+
+      // /api/admin routes are cross-firm by nature (DES-27's suspend/cancel),
+      // so they satisfy this by going through the platform client instead —
+      // which carries its own SUPER_ADMIN check. Widened rather than exempted:
+      // a route using *neither* client still fails, wherever it lives.
+      if (f.startsWith(ADMIN_API)) return !/getPlatformDb/.test(src);
+
       return !/tenantContext|getTenantDb/.test(src);
     });
 
-    expect(unscoped, 'these routes do not go through the tenant client').toEqual([]);
+    expect(unscoped, 'these routes reach the database without a guarded client').toEqual([]);
+  });
+
+  // The console's own routes must not quietly fall back to the tenant client:
+  // an operator has no firm, so it would throw — and reaching for it signals
+  // the route was written against the wrong model of who is calling.
+  it('admin API routes use the operator guard, not the firm one', () => {
+    const adminRoutes = ROUTES.filter((f) => f.startsWith(join('src', 'app', 'api', 'admin')));
+    expect(adminRoutes.length, 'no admin routes found — has the path changed?').toBeGreaterThan(0);
+
+    const wrongGuard = adminRoutes.filter((f) => {
+      const src = readFileSync(f, 'utf8');
+      return !/requireOperator/.test(src) || /tenantContext|getTenantDb/.test(src);
+    });
+
+    expect(wrongGuard, 'these admin routes are guarded as if a firm were calling').toEqual([]);
   });
 
   it('no route imports the raw prisma client', () => {
@@ -73,11 +96,16 @@ describe('the tenant client is the only way into tenant data', () => {
 describe('the cross-firm client is reachable from one place only', () => {
   const PLATFORM_CLIENT = /from '@\/server\/platformDb'/;
   const ADMIN = join('src', 'app', 'admin');
+  // The console's own API routes, listed precisely rather than as all of
+  // src/app/api — widening this to the whole API directory would retire the
+  // guard rather than adjust it.
+  const ADMIN_API = join('src', 'app', 'api', 'admin');
   const SERVER = join('src', 'server');
+  const ALLOWED = [ADMIN, ADMIN_API, SERVER];
 
   it('only the /admin console and src/server import it', () => {
     const importers = SRC.filter((f) => PLATFORM_CLIENT.test(readFileSync(f, 'utf8'))).filter(
-      (f) => !f.startsWith(ADMIN) && !f.startsWith(SERVER)
+      (f) => !ALLOWED.some((dir) => f.startsWith(dir))
     );
 
     expect(
@@ -123,7 +151,7 @@ describe('the scoped-model list stays honest', () => {
 
     for (const match of schema.matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)) {
       const [, name, body] = match;
-      if (UNSCOPED_MODELS.has(name)) continue;
+      if (UNSCOPED_MODELS.has(name) || PLATFORM_ONLY_MODELS.has(name)) continue;
       if (!/^\s+firmId\s/m.test(body)) unscoped.push(name);
     }
 
@@ -135,13 +163,33 @@ describe('the scoped-model list stays honest', () => {
     ).toEqual([]);
   });
 
-  // The pure module and the server module each hold an exemption list; they
+  // The pure module and the server module each hold the exemption lists; they
   // must agree, or the rules and the enforcement drift apart.
   it('the pure and server exemption lists agree', () => {
     expect([...UNSCOPED_MODELS].sort()).toEqual([...UNSCOPED_MODEL_NAMES].sort());
+    expect([...PLATFORM_ONLY_MODELS].sort()).toEqual([...PLATFORM_ONLY_MODEL_NAMES].sort());
   });
 
-  it('exempts only the tenant root', () => {
+  // "Exempt" means two different things, and conflating them is how a table
+  // ends up both unfiltered and reachable (DES-27). Each bucket is pinned to
+  // its members so adding a third has to be a deliberate edit here, with a
+  // reason — the point of the original "exactly one exempt model" assertion,
+  // kept rather than relaxed.
+  it('each exemption is in exactly one bucket, for a stated reason', () => {
+    // Not filtered, and legitimately readable through the platform path.
     expect([...UNSCOPED_MODELS]).toEqual(['Firm']);
+    // Refused outright by the tenant client — a firm may not read these at all.
+    expect([...PLATFORM_ONLY_MODELS]).toEqual(['AuditLog']);
+
+    const overlap = [...UNSCOPED_MODELS].filter((m) => PLATFORM_ONLY_MODELS.has(m));
+    expect(overlap, 'a model cannot be both unfiltered and forbidden').toEqual([]);
+  });
+
+  // The distinction only means anything if the tenant client actually refuses.
+  it('the tenant client refuses a platform-only model', async () => {
+    const { tenantScope } = await import('@/server/tenantDb');
+    const db = tenantScope('firm-1') as unknown as { auditLog: { findMany: () => Promise<unknown> } };
+
+    await expect(db.auditLog.findMany()).rejects.toThrow(/platform-only/i);
   });
 });

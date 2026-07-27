@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FIRM_STATUSES } from '@/lib/domain';
 
 // ---------- Shared field builders ----------
 //
@@ -354,4 +355,11 @@ export const documentFolderSchema = z.object({
 export const documentFolderUpdateSchema = z.object({
   name: z.string().min(1).optional(),
   order: z.number().int().optional(),
+});
+
+// ---------- Platform console (DES-27) ----------
+
+/** The body of a firm status change. The *legality* of the move is `canTransition`. */
+export const firmStatusSchema = z.object({
+  status: z.enum(FIRM_STATUSES),
 });

@@ -55,6 +55,25 @@ describe('LoginPage', () => {
     expect(router.push).not.toHaveBeenCalled();
   });
 
+  // A locked-out firm gets told why — the whole point of DES-27's gate. This
+  // is only safe because the server checks the password first.
+  it('explains a suspended firm rather than blaming the password', async () => {
+    signIn.mockResolvedValue({ error: 'FIRM_SUSPENDED' });
+    renderWithProviders(<LoginPage />);
+    await submit();
+
+    expect(screen.getByText(/suspended/i)).toBeInTheDocument();
+    expect(screen.queryByText(/invalid email or password/i)).not.toBeInTheDocument();
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('explains a canceled firm', async () => {
+    signIn.mockResolvedValue({ error: 'FIRM_CANCELED' });
+    renderWithProviders(<LoginPage />);
+    await submit();
+    expect(screen.getByText(/canceled/i)).toBeInTheDocument();
+  });
+
   // The button must come back so a mistyped password can be retried.
   it('re-enables the form after a failure', async () => {
     signIn.mockResolvedValue({ error: 'CredentialsSignin' });

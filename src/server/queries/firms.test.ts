@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { listFirms } from '@/server/queries/firms';
+import { listFirms, getFirmDetail } from '@/server/queries/firms';
 import { NO_FIRM_FILTERS } from '@/lib/firms';
 
 // A stubbed client, so these pin the *shape* of the queries — that filtering
@@ -97,5 +97,44 @@ describe('listFirms', () => {
 
     expect(rows).toEqual([]);
     expect((db as never as { project: { groupBy: ReturnType<typeof vi.fn> } }).project.groupBy).not.toHaveBeenCalled();
+  });
+});
+
+describe('getFirmDetail', () => {
+  const withUsers = () => {
+    const db = stubDb() as never as Record<string, { findMany: ReturnType<typeof vi.fn> }>;
+    db.user = {
+      findMany: vi.fn().mockResolvedValue([
+        { id: 'u1', name: 'Firm Admin', email: 'a@f.test', role: 'ADMIN', active: true, createdAt: new Date() },
+      ]),
+    };
+    return db as never;
+  };
+
+  it('returns the firm with its people and usage', async () => {
+    const detail = await getFirmDetail(withUsers(), 'f1');
+
+    expect(detail).toMatchObject({ id: 'f1', userCount: 3, projectCount: 2 });
+    expect(detail?.users.map((u) => u.email)).toEqual(['a@f.test']);
+    expect(detail?.lastActivityAt).toEqual(new Date('2026-06-01T00:00:00Z'));
+  });
+
+  // The detail page must agree with the list, so it narrows the same query
+  // rather than growing a second definition of "usage".
+  it('narrows to the one firm in SQL', async () => {
+    const db = withUsers();
+    await getFirmDetail(db, 'f1');
+
+    expect((db as never as { firm: { findMany: ReturnType<typeof vi.fn> } }).firm.findMany)
+      .toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'f1' } }));
+    expect((db as never as { user: { findMany: ReturnType<typeof vi.fn> } }).user.findMany)
+      .toHaveBeenCalledWith(expect.objectContaining({ where: { firmId: 'f1' } }));
+  });
+
+  it('is null for a firm that does not exist', async () => {
+    const db = withUsers();
+    (db as never as { firm: { findMany: ReturnType<typeof vi.fn> } }).firm.findMany.mockResolvedValue([]);
+
+    expect(await getFirmDetail(db, 'nope')).toBeNull();
   });
 });

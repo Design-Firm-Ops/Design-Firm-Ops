@@ -5,9 +5,12 @@ import { authOptions } from '@/server/auth';
 
 vi.mock('@/server/prisma', () => ({ prisma: prismaMock }));
 
-// The credentials sign-in check. Every rejection path returns null rather than
-// throwing, so a caller can't distinguish "no such user" from "wrong password"
-// — and none of them may accidentally return a user.
+// The credentials sign-in check.
+//
+// Every *credential* rejection returns null rather than throwing, so a caller
+// can't distinguish "no such user" from "wrong password" — and none of them may
+// accidentally return a user. The one path that throws is firm status, which
+// runs only after the password is proven correct; see the DES-27 block below.
 
 type Authorize = (credentials: Record<string, string> | undefined) => Promise<unknown>;
 const authorize = (authOptions.providers[0] as unknown as { options: { authorize: Authorize } }).options.authorize;
@@ -77,7 +80,11 @@ describe('credentials authorize', () => {
   it('normalizes the email so case and padding do not lock people out', async () => {
     prismaMock.user.findUnique.mockResolvedValue(user());
     await authorize({ email: '  MADISON@Example.COM  ', password: PASSWORD });
-    expect(prismaMock.user.findUnique).toHaveBeenCalledWith({ where: { email: 'madison@example.com' } });
+    // Only the `where` is the subject here; what else the query selects is
+    // pinned by the firm-status test below.
+    expect(prismaMock.user.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { email: 'madison@example.com' } })
+    );
   });
 });
 
@@ -102,5 +109,70 @@ describe('session wiring', () => {
     } as never);
     expect((session.user as { id: string; role: string }).id).toBe('u1');
     expect((session.user as { id: string; role: string }).role).toBe('DESIGNER');
+  });
+});
+
+// Firm lifecycle (DES-27). Until now `Firm.status` existed and nothing read
+// it: a suspended firm signed in exactly like an active one.
+describe('firm status gates sign-in', () => {
+  const withFirm = (status: string | null) =>
+    user({ firmId: status ? 'firm-1' : null, firm: status ? { status } : null });
+
+  it('lets an active or trialling firm in', async () => {
+    for (const status of ['ACTIVE', 'TRIAL']) {
+      prismaMock.user.findUnique.mockResolvedValue(withFirm(status));
+      const result = await authorize({ email: 'madison@example.com', password: PASSWORD });
+      expect(result, status).toMatchObject({ id: 'u1' });
+    }
+  });
+
+  it('refuses a suspended firm, saying why', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(withFirm('SUSPENDED'));
+    await expect(
+      authorize({ email: 'madison@example.com', password: PASSWORD })
+    ).rejects.toThrow('FIRM_SUSPENDED');
+  });
+
+  it('refuses a canceled firm, saying why', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(withFirm('CANCELED'));
+    await expect(
+      authorize({ email: 'madison@example.com', password: PASSWORD })
+    ).rejects.toThrow('FIRM_CANCELED');
+  });
+
+  // THE ordering test. "This firm is suspended" is safe to say only because
+  // it comes after the password check — otherwise it would confirm to anyone
+  // guessing an address that the account exists and which firm it's in.
+  it('does not reveal the firm status to someone with the wrong password', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(withFirm('SUSPENDED'));
+    expect(await authorize({ email: 'madison@example.com', password: 'wrong' })).toBeNull();
+  });
+
+  it('does not reveal it for an inactive user either', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(
+      user({ active: false, firmId: 'firm-1', firm: { status: 'SUSPENDED' } })
+    );
+    expect(await authorize({ email: 'madison@example.com', password: PASSWORD })).toBeNull();
+  });
+
+  // The platform operator belongs to no firm — there is no status to judge
+  // them by, and denying them would strand the only account able to lift a
+  // suspension.
+  it('always admits a user with no firm', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(
+      user({ role: 'SUPER_ADMIN', firmId: null, firm: null })
+    );
+    expect(await authorize({ email: 'madison@example.com', password: PASSWORD })).toMatchObject({
+      role: 'SUPER_ADMIN',
+    });
+  });
+
+  it('reads the firm status in the same query as the user', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(withFirm('ACTIVE'));
+    await authorize({ email: 'madison@example.com', password: PASSWORD });
+
+    expect(prismaMock.user.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ include: { firm: { select: { status: true } } } })
+    );
   });
 });

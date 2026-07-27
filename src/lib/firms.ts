@@ -11,6 +11,12 @@ export interface FirmFilters {
   /** Trimmed; empty string means "no search", never a search for "". */
   search: string;
   status: FirmStatus | 'ALL';
+  /**
+   * Narrows to one firm. Not a user-facing filter — it lets the detail page
+   * reuse the list's counts and activity derivation instead of growing a
+   * second, subtly different definition of "usage".
+   */
+  id?: string;
 }
 
 /** Everything, unfiltered — the console's default view. */
@@ -39,6 +45,7 @@ export function parseFirmFilters(params: { q?: string; status?: string }): FirmF
  * assigns cleanly to `Prisma.FirmWhereInput` at the persistence edge.
  */
 export interface FirmListWhere {
+  id?: string;
   status?: FirmStatus;
   name?: { contains: string; mode: 'insensitive' };
 }
@@ -46,6 +53,7 @@ export interface FirmListWhere {
 export function firmListWhere(filters: FirmFilters): FirmListWhere {
   const where: FirmListWhere = {};
 
+  if (filters.id) where.id = filters.id;
   if (filters.status !== 'ALL') where.status = filters.status;
 
   // Case-insensitive and in SQL. Filtering in JS after the fact would work

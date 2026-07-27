@@ -9,7 +9,7 @@ import {
   skipReason,
 } from '@/test/isolationDb';
 import { seedTwoFirms, type SeededFirm } from '@/test/twoFirmFixture';
-import { UNSCOPED_MODEL_NAMES } from '@/lib/isolation';
+import { EXEMPT_MODEL_NAMES } from '@/lib/isolation';
 
 // The tenant-isolation correctness gate (DES-31).
 //
@@ -30,7 +30,7 @@ function tenantModelsFromSchema(): string[] {
   const schema = readFileSync('prisma/schema.prisma', 'utf8');
   return [...schema.matchAll(/^model (\w+) \{/gm)]
     .map((m) => m[1])
-    .filter((name) => !UNSCOPED_MODEL_NAMES.includes(name));
+    .filter((name) => !EXEMPT_MODEL_NAMES.includes(name));
 }
 
 /** Prisma's client property for a model name: `ClientContact` -> `clientContact`. */
@@ -313,6 +313,61 @@ describe.skipIf(!enabled)('tenant isolation (integration)', () => {
       // Both fixtures are ACTIVE, so this is the filter proving it narrows.
       expect(await listFirms(platform, { search: '', status: 'ACTIVE' })).toHaveLength(2);
       expect(await listFirms(platform, { search: '', status: 'SUSPENDED' })).toHaveLength(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // Firm lifecycle (DES-27) — the first console action that *writes*
+  // ---------------------------------------------------------------------
+
+  describe('suspending a firm', () => {
+    const operator = { user: { id: 'op', email: 'op@x.test', role: 'SUPER_ADMIN', firmId: null } } as never;
+
+    it('affects that firm only, and leaves the other able to work', async () => {
+      const { getPlatformDb } = await import('@/server/platformDb');
+      const { firmDenialFor } = await import('@/server/firmGate');
+      const platform = getPlatformDb(operator);
+
+      await platform.firm.update({ where: { id: a.firmId }, data: { status: 'SUSPENDED' } });
+
+      const sessionFor = (firmId: string) => ({ user: { id: 'u', role: 'ADMIN', firmId } }) as never;
+      expect(await firmDenialFor(sessionFor(a.firmId))).toBe('FIRM_SUSPENDED');
+      expect(await firmDenialFor(sessionFor(b.firmId)), 'firm B was caught in the blast').toBeNull();
+
+      // And the suspended firm's data is untouched — suspension is a status
+      // flip, never a deletion.
+      expect(await dbA.project.count()).toBe(1);
+
+      await platform.firm.update({ where: { id: a.firmId }, data: { status: 'ACTIVE' } });
+      expect(await firmDenialFor(sessionFor(a.firmId))).toBeNull();
+    });
+
+    it('records who did it, against the right firm', async () => {
+      const { getPlatformDb } = await import('@/server/platformDb');
+      const { recordFirmStatusChange } = await import('@/server/audit');
+      const platform = getPlatformDb(operator);
+
+      await recordFirmStatusChange(platform, operator, {
+        firmId: b.firmId,
+        from: 'ACTIVE',
+        to: 'SUSPENDED',
+      });
+
+      const entries = await platform.auditLog.findMany({ where: { firmId: b.firmId } });
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({ actorId: 'op', action: 'firm.suspend' });
+      expect(entries[0].detail).toEqual({ from: 'ACTIVE', to: 'SUSPENDED' });
+
+      // The record belongs to firm B alone.
+      expect(await platform.auditLog.count({ where: { firmId: a.firmId } })).toBe(0);
+    });
+
+    // The audit trail is platform-only: a firm must not be able to read what
+    // was done to it, and the tenant client refuses rather than filtering.
+    it('is not readable through a tenant client at all', async () => {
+      await expect(
+        (dbA as unknown as { auditLog: { findMany: () => Promise<unknown> } }).auditLog.findMany()
+      ).rejects.toThrow(/platform-only/i);
     });
   });
 

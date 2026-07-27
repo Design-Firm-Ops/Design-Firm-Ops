@@ -1066,3 +1066,37 @@ model Settings {
 
   updatedAt DateTime @updatedAt
 }
+
+/// Privileged actions taken from the platform console (DES-27; DES-30 extends
+/// the vocabulary and adds the UI).
+///
+/// Deliberately NOT a tenant-owned table, despite carrying a firmId: that
+/// column is the *target* of an action, not an owner, and a firm must never
+/// read its own audit trail. It's listed in PLATFORM_ONLY_MODELS, so the
+/// tenant client refuses it outright rather than merely leaving it unfiltered
+/// — see src/server/tenantDb.ts.
+///
+/// No foreign keys on purpose. An audit record is a historical fact: a
+/// cascade would let deleting a firm destroy the evidence, and a restrict
+/// would block legitimate cleanup. Ids are recorded as written at the time.
+model AuditLog {
+  id String @id @default(cuid())
+
+  /// The SUPER_ADMIN who performed it.
+  actorId    String
+  actorEmail String
+
+  /// Dotted action name, e.g. "firm.suspend".
+  action String
+
+  /// The firm the action was performed on.
+  firmId String
+
+  /// Action-specific context — for a status change, { from, to }.
+  detail Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([firmId, createdAt])
+  @@index([createdAt])
+}
