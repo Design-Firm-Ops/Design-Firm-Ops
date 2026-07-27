@@ -17,6 +17,7 @@ export default defineConfig({
           name: 'unit',
           environment: 'node',
           include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
+          exclude: ['src/**/*.isolation.test.ts'],
         },
       },
       {
@@ -27,6 +28,23 @@ export default defineConfig({
           environment: 'jsdom',
           include: ['src/**/*.test.tsx'],
           setupFiles: ['./vitest.setup.ts'],
+        },
+      },
+      {
+        // The tenant-isolation correctness gate. Runs the real tenant client
+        // against a real Postgres, so it needs a database and its own timeouts.
+        // It skips (loudly) when DATABASE_URL is absent, which keeps `npm test`
+        // green in a fresh clone — CI is where it is actually enforced.
+        // See plans/DES-31_PLAN.md.
+        resolve: { alias },
+        test: {
+          name: 'isolation',
+          environment: 'node',
+          include: ['src/**/*.isolation.test.ts'],
+          testTimeout: 30_000,
+          hookTimeout: 120_000,
+          // One database, one fixture — parallel files would race on it.
+          fileParallelism: false,
         },
       },
     ],
@@ -44,6 +62,7 @@ export default defineConfig({
       include: ['src/lib/**', 'src/server/**', 'src/components/**'],
       exclude: [
         '**/*.test.*',
+        '**/*.isolation.test.ts',
         'src/test/**',
         // Thin read wrappers over Prisma — no logic of their own to verify.
         'src/server/queries/**',

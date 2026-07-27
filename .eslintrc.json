@@ -34,7 +34,8 @@
   "overrides": [
     {
       "files": [
-        "src/server/**"
+        "src/server/**",
+        "src/test/**"
       ],
       "rules": {
         "no-restricted-imports": "off"
