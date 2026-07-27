@@ -330,3 +330,41 @@ The query modules take raw prisma plus a firmId, so scoping is a *promise each a
 keeps*. The tenant client makes it a *mechanism*. Converting `src/server/queries/*` to take
 the tenant client would make this class of bug impossible rather than merely detected —
 roughly 10 call sites. Out of scope for a bug fix; recommended as its own issue.
+
+---
+
+## Fix: you could deactivate yourself
+
+Reported after review. Deactivation blocks sign-in (`authorize` checks `user.active`), so
+deactivating your own account was an immediate lockout that only *another* administrator
+could undo — and if you were the last one, the existing "at least one active
+administrator" rule caught it, but with a colleague still admin, nothing did. That rule
+protects the **firm**; nothing protected the **person**.
+
+Fixed in both places, because removing a button proves nothing:
+
+- `src/lib/userAdmin.ts` — `isSelfDeactivation`, shared so the UI hides exactly what the
+  server refuses. It fails closed on an unknown actor: a rule that can't identify who is
+  asking must not conclude "not self".
+- `PATCH /api/users/[id]` refuses with 409 before the last-admin check.
+- `UsersManager` renders no deactivate control on your own row; the existing "(you)"
+  marker is what explains its absence.
+
+Verified against a running server with two admins in one firm:
+
+| Request | Result |
+|---|---|
+| Deactivate myself | **409** "You cannot deactivate your own account." |
+| Deactivate a colleague | 200 |
+| Rename myself | 200 |
+| Reactivate the colleague | 200 |
+| Deactivate myself as the sole admin | **409** |
+
+The database confirmed no account was left deactivated by any of it.
+
+### Adjacent case, deliberately not changed
+
+You can still **demote yourself** from ADMIN to DESIGNER while another admin exists
+(verified: 200). That is a different severity — you keep your account and can still sign
+in and work; only another admin can restore the role. Blocking it is a product decision
+rather than a bug fix, so it's left alone and noted here.
