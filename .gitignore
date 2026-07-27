@@ -17,6 +17,9 @@
 # test coverage output
 /coverage
 
+# vitest JSON report used by the CI isolation gate
+isolation-report.json
+
 # misc
 .DS_Store
 *.pem

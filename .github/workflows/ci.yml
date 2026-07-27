@@ -61,18 +61,15 @@ jobs:
       # keeps a fresh clone usable — but in CI a skipped security gate is a
       # failure, not a pass. Run it alone and require that it actually
       # executed tests.
+      #
+      # The result is read from the JSON reporter rather than scraped from the
+      # printed summary: that output carries colour and formatting that differ
+      # between local and CI, and an earlier version of this step reported
+      # "no passing tests" on a run where all 45 passed.
       - name: Assert the isolation gate actually ran
         run: |
-          set -o pipefail
-          npm run test:isolation 2>&1 | tee isolation.log
-          if grep -q "TENANT-ISOLATION SUITE SKIPPED" isolation.log; then
-            echo "::error::The tenant-isolation suite skipped. It is a correctness gate and must run in CI."
-            exit 1
-          fi
-          if ! grep -Eq "Tests +[0-9]+ passed" isolation.log; then
-            echo "::error::The tenant-isolation suite reported no passing tests."
-            exit 1
-          fi
+          npm run test:isolation -- --reporter=json --outputFile=isolation-report.json
+          node scripts/assertIsolationRan.mjs isolation-report.json
 
       - name: Coverage thresholds
         run: npm run test:coverage

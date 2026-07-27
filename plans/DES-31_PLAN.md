@@ -198,3 +198,31 @@ DES-26–30 were blocked on this. The gate is now green and enforced, so they're
 The one part of the issue's scope not covered is impersonation ("bounded and logged"),
 because it doesn't exist yet — it's DES-30. When it lands, its tests belong in this
 suite.
+
+
+---
+
+## Follow-up: the CI gate mis-read its own result
+
+The first CI run failed with *"The tenant-isolation suite reported no passing
+tests"* — on a run where all 45 passed and the summary said so.
+
+The step scraped vitest's printed summary with
+`grep -Eq "Tests +[0-9]+ passed"`. That matches locally, so I could not
+reproduce it; the CI output evidently differs in whitespace or escape codes.
+Chasing the exact difference would have been the wrong fix, because the real
+problem is that a security gate was parsing human-readable output at all.
+
+Now it reads the **JSON reporter** (`--reporter=json --outputFile=`) and asserts
+on counts. The decision lives in `scripts/isolationReport.mjs` as a pure
+function, so it is unit-tested like any other rule — matching the
+`pg.mjs`/`pg.test.ts` precedent. Seven tests cover: green run, broken
+isolation, suite-never-ran, partial skip, unreadable report, breakage
+out-ranking skips, and a report missing counters.
+
+Verified end-to-end through the exact CI command, plus all four failure modes
+by hand.
+
+**A gate that mis-reads its own result is worse than no gate** — it teaches you
+to distrust a red build. That is why the fix is a tested function rather than a
+better regex.
