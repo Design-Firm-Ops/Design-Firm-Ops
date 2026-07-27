@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import NavSearch from './NavSearch';
+import NavLinks from './NavLinks';
 
 const links = [
   { href: '/app/projects', label: 'Projects' },
@@ -14,8 +14,6 @@ const links = [
 ];
 
 export default function Nav({ userName }: { userName?: string | null }) {
-  const pathname = usePathname();
-
   return (
     <header className="border-b border-taupe/40 bg-brown text-cream">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
@@ -24,22 +22,7 @@ export default function Nav({ userName }: { userName?: string | null }) {
           <span className="logo-sub text-gold">Studio Operations</span>
         </Link>
 
-        <nav className="flex flex-wrap items-center gap-1 text-sm">
-          {links.map((link) => {
-            const active = pathname?.startsWith(link.href);
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`rounded-md px-3 py-1.5 transition-colors ${
-                  active ? 'bg-cream text-brown' : 'hover:bg-cream/10'
-                }`}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
-        </nav>
+        <NavLinks links={links} />
 
         <NavSearch />
 

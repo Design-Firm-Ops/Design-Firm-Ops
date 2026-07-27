@@ -58,9 +58,61 @@ describe('the tenant client is the only way into tenant data', () => {
   });
 
   it('page components do not query the database directly', () => {
-    const pages = walk('src/app/app').filter((f) => f.endsWith('page.tsx') || f.endsWith('layout.tsx'));
+    // All of src/app, not just the firm-facing half: the /admin console reads
+    // across firms and must still go through `getPlatformDb`, where the
+    // SUPER_ADMIN check lives.
+    const pages = walk('src/app').filter((f) => f.endsWith('page.tsx') || f.endsWith('layout.tsx'));
     const querying = pages.filter((f) => /from '@\/server\/prisma'/.test(readFileSync(f, 'utf8')));
     expect(querying).toEqual([]);
+  });
+});
+
+// The /admin console is the one place that deliberately reads across firms
+// (DES-26). That makes `platformDb` the single exception to everything above,
+// so it gets guarded the same way the rule it excepts is guarded.
+describe('the cross-firm client is reachable from one place only', () => {
+  const PLATFORM_CLIENT = /from '@\/server\/platformDb'/;
+  const ADMIN = join('src', 'app', 'admin');
+  const SERVER = join('src', 'server');
+
+  it('only the /admin console and src/server import it', () => {
+    const importers = SRC.filter((f) => PLATFORM_CLIENT.test(readFileSync(f, 'utf8'))).filter(
+      (f) => !f.startsWith(ADMIN) && !f.startsWith(SERVER)
+    );
+
+    expect(
+      importers,
+      'these files read across every firm. Firm-facing code must use tenantContext(session).'
+    ).toEqual([]);
+  });
+
+  // Every route into the console has to pass the door, so the door cannot be
+  // something a page merely *may* use.
+  it('every /admin page reaching the database goes through it', () => {
+    const pages = walk(ADMIN).filter((f) => f.endsWith('page.tsx'));
+    const querying = pages.filter((f) => /@\/server\//.test(readFileSync(f, 'utf8')));
+
+    const bypassing = querying.filter((f) => !PLATFORM_CLIENT.test(readFileSync(f, 'utf8')));
+    expect(bypassing, 'these console pages read data without the platform client').toEqual([]);
+  });
+
+  // Two copies of the import policy exist because the console needs one narrow
+  // exception to it. This pins that the exception is only that one — the
+  // console must still be barred from raw prisma, which the DES-33 lesson says
+  // to verify rather than assume.
+  it('the /admin override still bans raw prisma', () => {
+    const config = JSON.parse(readFileSync('.eslintrc.json', 'utf8'));
+    const override = config.overrides.find((o: { files: string[] }) => o.files.includes('src/app/admin/**'));
+
+    expect(override, 'no ESLint override for the /admin console').toBeDefined();
+
+    const groups: string[] = override.rules['no-restricted-imports'][1].patterns.flatMap(
+      (p: { group: string[] }) => p.group
+    );
+    expect(groups).toContain('@/server/prisma');
+    expect(groups, 'the console may import the platform client — that is the exception').not.toContain(
+      '@/server/platformDb'
+    );
   });
 });
 

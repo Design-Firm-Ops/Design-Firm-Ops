@@ -1,4 +1,6 @@
 import { withAuth } from 'next-auth/middleware';
+import { NextResponse } from 'next/server';
+import { isUnder, landingPathFor } from '@/lib/routes';
 
 // Route gating.
 //
@@ -14,11 +16,6 @@ import { withAuth } from 'next-auth/middleware';
 // invoices and vendor credentials. Reaching firm data on a super-admin's
 // behalf is impersonation (DES-#8), and it should have to be explicit rather
 // than a side effect of visiting a URL.
-
-/** True when `pathname` is inside `base` — matches `/base` and `/base/...`, not `/basement`. */
-function isUnder(pathname: string, base: string): boolean {
-  return pathname === base || pathname.startsWith(`${base}/`);
-}
 
 /**
  * Whether a session with `role` may load `pathname`.
@@ -37,14 +34,34 @@ export function isAuthorizedFor(pathname: string, role: string | null | undefine
   return true;
 }
 
-export default withAuth({
-  pages: {
-    signIn: '/login',
+// Two different failures, two different answers.
+//
+// *Signed out* is `authorized: false`, which withAuth turns into the login
+// page with a callbackUrl — the normal flow.
+//
+// *Signed in, wrong area* used to take the same path, and that was a dead end:
+// a super-admin was sent to /app after logging in, bounced off the gate, and
+// landed back on the login form already signed in. So the session is
+// authorized as far as withAuth is concerned, and this function redirects them
+// to their own home instead.
+export default withAuth(
+  function middleware(req) {
+    const role = req.nextauth.token?.role as string | undefined;
+    if (isAuthorizedFor(req.nextUrl.pathname, role)) return NextResponse.next();
+
+    return NextResponse.redirect(new URL(landingPathFor(role), req.url));
   },
-  callbacks: {
-    authorized: ({ token, req }) => isAuthorizedFor(req.nextUrl.pathname, token?.role),
-  },
-});
+  {
+    pages: {
+      signIn: '/login',
+    },
+    callbacks: {
+      // Only "is there a session at all" — the area check happens above, so it
+      // can redirect somewhere useful rather than to the sign-in page.
+      authorized: ({ token }) => !!token,
+    },
+  }
+);
 
 export const config = {
   matcher: ['/app/:path*', '/admin/:path*'],

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, getSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { landingPathFor } from '@/lib/routes';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,14 +23,19 @@ export default function LoginPage() {
       redirect: false,
     });
 
-    setSubmitting(false);
-
     if (result?.error) {
+      setSubmitting(false);
       setError('Invalid email or password.');
       return;
     }
 
-    router.push('/app/projects');
+    // Read the session back rather than guessing: where to go depends on the
+    // role, and a platform operator sent to /app is bounced straight off the
+    // gate in middleware.ts and back to this form.
+    const session = await getSession();
+    setSubmitting(false);
+
+    router.push(landingPathFor(session?.user?.role));
     router.refresh();
   }
 

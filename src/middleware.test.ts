@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { isAuthorizedFor } from '@/middleware';
+import { landingPathFor } from '@/lib/routes';
 
 // The route gate is a security boundary, so every combination of
 // {signed out, designer, admin, super-admin} x {/app, /admin} is pinned.
@@ -69,5 +70,27 @@ describe('path matching', () => {
     expect(isAuthorizedFor('/admin', 'ROOT')).toBe(false);
     // ...but it is still a firm-ish session, so /app remains authenticated-only.
     expect(isAuthorizedFor('/app', 'ROOT')).toBe(true);
+  });
+});
+
+// The property that keeps sign-in from dead-ending.
+//
+// Before DES-26 every role was sent to /app/projects after logging in, so a
+// super-admin was bounced straight back out by the gate above and landed on
+// the login form again — signed in, and unable to get anywhere. Pinning
+// "where we send you" against "where you're allowed" makes that unbuildable
+// rather than merely fixed.
+describe('landing pages agree with the gate', () => {
+  it('sends every role somewhere it is actually allowed', () => {
+    for (const role of ['SUPER_ADMIN', ...FIRM_ROLES]) {
+      const landing = landingPathFor(role);
+      expect(isAuthorizedFor(landing, role), `${role} lands on ${landing}`).toBe(true);
+    }
+  });
+
+  it('never lands an authenticated user back on the login page', () => {
+    for (const role of ['SUPER_ADMIN', ...FIRM_ROLES]) {
+      expect(landingPathFor(role)).not.toBe('/login');
+    }
   });
 });

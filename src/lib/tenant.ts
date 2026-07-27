@@ -60,3 +60,30 @@ export function requireFirmId(session: Session | null | undefined): string {
       : 'This session has no firm.'
   );
 }
+
+/**
+ * The platform operator's user id, or a thrown error.
+ *
+ * The exact complement of `requireFirmId`: that one refuses a super-admin,
+ * this one refuses everybody else. Between them no session can open both
+ * doors, and none opens either by accident — which is what makes "cross-firm
+ * reads go through an explicit path" a checkable claim rather than a habit.
+ *
+ * Returns the id because privileged actions need an actor to attribute them
+ * to (DES-#8's audit log), and the caller shouldn't have to reach back into
+ * the session for it.
+ */
+export function requireSuperAdmin(session: Session | null | undefined): string {
+  if (!isSuperAdmin(session)) {
+    throw new Error('This action requires a platform operator (SUPER_ADMIN).');
+  }
+
+  const id = session?.user?.id;
+  if (!id) {
+    // The role without an identity is a malformed session. Cross-firm access
+    // is the wrong place to be lenient about that.
+    throw new Error('A platform operator session carries no user id.');
+  }
+
+  return id;
+}

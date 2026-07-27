@@ -28,10 +28,20 @@ export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export const USER_ROLES = ['ADMIN', 'DESIGNER'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
+// SUPER_ADMIN is deliberately absent from USER_ROLES: those are the roles a
+// firm can assign, and the platform operator is not one of them.
+
+export const FIRM_STATUSES = ['TRIAL', 'ACTIVE', 'SUSPENDED', 'CANCELED'] as const;
+export type FirmStatus = (typeof FIRM_STATUSES)[number];
+
 export function isDocumentType(value: unknown): value is DocumentType {
   return typeof value === 'string' && (DOCUMENT_TYPES as readonly string[]).includes(value);
 }
 
 export function isProjectStatus(value: unknown): value is ProjectStatus {
   return typeof value === 'string' && (PROJECT_STATUSES as readonly string[]).includes(value);
+}
+
+export function isFirmStatus(value: unknown): value is FirmStatus {
+  return typeof value === 'string' && (FIRM_STATUSES as readonly string[]).includes(value);
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Session } from 'next-auth';
-import { getTenantContext, requireFirmId, isSuperAdmin } from '@/lib/tenant';
+import { getTenantContext, requireFirmId, requireSuperAdmin, isSuperAdmin } from '@/lib/tenant';
 
 function session(user: Partial<Session['user']>): Session {
   return {
@@ -81,5 +81,29 @@ describe('requireFirmId', () => {
 
   it('throws when signed out', () => {
     expect(() => requireFirmId(null)).toThrow(/no firm/i);
+  });
+});
+
+describe('requireSuperAdmin', () => {
+  it('returns the operator’s user id', () => {
+    expect(requireSuperAdmin(superAdmin)).toBe('u1');
+  });
+
+  // The exact complement of requireFirmId: between them, every session can
+  // open one door and no session can open both.
+  it('throws for a firm user, whichever role they hold', () => {
+    expect(() => requireSuperAdmin(firmUser)).toThrow(/platform operator/i);
+    expect(() => requireSuperAdmin(session({ role: 'DESIGNER' }))).toThrow(/platform operator/i);
+  });
+
+  it('throws when signed out', () => {
+    expect(() => requireSuperAdmin(null)).toThrow(/platform operator/i);
+  });
+
+  // Belt and braces with the middleware gate: a session claiming the role
+  // without an id is malformed, and a cross-firm read is the wrong place to
+  // be lenient about that.
+  it('throws when the session carries no user id', () => {
+    expect(() => requireSuperAdmin(session({ role: 'SUPER_ADMIN', id: undefined as never }))).toThrow();
   });
 });

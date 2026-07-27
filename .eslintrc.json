@@ -26,6 +26,13 @@
               "**/server/prisma"
             ],
             "message": "Persistence belongs in src/server/, and tenant data must go through the tenant-scoped client: `const { db } = tenantContext(session)` from '@/server/tenantDb'. Raw prisma is unscoped and reads across firms. See plans/DES-25_PLAN.md."
+          },
+          {
+            "group": [
+              "@/server/platformDb",
+              "**/server/platformDb"
+            ],
+            "message": "The platform client reads across every firm. Only the /admin console may use it. Firm-facing code wants `tenantContext(session)` from '@/server/tenantDb'. See plans/DES-26_PLAN.md."
           }
         ]
       }
@@ -39,6 +46,37 @@
       ],
       "rules": {
         "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": [
+        "src/app/admin/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@prisma/client",
+                "message": "Persistence belongs in src/server/. Import a query/repository from '@/server/...' instead, or add one there. See plans/DES-33_PLAN.md."
+              },
+              {
+                "name": "@supabase/supabase-js",
+                "message": "Use the FileStorage port: import { storage } from '@/server/storage'. Only the Supabase adapter may import the SDK."
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "@/server/prisma",
+                  "**/server/prisma"
+                ],
+                "message": "Even the /admin console goes through `getPlatformDb(session)` rather than raw prisma: the SUPER_ADMIN check lives at that door. See plans/DES-26_PLAN.md."
+              }
+            ]
+          }
+        ]
       }
     }
   ]
