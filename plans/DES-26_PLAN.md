@@ -201,3 +201,43 @@ existing table/`card`/palette classes verbatim from the projects list, and the b
 clean — but nobody has *looked* at it, because doing so means signing in and I don't type
 passwords into forms. A throwaway preview database (four firms across all four statuses,
 plus an operator account) is available for a human to check; see the PR description.
+
+---
+
+## Follow-up: sign-in sent the operator nowhere
+
+Reported after the first pass, and a genuine gap in the issue's scope — the console was
+reachable but not *arrivable*.
+
+Three places hardcoded `/app/projects` as "where you go": the login form, the root page,
+and (implicitly) middleware, which bounced anyone in the wrong area to `/login`. For a
+super-admin that composed into a dead end: sign in → pushed to `/app` → refused by the
+bidirectional gate → back to the login form, **signed in, with nowhere to go**.
+
+The fix is one rule in one place. `landingPathFor(role)` in `src/lib/routes.ts` answers
+"where does this session belong", and all three callers use it. Middleware also stops
+conflating two different failures: *signed out* still goes to `/login` with a
+callbackUrl, while *signed in, wrong area* now redirects to that session's own home.
+
+The test that matters is the agreement property, not the individual cases:
+
+```ts
+for (const role of ['SUPER_ADMIN', ...FIRM_ROLES])
+  expect(isAuthorizedFor(landingPathFor(role), role)).toBe(true)
+```
+
+Where we send you and where you're allowed are two halves of one rule; pinning them
+against each other makes this class of dead end unbuildable rather than merely fixed.
+
+Verified against a running server for every role by minting session tokens directly
+(no credentials typed):
+
+| Session | `/` | `/app/projects` | `/admin/firms` |
+|---|---|---|---|
+| SUPER_ADMIN | → `/admin` → `/admin/firms` | → `/admin` | **200** |
+| firm ADMIN | → `/app/projects` | 200 | → `/app/projects` |
+| signed out | → `/login` | → `/login?callbackUrl=…` | → `/login?callbackUrl=…` |
+
+The rendered list was checked at the same time: four firms across all four statuses, with
+correct counts, `—` for a firm with no plan and for one never worked in, and each filter
+narrowing in the database.

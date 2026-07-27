@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isUnder } from '@/lib/routes';
+import { isUnder, landingPathFor } from '@/lib/routes';
 
 describe('isUnder', () => {
   it('matches the section root and its children', () => {
@@ -26,5 +26,27 @@ describe('isUnder', () => {
     expect(isUnder('', '/admin')).toBe(false);
     expect(isUnder(null, '/admin')).toBe(false);
     expect(isUnder(undefined, '/admin')).toBe(false);
+  });
+});
+
+describe('landingPathFor', () => {
+  it('sends the platform operator to the console', () => {
+    expect(landingPathFor('SUPER_ADMIN')).toBe('/admin');
+  });
+
+  it('sends firm users to their projects', () => {
+    expect(landingPathFor('ADMIN')).toBe('/app/projects');
+    expect(landingPathFor('DESIGNER')).toBe('/app/projects');
+  });
+
+  it('sends a signed-out visitor to the login page', () => {
+    expect(landingPathFor(null)).toBe('/login');
+    expect(landingPathFor(undefined)).toBe('/login');
+  });
+
+  // An unrecognized role is not the platform operator, so it must not be
+  // handed the console.
+  it('does not send an unrecognized role to the console', () => {
+    expect(landingPathFor('ROOT')).toBe('/app/projects');
   });
 });
