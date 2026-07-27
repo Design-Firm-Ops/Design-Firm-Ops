@@ -265,3 +265,68 @@ Unlike `/admin`, this page needs no session, so it was actually viewed at 1280px
 390px. That caught a layout bug the tests couldn't: the two pricing cards' buttons sat at
 different heights, because only the yearly card has a savings line. Fixed by pushing the
 button down with `mt-auto`.
+
+---
+
+## Bug fix: firm-scoped queries that ignored their firm
+
+Reported after review: a newly created firm's `/app/settings` listed **every user on the
+platform**, the platform operator included.
+
+### Cause
+
+`listUsers(firmId)` and `listDesigners(firmId)` in `src/server/queries/settings.ts` took a
+`firmId` and **never used it** — no `where`. Both dated from the DES-25 isolation work,
+where every query module was given an explicit firm; these two were missed. Nothing
+complained: the parameter is "used" as far as TypeScript cares, and lint doesn't flag
+unused parameters.
+
+Reachable from two screens:
+
+- `/app/settings` — the Users tab (reported), and the designer list the Permissions tab
+  assigns overrides from.
+- `/app/administration` — the user checkboxes for resource-folder permissions.
+
+`GET /api/users` was **not** affected; it goes through the tenant client.
+
+### Why the isolation gate didn't catch it
+
+This is the part worth keeping. Every guard built in DES-25/26/27/28 is about the *tenant
+client*: routes must use it, models must be scoped by it, nothing may bypass it. But page
+components don't use it. They call `src/server/queries/*` with a firmId, and those
+functions are **trusted** to apply it.
+
+The gate proved "no route can reach another firm's rows" and quietly assumed the query
+modules held up their end. Two of sixteen didn't. Trust was the whole hole.
+
+### Fix, and closing the class
+
+Both queries now filter by `firmId`. Beyond that:
+
+- **`src/server/queryScoping.test.ts`** — a new structural guard over every exported
+  function in `src/server/queries/`: it must use a firmId it accepts, must accept one if
+  it queries at all, and must put it in a `where` rather than a `select` or `orderBy`.
+- **Behavioural coverage in the isolation suite**, which is what actually proves a `where`
+  works — each query module exercised against two real firms.
+- **The two-firm fixture now seeds a platform operator** (`firmId: null`). Without one,
+  "a row belonging to no firm leaks into a firm's view" was untestable, because every row
+  in the fixture belonged to somebody. The per-model matrix now also asserts that no
+  unowned row appears in either firm's view.
+
+All three shapes of the bug were re-introduced on purpose and confirmed to fail:
+
+| Breach | Result |
+|---|---|
+| `where` removed from `listUsers` | structural guard **and** the real-data test fail |
+| A new query taking no firmId at all | structural guard fails |
+| firmId used, but only in `orderBy` | structural guard fails |
+
+A read-only check of the dev database confirmed the leak left no bad data behind: no
+resource folder grants access to a user from another firm.
+
+### The deeper issue, not fixed here
+
+The query modules take raw prisma plus a firmId, so scoping is a *promise each author
+keeps*. The tenant client makes it a *mechanism*. Converting `src/server/queries/*` to take
+the tenant client would make this class of bug impossible rather than merely detected —
+roughly 10 call sites. Out of scope for a bug fix; recommended as its own issue.

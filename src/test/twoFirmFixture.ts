@@ -209,5 +209,22 @@ async function seedFirm(db: PrismaClient, slug: string, name: string): Promise<S
 export async function seedTwoFirms(db: PrismaClient): Promise<{ a: SeededFirm; b: SeededFirm; shared: typeof SHARED }> {
   const a = await seedFirm(db, 'firm-a', 'Firm A Interiors');
   const b = await seedFirm(db, 'firm-b', 'Firm B Design');
+
+  // The platform operator, who belongs to no firm.
+  //
+  // Added after a real leak: `listUsers` took a firmId and never used it, so
+  // /app/settings showed every user on the platform — including this one. A
+  // fixture with only firm-owned rows could not have caught that, because the
+  // row that leaked belongs to nobody.
+  await db.user.create({
+    data: {
+      email: 'operator@platform.test',
+      passwordHash: 'x',
+      name: 'Platform Operator',
+      role: 'SUPER_ADMIN',
+      firmId: null,
+    },
+  });
+
   return { a, b, shared: SHARED };
 }

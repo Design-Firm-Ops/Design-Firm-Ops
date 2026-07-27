@@ -89,9 +89,16 @@ describe.skipIf(!enabled)('tenant isolation (integration)', () => {
         const idsB = new Set(rowsB.map((r) => r.id));
         expect(rowsA.some((r) => idsB.has(r.id)), `${model}: views overlap`).toBe(false);
 
-        // Together they account for everything — neither firm is silently
-        // losing rows, which would be isolation "working" for the wrong reason.
-        expect(rowsA.length + rowsB.length).toBe(all.length);
+        // Together they account for every row that belongs to a firm — neither
+        // firm is silently losing rows, which would be isolation "working" for
+        // the wrong reason. Rows with no firm (the platform operator) belong to
+        // neither, and must appear in neither.
+        const owned = all.filter((r) => r.firmId !== null);
+        expect(rowsA.length + rowsB.length).toBe(owned.length);
+        expect(
+          [...rowsA, ...rowsB].some((r) => r.firmId === null),
+          `${model}: a row belonging to no firm leaked into a firm's view`
+        ).toBe(false);
       });
     }
   });
@@ -474,6 +481,79 @@ describe.skipIf(!enabled)('tenant isolation (integration)', () => {
 
       // And left nothing half-built behind.
       expect(await raw.firm.count({ where: { name: 'Another' } })).toBe(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // The query modules, which scope by an explicit firmId
+  // ---------------------------------------------------------------------
+
+  // Page components don't use the tenant client — they call `src/server/queries/*`
+  // with a firmId and those functions are *trusted* to apply it. Nothing checked
+  // that they did, and two of them didn't: `listUsers` and `listDesigners` took
+  // a firmId and ignored it, so /app/settings listed every user on the platform,
+  // the platform operator included.
+  //
+  // Exercised here against real data because that is the only thing that proves
+  // a `where` clause is actually present.
+  describe('firm-scoped queries only return their own firm', () => {
+    it('listUsers', async () => {
+      const { listUsers } = await import('@/server/queries/settings');
+
+      const usersA = await listUsers(a.firmId);
+      const usersB = await listUsers(b.firmId);
+
+      expect(usersA.map((u) => u.email)).toEqual(['admin@firm-a.test']);
+      expect(usersB.map((u) => u.email)).toEqual(['admin@firm-b.test']);
+
+      // The one that was reported: a platform operator has no firm and must
+      // never appear in a firm's user list.
+      expect(
+        [...usersA, ...usersB].some((u) => u.role === 'SUPER_ADMIN'),
+        'the platform operator leaked into a firm’s user list'
+      ).toBe(false);
+    });
+
+    it('listDesigners', async () => {
+      const { listDesigners } = await import('@/server/queries/settings');
+
+      // The fixture's firm users are ADMINs, so add a designer to each and
+      // check neither firm sees the other's.
+      for (const firmId of [a.firmId, b.firmId]) {
+        await raw.user.create({
+          data: { firmId, email: `designer@${firmId}.test`, passwordHash: 'x', name: 'D', role: 'DESIGNER' },
+        });
+      }
+
+      const designersA = await listDesigners(a.firmId);
+      expect(designersA).toHaveLength(1);
+      expect(designersA[0].email).toBe(`designer@${a.firmId}.test`);
+      expect(await listDesigners(b.firmId)).toHaveLength(1);
+    });
+
+    it('getSettings and listPermissionOverrides', async () => {
+      const { getSettings, listPermissionOverrides } = await import('@/server/queries/settings');
+
+      // The fixture gives firm A designerCanViewFinancials and firm B not.
+      expect((await getSettings(a.firmId))?.designerCanViewFinancials).toBe(true);
+      expect((await getSettings(b.firmId))?.designerCanViewFinancials).toBe(false);
+
+      const overridesA = await listPermissionOverrides(a.firmId);
+      expect(overridesA.every((o) => o.firmId === a.firmId)).toBe(true);
+      expect(overridesA).toHaveLength(1);
+    });
+
+    it('the other query modules stay inside their firm', async () => {
+      const { listProjects, listActiveProjects } = await import('@/server/queries/projects');
+      const { listVendors } = await import('@/server/queries/vendors');
+
+      expect(await listProjects(a.firmId, 'ALL')).toHaveLength(1);
+      expect(await listActiveProjects(a.firmId)).toHaveLength(1);
+
+      // One vendor each in the fixture, both named "Circa Lighting" — so a
+      // count of two would mean the other firm's had come back too.
+      expect(await listVendors(a.firmId, false)).toHaveLength(1);
+      expect(await listVendors(b.firmId, false)).toHaveLength(1);
     });
   });
 
