@@ -137,12 +137,19 @@ export default function UsersManager({
                   <button className="mr-3 text-sm text-brown hover:text-gold" onClick={() => openEdit(user)}>
                     Edit
                   </button>
-                  <button
-                    className={`text-sm ${user.active ? 'text-red-700 hover:text-red-900' : 'text-green-700 hover:text-green-900'}`}
-                    onClick={() => toggleActive(user)}
-                  >
-                    {user.active ? 'Deactivate' : 'Reactivate'}
-                  </button>
+                  {/* Nothing on your own row. Deactivating yourself blocks your
+                      sign-in immediately and only another administrator could
+                      undo it, so it isn't offered — and the API refuses it
+                      regardless of what this renders. The "(you)" marker on the
+                      name is what explains the missing control. */}
+                  {user.id !== currentUserId && (
+                    <button
+                      className={`text-sm ${user.active ? 'text-red-700 hover:text-red-900' : 'text-green-700 hover:text-green-900'}`}
+                      onClick={() => toggleActive(user)}
+                    >
+                      {user.active ? 'Deactivate' : 'Reactivate'}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

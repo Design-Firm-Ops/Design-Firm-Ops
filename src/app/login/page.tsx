@@ -3,6 +3,7 @@
 import { useState, FormEvent } from 'react';
 import { signIn, getSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { landingPathFor } from '@/lib/routes';
 import { signInErrorMessage } from '@/lib/firmAccess';
 
@@ -52,9 +53,11 @@ export default function LoginPage({ searchParams }: { searchParams?: { error?: s
     <div className="flex min-h-screen items-center justify-center bg-cream px-4">
       <div className="card w-full max-w-sm p-8">
         <div className="mb-8 text-center">
-          <h1 className="logo-mark text-2xl text-brown">Design Firm Ops</h1>
-          <p className="logo-sub text-taupe">Studio Operations</p>
-          <p className="mt-4 text-sm text-brown/60">Internal sign in</p>
+          <Link href="/" className="leading-none">
+            <span className="logo-mark block text-2xl text-brown">Design Firm Ops</span>
+            <span className="logo-sub text-taupe">Studio Operations</span>
+          </Link>
+          <p className="mt-4 text-sm text-brown/60">Sign in</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -94,6 +97,13 @@ export default function LoginPage({ searchParams }: { searchParams?: { error?: s
             {submitting ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+
+        <p className="mt-6 text-center text-sm text-brown/60">
+          No account yet?{' '}
+          <Link href="/signup" className="text-brown underline hover:text-gold">
+            Create your firm
+          </Link>
+        </p>
       </div>
     </div>
   );

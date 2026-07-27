@@ -14,6 +14,7 @@ import bcrypt from 'bcryptjs';
 import { encryptSecret } from '../src/lib/crypto';
 import { RAW_VENDORS } from './vendorData';
 import { seedSuperAdmin } from '../src/server/superAdmin';
+import { applyFirmDefaults } from '../src/server/provisionFirm';
 
 const prisma = new PrismaClient();
 
@@ -63,43 +64,26 @@ async function seedUsers(firmId: string) {
 }
 
 async function seedSettings(firmId: string) {
+  const demoSettings = {
+    companyName: 'Madison Ditton Interiors',
+    companyAddress: '212 Main Street, Park City, UT 84060',
+    owner1Name: 'Madison Ditton',
+    owner1Contact: 'madison@mditerior.com · (435) 555-0110',
+    owner2Name: 'Studio Owner',
+    owner2Contact: 'owner2@mditerior.com · (435) 555-0111',
+    paymentInstructions:
+      '<p><strong>ACH / Wire</strong><br/>Bank: Zions Bank<br/>Routing: 124000054<br/>Account: 0123456789</p>' +
+      '<p><strong>Chase Bill Pay</strong><br/>Payee: Madison Ditton Interiors LLC</p>' +
+      '<p>Checks payable to Madison Ditton Interiors LLC.</p>',
+  };
+
   await prisma.settings.upsert({
     where: { firmId },
-    create: {
-      firmId,
-      companyName: 'Madison Ditton Interiors',
-      companyAddress: '212 Main Street, Park City, UT 84060',
-      owner1Name: 'Madison Ditton',
-      owner1Contact: 'madison@mditerior.com · (435) 555-0110',
-      owner2Name: 'Studio Owner',
-      owner2Contact: 'owner2@mditerior.com · (435) 555-0111',
-      paymentInstructions:
-        '<p><strong>ACH / Wire</strong><br/>Bank: Zions Bank<br/>Routing: 124000054<br/>Account: 0123456789</p>' +
-        '<p><strong>Chase Bill Pay</strong><br/>Payee: Madison Ditton Interiors LLC</p>' +
-        '<p>Checks payable to Madison Ditton Interiors LLC.</p>',
-    },
-    update: {},
+    create: { firmId, ...demoSettings },
+    // Re-asserted rather than left alone: applyFirmDefaults creates this row
+    // with just the firm name, so the demo details have to be layered on top.
+    update: demoSettings,
   });
-}
-
-async function seedPipelineStages(firmId: string) {
-  // The customizable-taxonomies migration always creates one default
-  // LeadBoard ("Leads") and attaches any pre-existing stages to it —
-  // reuse that board (or create it, for a from-scratch test DB where
-  // migrations were generated differently) rather than assuming stages
-  // don't exist yet.
-  const board =
-    (await prisma.leadBoard.findFirst({ where: { firmId }, orderBy: { order: 'asc' } })) ??
-    (await prisma.leadBoard.create({ data: { name: 'Leads', order: 0, firmId } }));
-
-  const existing = await prisma.pipelineStage.count({ where: { boardId: board.id } });
-  if (existing > 0) return;
-
-  const stages = ['New Lead', 'Contacted', 'Proposal Sent', 'Won', 'Lost'];
-  for (const [i, name] of stages.entries()) {
-    await prisma.pipelineStage.create({ data: { name, order: i, boardId: board.id, firmId } });
-  }
-  console.log(`  pipeline stages: ${stages.join(', ')}`);
 }
 
 function mapEnum<T extends string>(value: string | null, allowed: T[]): T | null {
@@ -404,9 +388,16 @@ async function main() {
   }
 
   const firmId = await seedFirm();
+
+  // The demo tenant gets its baseline lookups from the same definition a real
+  // sign-up uses, so the two cannot drift (DES-28). It can't be *provisioned*,
+  // because the multi-tenancy migration creates this firm on every database —
+  // but it can share the defaults, which is the part that matters.
+  await applyFirmDefaults(prisma, firmId, 'Madison Ditton Interiors');
+  console.log('  defaults: offerings, fee structures, item types, lead pipeline');
+
   await seedUsers(firmId);
   await seedSettings(firmId);
-  await seedPipelineStages(firmId);
   await clearDemoData(firmId);
   await seedVendors(firmId);
   await seedDemoProject(firmId);

@@ -162,7 +162,13 @@ model Firm {
   slug   String     @unique
   status FirmStatus @default(TRIAL)
   /// Free-form tier for now (BASIC/PRO/…); real plan limits are deferred.
+  /// Not chosen at sign-up — every firm starts on a trial (DES-28).
   plan   String?
+
+  /// When this firm's trial ends. Set at provisioning; null for firms that
+  /// never had one. Stored rather than derived from createdAt so an operator
+  /// can extend a trial without the length becoming a global constant.
+  trialEndsAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

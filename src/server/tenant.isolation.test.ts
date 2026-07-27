@@ -89,9 +89,16 @@ describe.skipIf(!enabled)('tenant isolation (integration)', () => {
         const idsB = new Set(rowsB.map((r) => r.id));
         expect(rowsA.some((r) => idsB.has(r.id)), `${model}: views overlap`).toBe(false);
 
-        // Together they account for everything — neither firm is silently
-        // losing rows, which would be isolation "working" for the wrong reason.
-        expect(rowsA.length + rowsB.length).toBe(all.length);
+        // Together they account for every row that belongs to a firm — neither
+        // firm is silently losing rows, which would be isolation "working" for
+        // the wrong reason. Rows with no firm (the platform operator) belong to
+        // neither, and must appear in neither.
+        const owned = all.filter((r) => r.firmId !== null);
+        expect(rowsA.length + rowsB.length).toBe(owned.length);
+        expect(
+          [...rowsA, ...rowsB].some((r) => r.firmId === null),
+          `${model}: a row belonging to no firm leaked into a firm's view`
+        ).toBe(false);
       });
     }
   });
@@ -368,6 +375,185 @@ describe.skipIf(!enabled)('tenant isolation (integration)', () => {
       await expect(
         (dbA as unknown as { auditLog: { findMany: () => Promise<unknown> } }).auditLog.findMany()
       ).rejects.toThrow(/platform-only/i);
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // Sign-up provisioning (DES-28) — the acceptance criterion
+  // ---------------------------------------------------------------------
+
+  // "A newly provisioned firm can log in and reaches a working, isolated /app
+  // with sane defaults" is a claim about isolation, so it's answered here
+  // rather than asserted in a unit test with a stub.
+  describe('a firm created by sign-up', () => {
+    it('gets a complete, isolated set of defaults', async () => {
+      const { provisionFirm } = await import('@/server/provisionFirm');
+      const {
+        DEFAULT_OFFERINGS,
+        DEFAULT_FEE_STRUCTURES,
+        DEFAULT_ITEM_TYPES,
+        DEFAULT_PIPELINE_STAGES,
+      } = await import('@/server/firmDefaults');
+      const { tenantScope } = await import('@/server/tenantDb');
+
+      const { firmId, userId } = await provisionFirm(
+        {
+          firmName: 'Newly Signed Up',
+          adminName: 'New Owner',
+          email: 'owner@newly.test',
+          password: 'correct horse battery',
+          plan: 'YEARLY',
+        },
+        raw
+      );
+
+      const db = tenantScope(firmId) as unknown as PrismaClient;
+
+      // Everything the app needs to be usable, seen through the new firm's
+      // own client — so this also proves the rows were stamped correctly.
+      expect(await db.offering.count()).toBe(DEFAULT_OFFERINGS.length);
+      expect(await db.feeStructureOption.count()).toBe(DEFAULT_FEE_STRUCTURES.length);
+      expect(await db.itemTypeOption.count()).toBe(DEFAULT_ITEM_TYPES.length);
+      expect(await db.pipelineStage.count()).toBe(DEFAULT_PIPELINE_STAGES.length);
+      expect(await db.leadBoard.count()).toBe(1);
+
+      // resolvePermissions reads this on every request; without it the app
+      // breaks on the first page load.
+      expect(await db.settings.findFirst()).not.toBeNull();
+
+      // The signer runs the firm, and starts on a trial that DES-27 lets in.
+      const user = await raw.user.findUnique({ where: { id: userId } });
+      expect(user).toMatchObject({ role: 'ADMIN', firmId });
+      expect((await raw.firm.findUnique({ where: { id: firmId } }))?.status).toBe('TRIAL');
+
+      // Isolated from the firms that already existed, in both directions.
+      expect(await db.project.count(), 'sees another firm’s projects').toBe(0);
+      expect(await db.client.count()).toBe(0);
+
+      // And firm A still sees only its own. Note this can't be written as
+      // `dbA.offering.findFirst({ where: { firmId } })` — the extension
+      // overwrites a caller-supplied firmId, which is the point of it.
+      const seenByA = await dbA.offering.findMany();
+      expect(seenByA.every((o) => o.firmId === a.firmId)).toBe(true);
+
+      const { firmDenialFor } = await import('@/server/firmGate');
+      expect(await firmDenialFor({ user: { id: userId, role: 'ADMIN', firmId } } as never)).toBeNull();
+    });
+
+    it('gives a second firm of the same name its own handle and its own data', async () => {
+      const { provisionFirm } = await import('@/server/provisionFirm');
+
+      const first = await provisionFirm(
+        { firmName: 'Same Name Studio', adminName: 'A', email: 'a@same.test', password: 'correct horse' },
+        raw
+      );
+      const second = await provisionFirm(
+        { firmName: 'Same Name Studio', adminName: 'B', email: 'b@same.test', password: 'correct horse' },
+        raw
+      );
+
+      expect(first.slug).toBe('same-name-studio');
+      expect(second.slug).toBe('same-name-studio-2');
+      expect(second.firmId).not.toBe(first.firmId);
+
+      // Both hold an offering called "Furniture" — the per-firm uniques again,
+      // now exercised by provisioning rather than by a fixture.
+      const { tenantScope } = await import('@/server/tenantDb');
+      for (const { firmId } of [first, second]) {
+        const db = tenantScope(firmId) as unknown as PrismaClient;
+        expect((await db.offering.findFirst({ where: { name: 'Furniture' } }))?.firmId).toBe(firmId);
+      }
+    });
+
+    it('refuses a second sign-up with the same email', async () => {
+      const { provisionFirm, EmailTakenError } = await import('@/server/provisionFirm');
+      const input = {
+        firmName: 'Duplicate Email Co',
+        adminName: 'C',
+        email: 'taken@example.test',
+        password: 'correct horse',
+      };
+
+      await provisionFirm(input, raw);
+      await expect(provisionFirm({ ...input, firmName: 'Another' }, raw)).rejects.toBeInstanceOf(
+        EmailTakenError
+      );
+
+      // And left nothing half-built behind.
+      expect(await raw.firm.count({ where: { name: 'Another' } })).toBe(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // The query modules, which scope by an explicit firmId
+  // ---------------------------------------------------------------------
+
+  // Page components don't use the tenant client — they call `src/server/queries/*`
+  // with a firmId and those functions are *trusted* to apply it. Nothing checked
+  // that they did, and two of them didn't: `listUsers` and `listDesigners` took
+  // a firmId and ignored it, so /app/settings listed every user on the platform,
+  // the platform operator included.
+  //
+  // Exercised here against real data because that is the only thing that proves
+  // a `where` clause is actually present.
+  describe('firm-scoped queries only return their own firm', () => {
+    it('listUsers', async () => {
+      const { listUsers } = await import('@/server/queries/settings');
+
+      const usersA = await listUsers(a.firmId);
+      const usersB = await listUsers(b.firmId);
+
+      expect(usersA.map((u) => u.email)).toEqual(['admin@firm-a.test']);
+      expect(usersB.map((u) => u.email)).toEqual(['admin@firm-b.test']);
+
+      // The one that was reported: a platform operator has no firm and must
+      // never appear in a firm's user list.
+      expect(
+        [...usersA, ...usersB].some((u) => u.role === 'SUPER_ADMIN'),
+        'the platform operator leaked into a firm’s user list'
+      ).toBe(false);
+    });
+
+    it('listDesigners', async () => {
+      const { listDesigners } = await import('@/server/queries/settings');
+
+      // The fixture's firm users are ADMINs, so add a designer to each and
+      // check neither firm sees the other's.
+      for (const firmId of [a.firmId, b.firmId]) {
+        await raw.user.create({
+          data: { firmId, email: `designer@${firmId}.test`, passwordHash: 'x', name: 'D', role: 'DESIGNER' },
+        });
+      }
+
+      const designersA = await listDesigners(a.firmId);
+      expect(designersA).toHaveLength(1);
+      expect(designersA[0].email).toBe(`designer@${a.firmId}.test`);
+      expect(await listDesigners(b.firmId)).toHaveLength(1);
+    });
+
+    it('getSettings and listPermissionOverrides', async () => {
+      const { getSettings, listPermissionOverrides } = await import('@/server/queries/settings');
+
+      // The fixture gives firm A designerCanViewFinancials and firm B not.
+      expect((await getSettings(a.firmId))?.designerCanViewFinancials).toBe(true);
+      expect((await getSettings(b.firmId))?.designerCanViewFinancials).toBe(false);
+
+      const overridesA = await listPermissionOverrides(a.firmId);
+      expect(overridesA.every((o) => o.firmId === a.firmId)).toBe(true);
+      expect(overridesA).toHaveLength(1);
+    });
+
+    it('the other query modules stay inside their firm', async () => {
+      const { listProjects, listActiveProjects } = await import('@/server/queries/projects');
+      const { listVendors } = await import('@/server/queries/vendors');
+
+      expect(await listProjects(a.firmId, 'ALL')).toHaveLength(1);
+      expect(await listActiveProjects(a.firmId)).toHaveLength(1);
+
+      // One vendor each in the fixture, both named "Circa Lighting" — so a
+      // count of two would mean the other firm's had come back too.
+      expect(await listVendors(a.firmId, false)).toHaveLength(1);
+      expect(await listVendors(b.firmId, false)).toHaveLength(1);
     });
   });
 

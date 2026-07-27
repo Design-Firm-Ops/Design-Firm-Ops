@@ -4,6 +4,7 @@ import { getTenantDb } from '@/server/tenantDb';
 import { requireAdmin } from '@/server/apiAuth';
 import { conflict, parseBody } from '@/lib/apiRoute';
 import { userUpdateSchema } from '@/lib/validation';
+import { isSelfDeactivation, SELF_DEACTIVATION_MESSAGE } from '@/lib/userAdmin';
 
 const USER_SELECT = {
   id: true,
@@ -22,6 +23,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const { data, response } = await parseBody(req, userUpdateSchema);
   if (response) return response;
+
+  // Checked before the last-admin rule below, which protects the *firm* from
+  // losing its administrators. This one protects the person: deactivation
+  // blocks sign-in, so doing it to yourself is an immediate lockout you cannot
+  // undo yourself — and it is refused even when a colleague would remain admin.
+  if (isSelfDeactivation(session.user.id, params.id, data)) {
+    return conflict(SELF_DEACTIVATION_MESSAGE);
+  }
 
   const demotingOrDeactivating =
     (data.role && data.role !== 'ADMIN') || data.active === false;

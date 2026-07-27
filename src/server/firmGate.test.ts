@@ -10,7 +10,7 @@ function session(user: Partial<Session['user']>): Session {
 }
 
 const dbWith = (status: string | null) => ({
-  firm: { findUnique: vi.fn().mockResolvedValue(status ? { status } : null) },
+  firm: { findUnique: vi.fn().mockResolvedValue(status ? { status, trialEndsAt: null } : null) },
 });
 
 describe('firmDenialFor', () => {
@@ -41,13 +41,16 @@ describe('firmDenialFor', () => {
 
   // One indexed primary-key lookup, selecting one column — this runs on every
   // authenticated request, so the shape of the query is part of the contract.
-  it('asks only for the status, by primary key', async () => {
+  // One read serves both the gate and the trial banner, so the /app layout
+  // doesn't ask for the same row twice on every page load.
+  it('asks for the status and trial, by primary key, in one query', async () => {
     const db = dbWith('ACTIVE');
     await firmDenialFor(session({}), db as never);
 
+    expect(db.firm.findUnique).toHaveBeenCalledTimes(1);
     expect(db.firm.findUnique).toHaveBeenCalledWith({
       where: { id: 'firm-1' },
-      select: { status: true },
+      select: { status: true, trialEndsAt: true },
     });
   });
 
