@@ -31,6 +31,22 @@ import { requireFirmId } from '@/lib/tenant';
  */
 export const UNSCOPED_MODELS = new Set(['Firm']);
 
+/**
+ * Models the tenant client refuses outright.
+ *
+ * A second exemption bucket, because "exempt" turned out to mean two different
+ * things (DES-27). `UNSCOPED_MODELS` means *don't filter this* — `Firm` is the
+ * tenant root, and the platform path reads it legitimately. `AuditLog` is not
+ * that: it records what an operator did *to* a firm, so its `firmId` is a
+ * target rather than an owner, and a firm must never read its own audit trail.
+ *
+ * Putting it in `UNSCOPED_MODELS` would have been the worst of both — unfiltered
+ * *and* reachable, so firm-facing code touching it would see every firm's
+ * records. Throwing instead keeps the fail-closed property: the tenant client
+ * cannot reach this table even by accident.
+ */
+export const PLATFORM_ONLY_MODELS = new Set(['AuditLog']);
+
 /** Operations that select existing rows: the firm belongs in `where`. */
 const WHERE_OPERATIONS = new Set([
   'findUnique',
@@ -66,6 +82,13 @@ export function tenantScope(firmId: string) {
     query: {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
+          if (model && PLATFORM_ONLY_MODELS.has(model)) {
+            throw new Error(
+              `${model} is platform-only and cannot be read through a tenant client. ` +
+                'Use getPlatformDb(session) from the /admin console.'
+            );
+          }
+
           if (!model || UNSCOPED_MODELS.has(model)) return query(args);
 
           const next = { ...(args as Record<string, unknown>) };

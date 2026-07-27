@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/server/auth';
 import { getPlatformDb } from '@/server/platformDb';
@@ -5,6 +6,7 @@ import { listFirms } from '@/server/queries/firms';
 import { parseFirmFilters } from '@/lib/firms';
 import { formatDate } from '@/lib/format';
 import FirmFilters from './FirmFilters';
+import FirmStatusBadge from '@/components/FirmStatusBadge';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,13 +16,6 @@ export const dynamic = 'force-dynamic';
 // does so through `getPlatformDb` — which throws for anyone who isn't the
 // platform operator. Nothing here is tenant-scoped, which is why the door is
 // named and guarded rather than implied.
-
-const STATUS_STYLES: Record<string, string> = {
-  TRIAL: 'bg-taupe/30 text-brown',
-  ACTIVE: 'bg-green-100 text-green-800',
-  SUSPENDED: 'bg-red-100 text-red-800',
-  CANCELED: 'bg-brown/10 text-brown/70',
-};
 
 export default async function AdminFirmsPage({
   searchParams,
@@ -62,15 +57,13 @@ export default async function AdminFirmsPage({
             {firms.map((firm) => (
               <tr key={firm.id} className="hover:bg-taupe/5">
                 <td className="px-4 py-3">
-                  {/* Not a link yet: the firm detail page is DES-27, and
-                      linking to a 404 is worse than not linking. */}
-                  <span className="font-medium text-brown">{firm.name}</span>
+                  <Link href={`/admin/firms/${firm.id}`} className="font-medium text-brown hover:text-gold">
+                    {firm.name}
+                  </Link>
                   <span className="block text-xs text-brown/50">{firm.slug}</span>
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[firm.status]}`}>
-                    {firm.status}
-                  </span>
+                  <FirmStatusBadge status={firm.status} />
                 </td>
                 <td className="px-4 py-3 text-brown/70">{firm.plan ?? '—'}</td>
                 <td className="px-4 py-3 text-right tabular-nums text-brown/70">{firm.userCount}</td>

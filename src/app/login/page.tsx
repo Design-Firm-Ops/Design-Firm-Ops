@@ -4,12 +4,18 @@ import { useState, FormEvent } from 'react';
 import { signIn, getSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { landingPathFor } from '@/lib/routes';
+import { signInErrorMessage } from '@/lib/firmAccess';
 
-export default function LoginPage() {
+export default function LoginPage({ searchParams }: { searchParams?: { error?: string } }) {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  // Seeded from the URL so a user bounced out of /app mid-session is told why,
+  // rather than meeting a bare login form. `searchParams` arrives as a prop —
+  // no useSearchParams, so no Suspense boundary is needed here.
+  const [error, setError] = useState<string | null>(
+    searchParams?.error ? signInErrorMessage(searchParams.error) : null
+  );
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
@@ -25,7 +31,10 @@ export default function LoginPage() {
 
     if (result?.error) {
       setSubmitting(false);
-      setError('Invalid email or password.');
+      // A suspended or canceled firm gets a specific explanation; anything
+      // else stays vague, because it would otherwise reveal which addresses
+      // have accounts. See src/lib/firmAccess.ts.
+      setError(signInErrorMessage(result.error));
       return;
     }
 

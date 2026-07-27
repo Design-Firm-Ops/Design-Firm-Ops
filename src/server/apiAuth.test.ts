@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { requireSession, requireAdmin } from '@/server/apiAuth';
+import { requireSession, requireAdmin, requireOperator } from '@/server/apiAuth';
 
 const getServerSession = vi.fn();
+const firmDenialFor = vi.fn().mockResolvedValue(null);
+vi.mock('@/server/firmGate', () => ({ firmDenialFor: (...a: unknown[]) => firmDenialFor(...a) }));
 vi.mock('next-auth', () => ({ getServerSession: () => getServerSession() }));
 vi.mock('@/server/auth', () => ({ authOptions: {} }));
 
@@ -10,6 +12,7 @@ vi.mock('@/server/auth', () => ({ authOptions: {} }));
 
 beforeEach(() => {
   getServerSession.mockReset();
+  firmDenialFor.mockReset().mockResolvedValue(null);
 });
 
 describe('requireSession', () => {
@@ -59,5 +62,58 @@ describe('requireAdmin', () => {
   it('rejects an unrecognized role rather than defaulting to allow', async () => {
     getServerSession.mockResolvedValue({ user: { id: 'u3', role: 'SUPERUSER' } });
     expect((await requireAdmin()).unauthorized?.status).toBe(403);
+  });
+});
+
+// DES-27: a suspended firm is refused on every request, not only at sign-in.
+describe('firm lifecycle is enforced per request', () => {
+  const firmUser = { user: { id: 'u1', role: 'DESIGNER', firmId: 'firm-1' } };
+
+  it('refuses a suspended firm with an explanation', async () => {
+    getServerSession.mockResolvedValue(firmUser);
+    firmDenialFor.mockResolvedValue('FIRM_SUSPENDED');
+
+    const { session, unauthorized } = await requireSession();
+    expect(session).toBeNull();
+    expect(unauthorized?.status).toBe(403);
+    await expect(unauthorized?.json()).resolves.toMatchObject({ error: expect.stringMatching(/suspended/i) });
+  });
+
+  // Otherwise a firm admin would keep full access to a suspended firm.
+  it('applies to requireAdmin too', async () => {
+    getServerSession.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', firmId: 'firm-1' } });
+    firmDenialFor.mockResolvedValue('FIRM_CANCELED');
+
+    expect((await requireAdmin()).unauthorized?.status).toBe(403);
+  });
+});
+
+describe('requireOperator', () => {
+  it('admits the platform operator', async () => {
+    const session = { user: { id: 'op', role: 'SUPER_ADMIN', firmId: null } };
+    getServerSession.mockResolvedValue(session);
+
+    const result = await requireOperator();
+    expect(result.session).toBe(session);
+  });
+
+  it('refuses firm users, including firm admins', async () => {
+    for (const role of ['ADMIN', 'DESIGNER']) {
+      getServerSession.mockResolvedValue({ user: { id: 'u1', role, firmId: 'firm-1' } });
+      expect((await requireOperator()).unauthorized?.status, role).toBe(403);
+    }
+  });
+
+  it('refuses a signed-out request', async () => {
+    getServerSession.mockResolvedValue(null);
+    expect((await requireOperator()).unauthorized?.status).toBe(401);
+  });
+
+  // The operator lifts suspensions, so gating them on a firm status would be
+  // circular — and they have no firm to be gated on in the first place.
+  it('does not consult firm status', async () => {
+    getServerSession.mockResolvedValue({ user: { id: 'op', role: 'SUPER_ADMIN', firmId: null } });
+    await requireOperator();
+    expect(firmDenialFor).not.toHaveBeenCalled();
   });
 });

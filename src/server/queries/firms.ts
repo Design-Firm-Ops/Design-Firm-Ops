@@ -1,6 +1,6 @@
 import type { PlatformDb } from '@/server/platformDb';
 import type { FirmStatus } from '@/lib/domain';
-import { firmListWhere, latestActivity, type FirmFilters } from '@/lib/firms';
+import { firmListWhere, latestActivity, NO_FIRM_FILTERS, type FirmFilters } from '@/lib/firms';
 
 // Firm reads for the /admin console.
 //
@@ -109,4 +109,41 @@ async function lastActivityByFirm(db: Db, firmIds: string[]): Promise<Map<string
     if (date) latest.set(firmId, date);
   }
   return latest;
+}
+
+export interface FirmDetailUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  active: boolean;
+  createdAt: Date;
+}
+
+export interface FirmDetail extends FirmListRow {
+  users: FirmDetailUser[];
+}
+
+/**
+ * One firm, with the people and usage the console's detail page shows.
+ *
+ * Built on `listFirms` rather than duplicating its counts and activity
+ * derivation — the two screens must agree, and "last activity" in particular
+ * is a definition, not a column (see `latestActivity`).
+ */
+export async function getFirmDetail(
+  db: Db & Pick<PlatformDb, 'user'>,
+  id: string
+): Promise<FirmDetail | null> {
+  const [rows, users] = await Promise.all([
+    listFirms(db, { ...NO_FIRM_FILTERS, id }),
+    db.user.findMany({
+      where: { firmId: id },
+      select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
+      orderBy: [{ role: 'asc' }, { name: 'asc' }],
+    }),
+  ]);
+
+  const firm = rows[0];
+  return firm ? { ...firm, users } : null;
 }

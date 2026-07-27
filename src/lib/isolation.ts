@@ -19,6 +19,20 @@
  */
 export const UNSCOPED_MODEL_NAMES: readonly string[] = ['Firm'];
 
+/**
+ * Models a tenant client must refuse rather than merely leave unfiltered.
+ *
+ * The pure mirror of `PLATFORM_ONLY_MODELS` in `@/server/tenantDb`, kept in
+ * step by a test. See that module for why the exemption list has two buckets.
+ */
+export const PLATFORM_ONLY_MODEL_NAMES: readonly string[] = ['AuditLog'];
+
+/** Models that carry a firmId but are not tenant-owned, for either reason. */
+export const EXEMPT_MODEL_NAMES: readonly string[] = [
+  ...UNSCOPED_MODEL_NAMES,
+  ...PLATFORM_ONLY_MODEL_NAMES,
+];
+
 /** Operations whose `where` selects existing rows, so it must carry the firm. */
 export const FILTERED_OPERATIONS: readonly string[] = [
   'findUnique',
@@ -39,7 +53,7 @@ export const FILTERED_OPERATIONS: readonly string[] = [
 export const CREATING_OPERATIONS: readonly string[] = ['create', 'createMany'];
 
 export function isTenantModel(model: string): boolean {
-  return !UNSCOPED_MODEL_NAMES.includes(model);
+  return !EXEMPT_MODEL_NAMES.includes(model);
 }
 
 export interface ScopeVerdict {
