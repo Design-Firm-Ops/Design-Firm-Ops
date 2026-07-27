@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isAuthorizedFor } from '@/middleware';
+import { isAuthorizedFor, config } from '@/middleware';
 import { landingPathFor } from '@/lib/routes';
 
 // The route gate is a security boundary, so every combination of
@@ -91,6 +91,30 @@ describe('landing pages agree with the gate', () => {
   it('never lands an authenticated user back on the login page', () => {
     for (const role of ['SUPER_ADMIN', ...FIRM_ROLES]) {
       expect(landingPathFor(role)).not.toBe('/login');
+    }
+  });
+});
+
+// The public front door. `/`, `/login` and `/signup` are reachable by someone
+// with no account at all — a matcher edit that quietly put a wall in front of
+// registration would be invisible otherwise, since middleware failures look
+// like redirects rather than errors.
+describe('the public pages stay public', () => {
+  const matches = (pathname: string) =>
+    config.matcher.some((pattern) => {
+      const base = pattern.replace('/:path*', '');
+      return pathname === base || pathname.startsWith(`${base}/`);
+    });
+
+  it('does not gate the home page, sign-in or sign-up', () => {
+    for (const pathname of ['/', '/login', '/signup', '/signup/billing']) {
+      expect(matches(pathname), `${pathname} is behind the auth gate`).toBe(false);
+    }
+  });
+
+  it('still gates the app and the console', () => {
+    for (const pathname of ['/app', '/app/projects', '/admin', '/admin/firms']) {
+      expect(matches(pathname), `${pathname} is not gated`).toBe(true);
     }
   });
 });

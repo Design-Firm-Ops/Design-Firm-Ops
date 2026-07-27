@@ -229,3 +229,39 @@ $490.00 · Saving $98.00 a year · Billing isn't connected yet`.
 - **The rate limiter is honest about itself.** In-memory and per-process: it slows a
   casual script, and is not a WAF. Written in the module comment so nobody trusts it for
   more than it does.
+
+---
+
+## Addition: the public home page
+
+Requested during the PR. `/` was a redirect — signed in to your landing page, signed out
+to `/login` — so a stranger who hadn't heard of this met a login form with no way to
+register and nothing explaining what it was.
+
+`/` is now the front door: hero, what the app does, pricing, and both ways in. A signed-in
+visitor still never sees it, and is redirected by role via `landingPathFor`.
+
+**The copy only claims what the product does.** Features are the real ones — leads,
+projects, FF&E procurement, trade accounts, invoicing, payments — and there are no
+testimonials, customer counts or logos, because a marketing page is the easiest place for
+an invented number to appear and this one is the first thing a real prospect reads. A test
+asserts their absence, so a later edit has to be deliberate.
+
+Pricing comes from `planPricing()`, the same source the sign-up form and billing page use,
+so the number quoted can't drift from the number charged. "Free trial, no card required"
+is likewise true rather than aspirational: sign-up creates a `TRIAL` firm and the billing
+page collects nothing.
+
+`/login` gained a link to sign up, and its logo now links home — a login form with no exit
+was the other half of the same dead end.
+
+Also pinned: `/`, `/login`, `/signup` and `/signup/billing` are **not** in the middleware
+matcher. A matcher edit that put a wall in front of registration would otherwise be
+invisible, since middleware failures look like redirects rather than errors.
+
+### Looked at, not just tested
+
+Unlike `/admin`, this page needs no session, so it was actually viewed at 1280px and
+390px. That caught a layout bug the tests couldn't: the two pricing cards' buttons sat at
+different heights, because only the yearly card has a savings line. Fixed by pushing the
+button down with `mt-auto`.
