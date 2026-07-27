@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
 import { provisionFirm, EmailTakenError } from '@/server/provisionFirm';
 import { DEFAULT_OFFERINGS, DEFAULT_ITEM_TYPES, DEFAULT_PIPELINE_STAGES } from '@/server/firmDefaults';
+import { TRIAL_DAYS } from '@/lib/trial';
 
 // Unit level: the decisions — email collisions, slug retries, and that every
 // default is asked for inside one transaction.
@@ -79,7 +80,11 @@ describe('provisionFirm', () => {
     const result = await provisionFirm(INPUT, db);
 
     expect(tx.firm.create).toHaveBeenCalledWith({
-      data: { name: 'Harbor & Pine Design Co.', slug: 'harbor-pine-design-co', status: 'TRIAL', plan: 'MONTHLY' },
+      data: expect.objectContaining({
+        name: 'Harbor & Pine Design Co.',
+        slug: 'harbor-pine-design-co',
+        status: 'TRIAL',
+      }),
     });
     expect(result.slug).toBe('harbor-pine-design-co');
   });
@@ -168,5 +173,33 @@ describe('provisionFirm', () => {
   it('lets an unexpected database error through rather than retrying forever', async () => {
     const { db } = stubDb({ failUserWith: new Error('connection reset') });
     await expect(provisionFirm(INPUT, db)).rejects.toThrow('connection reset');
+  });
+});
+
+describe('the trial', () => {
+  it('ends TRIAL_DAYS after the firm is created', async () => {
+    const { db, tx } = stubDb();
+    const before = Date.now();
+    await provisionFirm(INPUT, db);
+
+    const { trialEndsAt } = tx.firm.create.mock.calls[0][0].data as unknown as { trialEndsAt: Date };
+    const expected = before + TRIAL_DAYS * 24 * 60 * 60 * 1000;
+
+    expect(trialEndsAt).toBeInstanceOf(Date);
+    // Within a few seconds of the expected end — the exact instant depends on
+    // when `new Date()` was called inside.
+    expect(Math.abs(trialEndsAt.getTime() - expected)).toBeLessThan(5000);
+  });
+
+  // Retrying a slug must not walk the trial end date forward on each attempt.
+  it('is the same date across slug retries', async () => {
+    const { db, tx } = stubDb({ takenSlugs: ['harbor-pine-design-co', 'harbor-pine-design-co-2'] });
+    await provisionFirm(INPUT, db);
+
+    const ends = tx.firm.create.mock.calls.map(
+      (c) => (c[0].data as unknown as { trialEndsAt: Date }).trialEndsAt.getTime()
+    );
+    expect(ends.length).toBeGreaterThan(1);
+    expect(new Set(ends).size, 'each retry got its own trial end').toBe(1);
   });
 });

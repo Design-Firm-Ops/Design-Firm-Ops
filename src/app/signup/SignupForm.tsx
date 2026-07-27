@@ -3,19 +3,21 @@
 import { useState, FormEvent } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { formatMoney } from '@/lib/money';
-import { planPricing } from '@/lib/billing';
-import type { BillingPlan } from '@/lib/validation';
+import { APP_HOME } from '@/lib/routes';
 
 // Public sign-up: creates a firm and its first admin.
 //
 // On success it signs in with the credentials just set, rather than the API
 // handing back a session. That keeps exactly one path that mints a session —
 // the one with the firm-status gate on it (DES-27).
+//
+// No plan is chosen here and there is no billing step: every firm starts on a
+// free trial and goes straight to the app, with the countdown shown by
+// TrialBanner. Asking someone to pick a price before they've seen the product
+// was a step that bought nothing.
 
 export default function SignupForm() {
   const router = useRouter();
-  const [plan, setPlan] = useState<BillingPlan>('YEARLY');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -36,7 +38,6 @@ export default function SignupForm() {
         adminName: String(form.get('adminName') ?? ''),
         email,
         password,
-        plan,
       }),
     });
 
@@ -58,7 +59,7 @@ export default function SignupForm() {
       return;
     }
 
-    router.push('/signup/billing');
+    router.push(APP_HOME);
     router.refresh();
   }
 
@@ -100,38 +101,6 @@ export default function SignupForm() {
         />
         <p className="mt-1 text-xs text-brown/50">At least 8 characters.</p>
       </div>
-
-      <fieldset>
-        <legend className="mb-2 text-sm font-medium text-brown">Billing</legend>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {planPricing().map((option) => (
-            <label
-              key={option.plan}
-              className={`cursor-pointer rounded-md border p-3 text-sm transition-colors ${
-                plan === option.plan ? 'border-gold bg-gold/10' : 'border-taupe/40 hover:bg-taupe/5'
-              }`}
-            >
-              <input
-                type="radio"
-                name="plan"
-                value={option.plan}
-                checked={plan === option.plan}
-                onChange={() => setPlan(option.plan)}
-                className="sr-only"
-              />
-              <span className="block font-medium text-brown">{option.label}</span>
-              <span className="block text-brown/70">
-                {formatMoney(option.amount)} {option.cadence}
-              </span>
-              {option.annualSavings.greaterThan(0) && (
-                <span className="mt-1 block text-xs text-green-800">
-                  Save {formatMoney(option.annualSavings)} a year
-                </span>
-              )}
-            </label>
-          ))}
-        </div>
-      </fieldset>
 
       {error && (
         <p role="alert" className="text-sm text-red-700">

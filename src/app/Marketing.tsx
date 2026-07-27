@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { formatMoney } from '@/lib/money';
 import { planPricing } from '@/lib/billing';
+import { TRIAL_DAYS } from '@/lib/trial';
 
 // The public home page.
 //
@@ -91,7 +92,7 @@ export default function Marketing() {
             </Link>
           </div>
           <p className="mt-4 text-sm text-brown/50">
-            Starts on a free trial. No card required.
+            Free for {TRIAL_DAYS} days. No card required.
           </p>
         </section>
 
@@ -107,9 +108,10 @@ export default function Marketing() {
         </section>
 
         <section className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
-          <h2 className="text-center font-serif text-3xl text-brown">Pricing</h2>
+          <h2 className="text-center font-serif text-3xl text-brown">Pricing after your trial</h2>
           <p className="mt-3 text-center text-brown/70">
-            One price for the whole studio. Every feature on both plans.
+            Start free for {TRIAL_DAYS} days — no card, and nothing to choose up front. One
+            price for the whole studio when you’re ready.
           </p>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-2">
@@ -126,13 +128,17 @@ export default function Marketing() {
                     Save {formatMoney(plan.annualSavings)} a year
                   </p>
                 )}
-                <div className="mt-auto pt-5">
-                  <Link href="/signup" className="btn-secondary block w-full">
-                    Get started
-                  </Link>
-                </div>
               </div>
             ))}
+          </div>
+
+          {/* One call to action rather than one per plan: sign-up doesn't pick
+              a plan any more, so a button under each price would promise a
+              choice the flow doesn't offer. */}
+          <div className="mt-8 text-center">
+            <Link href="/signup" className="btn-primary">
+              Start your free trial
+            </Link>
           </div>
         </section>
       </main>

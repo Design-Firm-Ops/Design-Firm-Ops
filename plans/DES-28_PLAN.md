@@ -368,3 +368,61 @@ You can still **demote yourself** from ADMIN to DESIGNER while another admin exi
 (verified: 200). That is a different severity — you keep your account and can still sign
 in and work; only another admin can restore the role. Blocking it is a product decision
 rather than a bug fix, so it's left alone and noted here.
+
+---
+
+## Change: trial-first sign-up, no billing step
+
+Requested after review. Since every firm gets a trial, asking someone to choose a price
+before they have seen the product bought nothing.
+
+- **Sign-up no longer asks for a plan.** `signupSchema` drops the field (a stray one is
+  stripped rather than stored, so it can't reach `Firm.plan` by accident) and the form is
+  four fields and a button.
+- **`/signup/billing` is deleted.** Sign-up goes straight to `/app/projects`.
+- **The home page reframes pricing** as what it costs *after* the trial, with one
+  "Start your free trial" call to action instead of a button under each price — a per-plan
+  button would promise a choice the flow no longer offers.
+- `isBillingPlan` and `pricingFor` existed only for the deleted page and are gone. Dead
+  code in a module about money invites reuse of an idea we've dropped.
+
+### The trial banner
+
+`Firm` gains **`trialEndsAt`** — stored rather than derived from `createdAt`, so an
+operator can extend a single firm's trial later without the length becoming a global
+constant. The migration is additive and backfills existing TRIAL firms with
+`createdAt + 14 days`, which is what deriving would have given them. Rehearsed on a
+throwaway database: applies cleanly, idempotent across three runs, no drift.
+
+`src/lib/trial.ts` holds the length and the arithmetic, with `now` injected so the
+boundaries are tested by moving the clock. Days remaining are rounded **up**, so the final
+hours read "1 day left" rather than "0 days left", which would look like it had already
+ended.
+
+`TrialBanner` renders across the top of `/app`, and **nothing at all** unless there is a
+trial to report — a stale countdown on a converted firm's screen would be worse than no
+banner. The copy doesn't threaten a lockout, because nothing cuts access off when a trial
+ends (DES-27's gate only blocks SUSPENDED and CANCELED); a test asserts the wording stays
+honest about that.
+
+The layout reads status and trial in **one** query: `loadFirmGate` replaces the
+status-only lookup `firmDenialFor` used to do, and `firmDenialFor` is now derived from it,
+so the per-request cost is unchanged.
+
+### Verified end to end
+
+| Check | Result |
+|---|---|
+| `POST /api/signup` with no plan field | **201** |
+| New firm | `TRIAL`, no plan, `trialEndsAt` = created + **14 days** |
+| `/signup/billing` | **404** — gone |
+| Banner on `/app/projects` | "14 days left in your free trial. Billing isn't connected yet — nothing has been charged." |
+| Trial end moved into the past | "Your free trial has ended." |
+| Firm set to `ACTIVE` | **no banner at all** |
+| Home page, signed out | pricing framed as after-trial, zero per-plan buttons |
+
+### Note for anyone pulling this branch
+
+`prisma migrate status` reports the new migration as pending on an existing database. Run
+`npm run prisma:migrate` (or `npx prisma migrate deploy`) before starting the app — the
+generated client expects the column.

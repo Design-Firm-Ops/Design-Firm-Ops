@@ -80,7 +80,6 @@ describe('signupSchema', () => {
     adminName: 'Sam Reyes',
     email: 'Sam@Harbor.TEST',
     password: 'correct horse battery',
-    plan: 'MONTHLY',
   };
 
   it('accepts a complete sign-up and normalizes the email', () => {
@@ -103,9 +102,11 @@ describe('signupSchema', () => {
     expect(signupSchema.safeParse({ ...valid, email: 'not-an-email' }).success).toBe(false);
   });
 
-  it('only accepts the two billing plans', () => {
-    expect(signupSchema.safeParse({ ...valid, plan: 'FREE' }).success).toBe(false);
-    expect(signupSchema.safeParse({ ...valid, plan: 'YEARLY' }).success).toBe(true);
+  // Sign-up no longer takes a plan: every firm starts on a trial. A stray one
+  // is stripped rather than stored, so it can't reach Firm.plan by accident.
+  it('ignores a plan if one is sent', () => {
+    const parsed = signupSchema.parse({ ...valid, plan: 'YEARLY' });
+    expect(parsed).not.toHaveProperty('plan');
   });
 
   // This is the app's only unauthenticated write: unbounded strings from an

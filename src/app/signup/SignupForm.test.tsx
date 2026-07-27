@@ -36,16 +36,16 @@ async function fillAndSubmit() {
 }
 
 describe('SignupForm', () => {
-  it('offers both billing plans, with the yearly saving stated', () => {
+  // Every firm starts on a free trial, so there is no price to choose before
+  // seeing the product — and nothing here should ask for one.
+  it('does not ask anyone to pick a plan', () => {
     renderWithProviders(<SignupForm />);
-    expect(screen.getByRole('radio', { name: /monthly/i })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /yearly/i })).toBeInTheDocument();
-    expect(screen.getByText(/save \$98\.00 a year/i)).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(screen.queryByText(/\$\d/)).toBeNull();
   });
 
-  it('sends the whole form, including the chosen plan', async () => {
+  it('sends the whole form', async () => {
     renderWithProviders(<SignupForm />);
-    await userEvent.click(screen.getByRole('radio', { name: /monthly/i }));
     await fillAndSubmit();
 
     expect(fetchMock).toHaveBeenCalledWith('/api/signup', expect.objectContaining({ method: 'POST' }));
@@ -54,12 +54,11 @@ describe('SignupForm', () => {
       adminName: 'Sam Reyes',
       email: 'sam@harbor.test',
       password: 'correct horse battery',
-      plan: 'MONTHLY',
     });
   });
 
   // One path mints a session — the one with DES-27's firm-status gate on it.
-  it('signs in with the credentials just set, then goes to billing', async () => {
+  it('signs in with the credentials just set, then goes straight to the app', async () => {
     renderWithProviders(<SignupForm />);
     await fillAndSubmit();
 
@@ -68,7 +67,8 @@ describe('SignupForm', () => {
       password: 'correct horse battery',
       redirect: false,
     });
-    expect(router.push).toHaveBeenCalledWith('/signup/billing');
+    // No billing step in between — a trial needs no payment decision.
+    expect(router.push).toHaveBeenCalledWith('/app/projects');
   });
 
   it('reports a taken email without navigating', async () => {

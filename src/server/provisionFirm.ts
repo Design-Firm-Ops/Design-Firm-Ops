@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/server/prisma';
 import { slugify, nextSlugCandidate } from '@/lib/slug';
+import { trialEndFor } from '@/lib/trial';
 import {
   DEFAULT_OFFERINGS,
   DEFAULT_FEE_STRUCTURES,
@@ -143,6 +144,9 @@ export async function provisionFirm(
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
   const base = slugify(input.firmName);
 
+  // Captured once so slug retries don't each get a slightly later trial end.
+  const now = new Date();
+
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
     const slug = nextSlugCandidate(base, attempt);
 
@@ -154,6 +158,7 @@ export async function provisionFirm(
             slug,
             // New firms start on trial; DES-27's lifecycle takes it from here.
             status: 'TRIAL',
+            trialEndsAt: trialEndFor(now),
             plan: input.plan ?? null,
           },
         });

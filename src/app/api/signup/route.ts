@@ -39,7 +39,6 @@ export async function POST(req: NextRequest) {
       adminName: data.adminName,
       email: data.email,
       password: data.password,
-      plan: data.plan,
     });
 
     // Deliberately no session: the client signs in with the credentials it

@@ -51,8 +51,3 @@ export function planPricing(): PlanPricing[] {
   ];
 }
 
-export function pricingFor(plan: BillingPlan): PlanPricing {
-  // Non-null: planPricing() covers every member of the BillingPlan union, and
-  // a test pins that.
-  return planPricing().find((p) => p.plan === plan)!;
-}

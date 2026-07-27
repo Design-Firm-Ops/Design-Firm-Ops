@@ -3,6 +3,7 @@ import { renderWithProviders, screen } from '@/test';
 import Marketing from './Marketing';
 import { planPricing } from '@/lib/billing';
 import { formatMoney } from '@/lib/money';
+import { TRIAL_DAYS } from '@/lib/trial';
 
 // The public home page. Its job is to explain what this is and offer the two
 // ways in, so those are what get pinned — plus the claims it makes, which have
@@ -40,11 +41,25 @@ describe('Marketing', () => {
     expect(screen.getByText(/save \$98\.00 a year/i)).toBeInTheDocument();
   });
 
-  // Sign-up creates a TRIAL firm and the billing page is a mock that collects
-  // nothing, so this claim is true — and must stay true.
+  // Sign-up creates a TRIAL firm with this exact length and collects no payment
+  // details, so the claim is true — and the length comes from the same constant
+  // provisioning uses, so it stays true.
   it('only promises a trial that the flow actually delivers', () => {
+    // Read from the whole container: React splits "Free for {TRIAL_DAYS} days"
+    // across text nodes, so no single node matches.
+    const { container } = renderWithProviders(<Marketing />);
+    const text = (container.textContent ?? '').replace(/\s+/g, ' ');
+
+    expect(text).toContain(`Free for ${TRIAL_DAYS} days`);
+    expect(text).toMatch(/no card required/i);
+  });
+
+  // Sign-up no longer picks a plan, so a per-price button would promise a
+  // choice the flow doesn't offer.
+  it('does not offer a per-plan call to action', () => {
     renderWithProviders(<Marketing />);
-    expect(screen.getByText(/free trial. no card required/i)).toBeInTheDocument();
+    expect(screen.queryAllByRole('link', { name: /get started/i })).toHaveLength(0);
+    expect(screen.getByRole('link', { name: /start your free trial/i })).toBeInTheDocument();
   });
 
   // A marketing page is the easiest place for an invented number or a
