@@ -363,3 +363,25 @@ export const documentFolderUpdateSchema = z.object({
 export const firmStatusSchema = z.object({
   status: z.enum(FIRM_STATUSES),
 });
+
+/** Billing cadence. Mocked for now (DES-28) — no charge is ever made. */
+export const BILLING_PLANS = ['MONTHLY', 'YEARLY'] as const;
+export type BillingPlan = (typeof BILLING_PLANS)[number];
+
+/** `Firm.plan` is a free-form string column, so reading it back needs a check. */
+export function isBillingPlan(value: unknown): value is BillingPlan {
+  return typeof value === 'string' && (BILLING_PLANS as readonly string[]).includes(value);
+}
+
+/**
+ * Public sign-up. This is the app's only unauthenticated write, so the schema
+ * is the first line of defence rather than a convenience — every field is
+ * bounded, and nothing is optional by accident.
+ */
+export const signupSchema = z.object({
+  firmName: z.string().trim().min(1, 'Firm name is required').max(120),
+  adminName: z.string().trim().min(1, 'Your name is required').max(120),
+  email: z.string().trim().toLowerCase().email('Enter a valid email address').max(255),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(200),
+  plan: z.enum(BILLING_PLANS),
+});

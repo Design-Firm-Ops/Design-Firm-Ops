@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { optionalText, optionalEmail, requiredName, nullableNumber, nullableInt, reorderSchema } from '@/lib/validation';
+import { optionalText, optionalEmail, requiredName, nullableNumber, nullableInt, reorderSchema, signupSchema} from '@/lib/validation';
 
 describe('optionalText', () => {
   const schema = optionalText();
@@ -71,5 +71,50 @@ describe('reorderSchema', () => {
     expect(reorderSchema.parse({ order: ['a', 'b'] })).toEqual({ order: ['a', 'b'] });
     expect(reorderSchema.safeParse({ order: [] }).success).toBe(false);
     expect(reorderSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('signupSchema', () => {
+  const valid = {
+    firmName: 'Harbor & Pine',
+    adminName: 'Sam Reyes',
+    email: 'Sam@Harbor.TEST',
+    password: 'correct horse battery',
+    plan: 'MONTHLY',
+  };
+
+  it('accepts a complete sign-up and normalizes the email', () => {
+    const parsed = signupSchema.parse(valid);
+    expect(parsed.email).toBe('sam@harbor.test');
+    expect(parsed.firmName).toBe('Harbor & Pine');
+  });
+
+  it('requires a firm name and a person', () => {
+    expect(signupSchema.safeParse({ ...valid, firmName: '   ' }).success).toBe(false);
+    expect(signupSchema.safeParse({ ...valid, adminName: '' }).success).toBe(false);
+  });
+
+  it('rejects a short password', () => {
+    expect(signupSchema.safeParse({ ...valid, password: 'sh0rt' }).success).toBe(false);
+    expect(signupSchema.safeParse({ ...valid, password: '12345678' }).success).toBe(true);
+  });
+
+  it('rejects a malformed email', () => {
+    expect(signupSchema.safeParse({ ...valid, email: 'not-an-email' }).success).toBe(false);
+  });
+
+  it('only accepts the two billing plans', () => {
+    expect(signupSchema.safeParse({ ...valid, plan: 'FREE' }).success).toBe(false);
+    expect(signupSchema.safeParse({ ...valid, plan: 'YEARLY' }).success).toBe(true);
+  });
+
+  // This is the app's only unauthenticated write: unbounded strings from an
+  // anonymous caller are a denial-of-service shape, not a validation nicety.
+  it('bounds every field', () => {
+    const long = 'a'.repeat(1000);
+    expect(signupSchema.safeParse({ ...valid, firmName: long }).success).toBe(false);
+    expect(signupSchema.safeParse({ ...valid, adminName: long }).success).toBe(false);
+    expect(signupSchema.safeParse({ ...valid, password: long }).success).toBe(false);
+    expect(signupSchema.safeParse({ ...valid, email: `${long}@x.test` }).success).toBe(false);
   });
 });

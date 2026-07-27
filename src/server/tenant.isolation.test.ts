@@ -372,6 +372,112 @@ describe.skipIf(!enabled)('tenant isolation (integration)', () => {
   });
 
   // ---------------------------------------------------------------------
+  // Sign-up provisioning (DES-28) — the acceptance criterion
+  // ---------------------------------------------------------------------
+
+  // "A newly provisioned firm can log in and reaches a working, isolated /app
+  // with sane defaults" is a claim about isolation, so it's answered here
+  // rather than asserted in a unit test with a stub.
+  describe('a firm created by sign-up', () => {
+    it('gets a complete, isolated set of defaults', async () => {
+      const { provisionFirm } = await import('@/server/provisionFirm');
+      const {
+        DEFAULT_OFFERINGS,
+        DEFAULT_FEE_STRUCTURES,
+        DEFAULT_ITEM_TYPES,
+        DEFAULT_PIPELINE_STAGES,
+      } = await import('@/server/firmDefaults');
+      const { tenantScope } = await import('@/server/tenantDb');
+
+      const { firmId, userId } = await provisionFirm(
+        {
+          firmName: 'Newly Signed Up',
+          adminName: 'New Owner',
+          email: 'owner@newly.test',
+          password: 'correct horse battery',
+          plan: 'YEARLY',
+        },
+        raw
+      );
+
+      const db = tenantScope(firmId) as unknown as PrismaClient;
+
+      // Everything the app needs to be usable, seen through the new firm's
+      // own client — so this also proves the rows were stamped correctly.
+      expect(await db.offering.count()).toBe(DEFAULT_OFFERINGS.length);
+      expect(await db.feeStructureOption.count()).toBe(DEFAULT_FEE_STRUCTURES.length);
+      expect(await db.itemTypeOption.count()).toBe(DEFAULT_ITEM_TYPES.length);
+      expect(await db.pipelineStage.count()).toBe(DEFAULT_PIPELINE_STAGES.length);
+      expect(await db.leadBoard.count()).toBe(1);
+
+      // resolvePermissions reads this on every request; without it the app
+      // breaks on the first page load.
+      expect(await db.settings.findFirst()).not.toBeNull();
+
+      // The signer runs the firm, and starts on a trial that DES-27 lets in.
+      const user = await raw.user.findUnique({ where: { id: userId } });
+      expect(user).toMatchObject({ role: 'ADMIN', firmId });
+      expect((await raw.firm.findUnique({ where: { id: firmId } }))?.status).toBe('TRIAL');
+
+      // Isolated from the firms that already existed, in both directions.
+      expect(await db.project.count(), 'sees another firm’s projects').toBe(0);
+      expect(await db.client.count()).toBe(0);
+
+      // And firm A still sees only its own. Note this can't be written as
+      // `dbA.offering.findFirst({ where: { firmId } })` — the extension
+      // overwrites a caller-supplied firmId, which is the point of it.
+      const seenByA = await dbA.offering.findMany();
+      expect(seenByA.every((o) => o.firmId === a.firmId)).toBe(true);
+
+      const { firmDenialFor } = await import('@/server/firmGate');
+      expect(await firmDenialFor({ user: { id: userId, role: 'ADMIN', firmId } } as never)).toBeNull();
+    });
+
+    it('gives a second firm of the same name its own handle and its own data', async () => {
+      const { provisionFirm } = await import('@/server/provisionFirm');
+
+      const first = await provisionFirm(
+        { firmName: 'Same Name Studio', adminName: 'A', email: 'a@same.test', password: 'correct horse' },
+        raw
+      );
+      const second = await provisionFirm(
+        { firmName: 'Same Name Studio', adminName: 'B', email: 'b@same.test', password: 'correct horse' },
+        raw
+      );
+
+      expect(first.slug).toBe('same-name-studio');
+      expect(second.slug).toBe('same-name-studio-2');
+      expect(second.firmId).not.toBe(first.firmId);
+
+      // Both hold an offering called "Furniture" — the per-firm uniques again,
+      // now exercised by provisioning rather than by a fixture.
+      const { tenantScope } = await import('@/server/tenantDb');
+      for (const { firmId } of [first, second]) {
+        const db = tenantScope(firmId) as unknown as PrismaClient;
+        expect((await db.offering.findFirst({ where: { name: 'Furniture' } }))?.firmId).toBe(firmId);
+      }
+    });
+
+    it('refuses a second sign-up with the same email', async () => {
+      const { provisionFirm, EmailTakenError } = await import('@/server/provisionFirm');
+      const input = {
+        firmName: 'Duplicate Email Co',
+        adminName: 'C',
+        email: 'taken@example.test',
+        password: 'correct horse',
+      };
+
+      await provisionFirm(input, raw);
+      await expect(provisionFirm({ ...input, firmName: 'Another' }, raw)).rejects.toBeInstanceOf(
+        EmailTakenError
+      );
+
+      // And left nothing half-built behind.
+      expect(await raw.firm.count({ where: { name: 'Another' } })).toBe(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------
   // resolvePermissions reads the right firm's Settings
   // ---------------------------------------------------------------------
 

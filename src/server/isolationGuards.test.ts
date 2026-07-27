@@ -24,25 +24,60 @@ const SRC = walk('src').filter((f) => !f.includes('.test.'));
 const ROUTES = walk('src/app/api').filter((f) => f.endsWith('route.ts'));
 
 describe('the tenant client is the only way into tenant data', () => {
-  it('every API route goes through a guarded client', () => {
-    // NextAuth's handler is the one exception: it authenticates, and runs
+  // The invariant, stated once: **no route reaches the database except through
+  // a named door that carries its own guarantee.** There are three doors now,
+  // for three genuinely different situations — a route belonging to none of
+  // them still fails, which is what keeps this a check rather than a list of
+  // excuses.
+  it('every API route goes through a guarded door', () => {
+    // NextAuth's handler is the one true exception: it authenticates, and runs
     // before any tenant exists to scope to.
     const AUTH_HANDLER = join('src', 'app', 'api', 'auth', '[...nextauth]', 'route.ts');
     const ADMIN_API = join('src', 'app', 'api', 'admin');
+    const SIGNUP = join('src', 'app', 'api', 'signup', 'route.ts');
 
     const unscoped = ROUTES.filter((f) => f !== AUTH_HANDLER).filter((f) => {
       const src = readFileSync(f, 'utf8');
 
+      // Sign-up has no tenant to scope to because it *creates* one (DES-28).
+      // Its door is `provisionFirm`, which stamps everything to the firm it
+      // just made, in one transaction.
+      if (f === SIGNUP) return !/provisionFirm/.test(src);
+
       // /api/admin routes are cross-firm by nature (DES-27's suspend/cancel),
-      // so they satisfy this by going through the platform client instead —
-      // which carries its own SUPER_ADMIN check. Widened rather than exempted:
-      // a route using *neither* client still fails, wherever it lives.
+      // so they go through the platform client, which carries its own
+      // SUPER_ADMIN check.
       if (f.startsWith(ADMIN_API)) return !/getPlatformDb/.test(src);
 
       return !/tenantContext|getTenantDb/.test(src);
     });
 
-    expect(unscoped, 'these routes reach the database without a guarded client').toEqual([]);
+    expect(unscoped, 'these routes reach the database without a guarded door').toEqual([]);
+  });
+
+  // The sign-up door only means anything if sign-up walks through it and does
+  // nothing else — a route that also queried directly would be scoped to a
+  // tenant in name only.
+  it('sign-up touches the database only through provisionFirm', () => {
+    const signup = join('src', 'app', 'api', 'signup', 'route.ts');
+    const src = readFileSync(signup, 'utf8');
+
+    // It imports the raw client to hand to provisionFirm, which is the one
+    // legitimate reason — but must not call anything on it itself.
+    const directQueries = [...src.matchAll(/\bprisma\.(\w+)\b/g)].map((m) => m[0]);
+    expect(directQueries, 'sign-up queries the database directly').toEqual([]);
+  });
+
+  // Added because probing found it missing: every other property of this route
+  // was pinned, and deleting the rate limit entirely still passed the suite.
+  // An unauthenticated endpoint that creates tenants must not lose its limiter
+  // silently.
+  it('sign-up is rate limited', () => {
+    const src = readFileSync(join('src', 'app', 'api', 'signup', 'route.ts'), 'utf8');
+
+    expect(src, 'sign-up no longer rate limits').toMatch(/createRateLimiter/);
+    expect(src, 'the limiter is created but never consulted').toMatch(/\.check\(/);
+    expect(src, 'a refused sign-up must answer 429').toMatch(/429/);
   });
 
   // The console's own routes must not quietly fall back to the tenant client:
