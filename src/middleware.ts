@@ -1,4 +1,5 @@
 import { withAuth } from 'next-auth/middleware';
+import { isUnder } from '@/lib/routes';
 
 // Route gating.
 //
@@ -14,11 +15,6 @@ import { withAuth } from 'next-auth/middleware';
 // invoices and vendor credentials. Reaching firm data on a super-admin's
 // behalf is impersonation (DES-#8), and it should have to be explicit rather
 // than a side effect of visiting a URL.
-
-/** True when `pathname` is inside `base` — matches `/base` and `/base/...`, not `/basement`. */
-function isUnder(pathname: string, base: string): boolean {
-  return pathname === base || pathname.startsWith(`${base}/`);
-}
 
 /**
  * Whether a session with `role` may load `pathname`.

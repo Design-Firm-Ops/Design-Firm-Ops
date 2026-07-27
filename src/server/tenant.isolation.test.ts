@@ -244,6 +244,79 @@ describe.skipIf(!enabled)('tenant isolation (integration)', () => {
   });
 
   // ---------------------------------------------------------------------
+  // The deliberate cross-firm path (DES-26)
+  // ---------------------------------------------------------------------
+
+  // The /admin console is the first thing that *means* to read across firms.
+  // Asserting only that tenants can't cross would leave the other half
+  // untested: a change that broke cross-firm reads entirely would keep this
+  // suite green while the console silently showed one firm.
+  describe('the platform client', () => {
+    const operator = { user: { id: 'op', role: 'SUPER_ADMIN', firmId: null } } as never;
+
+    it('sees every firm, where a tenant client sees one', async () => {
+      const { getPlatformDb } = await import('@/server/platformDb');
+      const platform = getPlatformDb(operator);
+
+      const firmIds = (await platform.firm.findMany({ select: { id: true } })).map((f) => f.id);
+      expect(firmIds).toHaveLength(2);
+      expect(firmIds).toEqual(expect.arrayContaining([a.firmId, b.firmId]));
+
+      // The same question, asked three ways: across firms, and from inside each.
+      const all = await platform.project.findMany();
+      expect(all).toHaveLength(2);
+      expect(await dbA.project.count()).toBe(1);
+      expect(await dbB.project.count()).toBe(1);
+    });
+
+    it('is refused to everyone who is not the platform operator', async () => {
+      const { getPlatformDb } = await import('@/server/platformDb');
+
+      expect(() => getPlatformDb(null)).toThrow(/platform operator/i);
+      expect(() =>
+        getPlatformDb({ user: { id: 'u', role: 'ADMIN', firmId: a.firmId } } as never)
+      ).toThrow(/platform operator/i);
+      expect(() =>
+        getPlatformDb({ user: { id: 'u', role: 'DESIGNER', firmId: a.firmId } } as never)
+      ).toThrow(/platform operator/i);
+    });
+
+    // What the console actually renders: counts and activity per firm, each
+    // attributed to the right firm rather than summed across the platform.
+    it('reports per-firm counts, not platform totals', async () => {
+      const { getPlatformDb } = await import('@/server/platformDb');
+      const { listFirms } = await import('@/server/queries/firms');
+      const { NO_FIRM_FILTERS } = await import('@/lib/firms');
+
+      const rows = await listFirms(getPlatformDb(operator), NO_FIRM_FILTERS);
+      expect(rows).toHaveLength(2);
+
+      for (const row of rows) {
+        expect(row.userCount, `${row.slug} user count`).toBe(1);
+        expect(row.projectCount, `${row.slug} project count`).toBe(1);
+        expect(row.lastActivityAt).toBeInstanceOf(Date);
+      }
+    });
+
+    it('filters by name and status in the database', async () => {
+      const { getPlatformDb } = await import('@/server/platformDb');
+      const { listFirms } = await import('@/server/queries/firms');
+      const platform = getPlatformDb(operator);
+
+      // The fixture names are "Firm A Interiors" and "Firm B Design".
+      const searched = await listFirms(platform, { search: 'interiors', status: 'ALL' });
+      expect(searched.map((f) => f.slug)).toEqual(['firm-a']);
+
+      // Case-insensitively — an operator types what they remember.
+      expect(await listFirms(platform, { search: 'INTERIORS', status: 'ALL' })).toHaveLength(1);
+
+      // Both fixtures are ACTIVE, so this is the filter proving it narrows.
+      expect(await listFirms(platform, { search: '', status: 'ACTIVE' })).toHaveLength(2);
+      expect(await listFirms(platform, { search: '', status: 'SUSPENDED' })).toHaveLength(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------
   // resolvePermissions reads the right firm's Settings
   // ---------------------------------------------------------------------
 
